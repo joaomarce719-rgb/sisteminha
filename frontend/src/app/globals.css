@@ -1,0 +1,200 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --color-ocean-50: #e6f5ff;
+  --color-ocean-100: #b3e0ff;
+  --color-ocean-200: #80cbff;
+  --color-ocean-300: #4db5ff;
+  --color-ocean-400: #1aa0ff;
+  --color-ocean-500: #0088e6;
+  --color-ocean-600: #006bb3;
+  --color-ocean-700: #004f80;
+  --color-ocean-800: #00324d;
+  --color-ocean-900: #001a2e;
+
+  --color-shrimp-50: #fff5f0;
+  --color-shrimp-100: #ffe0cc;
+  --color-shrimp-200: #ffbf99;
+  --color-shrimp-300: #ff9e66;
+  --color-shrimp-400: #ff7d33;
+  --color-shrimp-500: #ff5c00;
+  --color-shrimp-600: #cc4a00;
+  --color-shrimp-700: #993700;
+  --color-shrimp-800: #662500;
+  --color-shrimp-900: #331200;
+
+  --color-pond-50: #e8faf0;
+  --color-pond-100: #b8f0d4;
+  --color-pond-200: #88e6b8;
+  --color-pond-300: #58dc9c;
+  --color-pond-400: #28d280;
+  --color-pond-500: #1ab366;
+  --color-pond-600: #14904f;
+  --color-pond-700: #0e6d3b;
+  --color-pond-800: #084a28;
+  --color-pond-900: #022714;
+
+  --color-alert-red: #ef4444;
+  --color-alert-amber: #f59e0b;
+  --color-alert-green: #10b981;
+
+  --font-sans: "Inter", system-ui, sans-serif;
+}
+
+:root {
+  --bg-primary: #0a0f1a;
+  --bg-secondary: #111827;
+  --bg-card: #1a2332;
+  --bg-card-hover: #1f2b3d;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-accent: rgba(0, 136, 230, 0.3);
+  --text-primary: #f0f4f8;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --glass-bg: rgba(26, 35, 50, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Glassmorphism Card ─────────────────────────── */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  box-shadow:
+    0 4px 30px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.glass-card-hover:hover {
+  background: rgba(30, 42, 58, 0.9);
+  border-color: rgba(0, 136, 230, 0.25);
+  transform: translateY(-1px);
+  box-shadow:
+    0 8px 40px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* ── Gradient Text ──────────────────────────────── */
+.gradient-text {
+  background: linear-gradient(135deg, #4db5ff, #ff7d33);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Pulse animations for alerts ────────────────── */
+@keyframes pulse-red {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+  50% { box-shadow: 0 0 20px 8px rgba(239, 68, 68, 0.2); }
+}
+
+.pulse-alert {
+  animation: pulse-red 2s ease-in-out infinite;
+}
+
+@keyframes glow {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.glow-text {
+  animation: glow 2s ease-in-out infinite;
+}
+
+/* ── Custom Scrollbar ───────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+
+/* ── Numeric Input for mobile (field use) ───────── */
+input[inputmode="decimal"],
+input[inputmode="numeric"] {
+  font-variant-numeric: tabular-nums;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+/* ── Status Badges ──────────────────────────────── */
+.badge-success {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.badge-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.badge-info {
+  background: rgba(0, 136, 230, 0.15);
+  color: #4db5ff;
+  border: 1px solid rgba(0, 136, 230, 0.3);
+}
+
+/* ── Modal & Page animations ───────────────────── */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-in {
+  animation: fadeInUp 0.25s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* ── Tabular numbers for data tables ───────────── */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
