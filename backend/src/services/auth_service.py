@@ -9,9 +9,9 @@ from datetime import datetime, timedelta, timezone
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from src.config import get_settings
 from src.database import get_db
@@ -22,15 +22,16 @@ from src.schemas.auth import TokenPayload
 settings = get_settings()
 
 # ── Hashing ──────────────────────────────────────────
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
-
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    try:
+        return bcrypt.checkpw(plain.encode('utf-8'), hashed.encode('utf-8'))
+    except ValueError:
+        return False
 
 
 # ── JWT ──────────────────────────────────────────────
@@ -74,11 +75,11 @@ def decode_token(token: str) -> TokenPayload:
 # ── Dependencies ─────────────────────────────────────
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ) -> Usuario:
     """Retorna o usuário autenticado a partir do token JWT."""
     payload = decode_token(token)
-    result = await db.execute(
+    result = db.execute(
         select(Usuario).where(Usuario.id == payload.sub)
     )
     user = result.scalar_one_or_none()
