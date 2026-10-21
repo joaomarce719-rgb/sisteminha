@@ -36,3 +36,5 @@ line-length = 100
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# scikit-fuzzy usa np.maximum com 3 argumentos (descontinuado no NumPy 2.x)
+filterwarnings = ["ignore:Passing more than 2 positional arguments:DeprecationWarning"]

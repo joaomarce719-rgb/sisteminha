@@ -28,6 +28,7 @@ from src.services.decision_engine import (
 )
 from src.services.regras_ciclo import validar_data_no_ciclo
 from src.services.fuzzy_engine import (
+    ajuste_no_periodo,
     atualizar_taxa_sobrevivencia,
     inferir_ajuste_sobrevivencia,
 )
@@ -87,8 +88,8 @@ async def registrar_manejo(
     # Delta consumo para fuzzy
     delta_consumo = payload.quantidade_racao_kg / racao_esperada if racao_esperada > 0 else 1.0
 
-    # Ganho semanal recente
-    ganho_semanal = 0.0
+    # Ganho semanal recente (None = ainda sem duas biometrias)
+    ganho_semanal = None
     if len(biometrias) >= 2:
         dias = (biometrias[-1].data_medicao - biometrias[-2].data_medicao).days
         if dias > 0:
@@ -101,7 +102,15 @@ async def registrar_manejo(
         nivel_sobra=payload.sobra_bandeja_nivel,
         ganho_semanal_g=ganho_semanal,
     )
-    nova_taxa_sobrev = atualizar_taxa_sobrevivencia(taxa_sobrev_anterior, ajuste)
+    # O ΔS fuzzy é semanal: aplica a fração correspondente ao intervalo desde o
+    # registro anterior (vários tratos no mesmo dia não acumulam ajuste)
+    data_anterior = manejos_anteriores[-1].data_registro if manejos_anteriores else ciclo.data_povoamento
+    dias_periodo = (payload.data_registro - data_anterior).days
+    if not manejos_anteriores:
+        dias_periodo = max(dias_periodo, 1)
+    nova_taxa_sobrev = atualizar_taxa_sobrevivencia(
+        taxa_sobrev_anterior, ajuste_no_periodo(ajuste, dias_periodo)
+    )
 
     # Status alimentar
     if delta_consumo < 0.7:
