@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.database import get_db
+from src.services.escopo import ciclo_da_organizacao, ids_ciclos_da_organizacao
 from src.models.alerta import Alerta
 from src.models.enums import RoleUsuario, StatusAlerta
 from src.schemas.alerta import AlertaResolver, AlertaResponse
@@ -32,7 +33,11 @@ async def listar_alertas(
     _user=Depends(has_role([RoleUsuario.VIGIA, RoleUsuario.GESTOR])),
 ):
     """Lista alertas, mais recentes primeiro (filtros por status e ciclo)."""
-    query = select(Alerta).order_by(Alerta.created_at.desc())
+    query = (
+        select(Alerta)
+        .where(Alerta.ciclo_id.in_(ids_ciclos_da_organizacao(_user)))
+        .order_by(Alerta.created_at.desc())
+    )
     if status_alerta:
         query = query.where(Alerta.status == status_alerta)
     if ciclo_id:
@@ -51,6 +56,7 @@ async def resolver_alerta(
     alerta = db.get(Alerta, alerta_id)
     if not alerta:
         raise HTTPException(status_code=404, detail="Alerta não encontrado.")
+    ciclo_da_organizacao(db, alerta.ciclo_id, user)
     if alerta.status == StatusAlerta.RESOLVIDO:
         raise HTTPException(status_code=400, detail="Alerta já resolvido.")
 

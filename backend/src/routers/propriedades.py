@@ -16,6 +16,8 @@ from src.schemas.propriedade import (
     PropriedadeUpdate,
 )
 from src.services.audit import registrar_auditoria
+from src.services.auth_service import is_superadmin
+from src.services.escopo import org_do_usuario
 
 router = APIRouter(prefix="/api/v1/propriedades", tags=["Propriedades"])
 
@@ -29,9 +31,18 @@ def listar_propriedades(
 ):
     """Lista propriedades rurais cadastradas."""
     query = select(Propriedade).order_by(Propriedade.nome)
+    if not is_superadmin(_user):
+        query = query.where(Propriedade.organizacao_id == org_do_usuario(_user))
     if organizacao_id:
         query = query.where(Propriedade.organizacao_id == organizacao_id)
     return list(db.scalars(query).all())
+
+
+def _propriedade_acessivel(db: Session, prop_id: UUID, user: Usuario) -> Propriedade:
+    prop = db.get(Propriedade, prop_id)
+    if not prop or (prop.organizacao_id != user.organizacao_id and not is_superadmin(user)):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Propriedade não encontrada")
+    return prop
 
 
 @router.get("/{prop_id}", response_model=PropriedadeResponse)
@@ -41,9 +52,7 @@ def obter_propriedade(
     _user: Usuario = Depends(get_current_usuario),
 ):
     """Obtém detalhes de uma propriedade."""
-    prop = db.get(Propriedade, prop_id)
-    if not prop:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Propriedade não encontrada")
+    prop = _propriedade_acessivel(db, prop_id, _user)
     return prop
 
 
@@ -54,9 +63,10 @@ def criar_propriedade(
     db: Session = Depends(get_db),
     user: Usuario = Depends(require_gestor),
 ):
-    """Cria uma nova propriedade/fazenda (apenas GESTOR)."""
+    """Cria uma propriedade na organização do GESTOR (superadmin escolhe a organização)."""
+    org_id = payload.organizacao_id if is_superadmin(user) else org_do_usuario(user)
     prop = Propriedade(
-        organizacao_id=payload.organizacao_id,
+        organizacao_id=org_id,
         nome=payload.nome,
         localizacao=payload.localizacao,
         area_total_ha=payload.area_total_ha,
@@ -91,9 +101,7 @@ def atualizar_propriedade(
     user: Usuario = Depends(require_gestor),
 ):
     """Atualiza uma propriedade rural (apenas GESTOR)."""
-    prop = db.get(Propriedade, prop_id)
-    if not prop:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Propriedade não encontrada")
+    prop = _propriedade_acessivel(db, prop_id, user)
 
     dados_ant = {
         "nome": prop.nome,

@@ -37,6 +37,7 @@ export default function LoginPage() {
   const [regNome, setRegNome] = useState("");
   const [regEmail, setRegEmail] = useState("");
   const [regTelefone, setRegTelefone] = useState("");
+  const [regCodigoOrg, setRegCodigoOrg] = useState("");
   const [regSenha, setRegSenha] = useState("");
   const [regConfirmaSenha, setRegConfirmaSenha] = useState("");
   const [regShowSenha, setRegShowSenha] = useState(false);
@@ -115,6 +116,7 @@ export default function LoginPage() {
         email: regEmail.trim(),
         senha: regSenha,
         telefone_emergencia: regTelefone.trim() || undefined,
+        codigo_organizacao: regCodigoOrg.trim() || undefined,
       });
 
       if (!novo.ativo) {
@@ -409,6 +411,21 @@ export default function LoginPage() {
                   placeholder="roberto@fazenda.com"
                   className="mt-1"
                   required
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="regCodigoOrg" className="text-xs font-semibold text-slate-700">
+                  Código da Fazenda / Organização
+                </Label>
+                <Input
+                  id="regCodigoOrg"
+                  name="codigo_organizacao"
+                  type="text"
+                  value={regCodigoOrg}
+                  onChange={(e) => setRegCodigoOrg(e.target.value)}
+                  placeholder="Informado pelo gestor da fazenda"
+                  className="mt-1"
                 />
               </div>
 

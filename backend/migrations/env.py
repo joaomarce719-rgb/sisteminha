@@ -9,7 +9,7 @@ from logging.config import fileConfig
 from alembic import context
 
 import src.models  # noqa: F401  (registra todos os modelos no metadata)
-from src.database import Base, engine
+from src.database import Base, conexao_para_migracao, engine
 
 config = context.config
 
@@ -37,8 +37,9 @@ def run_migrations_online() -> None:
     if conexao is not None:
         _executar(conexao)
         return
-    with engine.connect() as connection:
+    with conexao_para_migracao() as connection:
         _executar(connection)
+        connection.commit()
 
 
 def _executar(connection) -> None:

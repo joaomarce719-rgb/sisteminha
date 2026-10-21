@@ -8,6 +8,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from src.database import get_db
+from src.services.escopo import org_do_usuario
 from src.dependencies import get_current_usuario, require_gestor
 from src.models.tabela_alimentar import TabelaAlimentar
 from src.models.usuario import Usuario
@@ -29,6 +30,27 @@ _CLIFFORD_DEFAULT_FAIXAS = [
     {"peso_g": 15.0, "taxa_pct": 3.33},
     {"peso_g": 20.0, "taxa_pct": 2.98},
 ]
+
+
+def _visivel_para(user: Usuario):
+    return (TabelaAlimentar.organizacao_id == org_do_usuario(user)) | TabelaAlimentar.organizacao_id.is_(None)
+
+
+def _tabela_visivel(db: Session, tabela_id: uuid.UUID, user: Usuario) -> TabelaAlimentar:
+    tabela = db.get(TabelaAlimentar, tabela_id)
+    if not tabela or tabela.organizacao_id not in (None, org_do_usuario(user)):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tabela alimentar não encontrada")
+    return tabela
+
+
+def _limpar_padrao(db: Session, org_id: uuid.UUID) -> None:
+    """Desmarca o padrão das tabelas da organização (a global não é afetada)."""
+    for t in db.scalars(
+        select(TabelaAlimentar).where(
+            TabelaAlimentar.is_padrao.is_(True), TabelaAlimentar.organizacao_id == org_id
+        )
+    ).all():
+        t.is_padrao = False
 
 
 def garantir_tabela_padrao(db: Session) -> None:
@@ -53,8 +75,12 @@ def listar_tabelas_alimentares(
     _user: Annotated[Usuario, Depends(get_current_usuario)],
     apenas_ativas: bool = Query(True, description="Filtrar apenas tabelas ativas"),
 ):
-    """Lista as tabelas alimentares cadastradas."""
-    query = select(TabelaAlimentar).order_by(desc(TabelaAlimentar.is_padrao), TabelaAlimentar.nome)
+    """Lista as tabelas da organização e as de referência global."""
+    query = (
+        select(TabelaAlimentar)
+        .where(_visivel_para(_user))
+        .order_by(desc(TabelaAlimentar.is_padrao), TabelaAlimentar.nome)
+    )
     if apenas_ativas:
         query = query.where(TabelaAlimentar.ativo.is_(True))
     return list(db.scalars(query).all())
@@ -67,10 +93,7 @@ def obter_tabela_alimentar(
     _user: Annotated[Usuario, Depends(get_current_usuario)],
 ):
     """Obtém os detalhes de uma tabela alimentar específica."""
-    tabela = db.get(TabelaAlimentar, tabela_id)
-    if not tabela:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tabela alimentar não encontrada")
-    return tabela
+    return _tabela_visivel(db, tabela_id, _user)
 
 
 @router.post("", response_model=TabelaAlimentarResponse, status_code=status.HTTP_201_CREATED)
@@ -81,16 +104,15 @@ def criar_tabela_alimentar(
     usuario: Annotated[Usuario, Depends(require_gestor)],
 ):
     """Cria uma nova tabela alimentar (apenas GESTOR)."""
-    # Se marcada como padrão, remove padrão das outras
+    org_id = org_do_usuario(usuario)
+    # Se marcada como padrão, remove o padrão das outras tabelas da organização
     if payload.is_padrao:
-        outras = db.scalars(select(TabelaAlimentar).where(TabelaAlimentar.is_padrao.is_(True))).all()
-        for t in outras:
-            t.is_padrao = False
+        _limpar_padrao(db, org_id)
 
     # Determinar versão incremental para o mesmo nome
     ultima_versao = db.scalar(
         select(TabelaAlimentar.versao)
-        .where(TabelaAlimentar.nome == payload.nome)
+        .where(TabelaAlimentar.nome == payload.nome, TabelaAlimentar.organizacao_id == org_id)
         .order_by(desc(TabelaAlimentar.versao))
         .limit(1)
     )
@@ -106,6 +128,7 @@ def criar_tabela_alimentar(
         ativo=True,
         faixas=faixas_ordenadas,
         created_by_id=usuario.id,
+        organizacao_id=org_id,
     )
     db.add(tabela)
     db.flush()
@@ -140,9 +163,12 @@ def atualizar_tabela_alimentar(
     A versão anterior é preservada (inativa) para que ciclos e resultados que a
     referenciam continuem reproduzíveis.
     """
-    tabela = db.get(TabelaAlimentar, tabela_id)
-    if not tabela:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tabela alimentar não encontrada")
+    tabela = _tabela_visivel(db, tabela_id, usuario)
+    if tabela.organizacao_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tabela de referência global é somente leitura; crie uma tabela da organização.",
+        )
 
     dados_ant = {
         "nome": tabela.nome,
@@ -153,9 +179,7 @@ def atualizar_tabela_alimentar(
     }
 
     if payload.is_padrao is True:
-        outras = db.scalars(select(TabelaAlimentar).where(TabelaAlimentar.is_padrao.is_(True))).all()
-        for t in outras:
-            t.is_padrao = False
+        _limpar_padrao(db, tabela.organizacao_id)
         tabela.is_padrao = True
 
     if payload.nome is not None:
@@ -172,7 +196,7 @@ def atualizar_tabela_alimentar(
     if faixas_novas is not None and faixas_novas != tabela.faixas:
         ultima_versao = db.scalar(
             select(TabelaAlimentar.versao)
-            .where(TabelaAlimentar.nome == tabela.nome)
+            .where(TabelaAlimentar.nome == tabela.nome, TabelaAlimentar.organizacao_id == tabela.organizacao_id)
             .order_by(desc(TabelaAlimentar.versao))
             .limit(1)
         )
@@ -184,6 +208,7 @@ def atualizar_tabela_alimentar(
             ativo=True,
             faixas=faixas_novas,
             created_by_id=usuario.id,
+            organizacao_id=tabela.organizacao_id,
         )
         tabela.is_padrao = False
         tabela.ativo = False

@@ -19,7 +19,7 @@ def test_excluir_ciclo_com_ronda(client, gestor, vigia, novo_ciclo):
     r = client.post("/api/v1/rondas-noturnas/", json={**RONDA, "ciclo_id": ciclo["id"]}, headers=vigia)
     assert r.status_code == 201, r.text
     assert client.delete(f"/api/v1/ciclos/{ciclo['id']}", headers=gestor).status_code == 200
-    assert client.get(f"/api/v1/rondas-noturnas/ciclo/{ciclo['id']}", headers=gestor).json() == []
+    assert client.get(f"/api/v1/rondas-noturnas/ciclo/{ciclo['id']}", headers=gestor).status_code == 404
 
 
 def test_custo_em_ciclo_inexistente(client, gestor):

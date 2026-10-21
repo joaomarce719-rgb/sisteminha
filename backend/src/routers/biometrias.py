@@ -8,6 +8,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.database import get_db
+from src.services.escopo import (
+    ciclo_da_organizacao,
+    ids_ciclos_da_organizacao,
+    verificar_ciclo_da_organizacao,
+)
 from src.services.audit import registrar_auditoria, snapshot
 from src.models.biometria import Biometria
 from src.models.ciclo_produtivo import CicloProdutivo
@@ -17,7 +22,11 @@ from src.services.auth_service import has_role
 from src.services.decision_engine import calcular_ganho_diario, calcular_ganho_semanal
 from src.services.regras_ciclo import validar_data_no_ciclo
 
-router = APIRouter(prefix="/api/v1/ciclos/{ciclo_id}/biometrias", tags=["Biometrias"])
+router = APIRouter(
+    prefix="/api/v1/ciclos/{ciclo_id}/biometrias",
+    tags=["Biometrias"],
+    dependencies=[Depends(verificar_ciclo_da_organizacao)],
+)
 
 
 async def _get_ciclo_ativo(ciclo_id: UUID, db: Session) -> CicloProdutivo:
@@ -119,6 +128,7 @@ async def registrar_biometria_global(
 ):
     if not payload.ciclo_id:
         raise HTTPException(status_code=422, detail="ciclo_id é obrigatório.")
+    ciclo_da_organizacao(db, payload.ciclo_id, _user)
     return await registrar_biometria(payload.ciclo_id, payload, db, _user)
 
 
@@ -129,6 +139,7 @@ async def listar_biometrias_global(
     _user=Depends(has_role([RoleUsuario.CAMPO, RoleUsuario.VIGIA, RoleUsuario.GESTOR])),
 ):
     query = select(Biometria).order_by(Biometria.data_medicao.desc())
+    query = query.where(Biometria.ciclo_id.in_(ids_ciclos_da_organizacao(_user)))
     if ciclo_id:
         query = query.where(Biometria.ciclo_id == ciclo_id)
     result = db.execute(query)
@@ -145,6 +156,7 @@ async def deletar_biometria(
     bio = result.scalar_one_or_none()
     if not bio:
         raise HTTPException(status_code=404, detail="Biometria não encontrada.")
+    ciclo_da_organizacao(db, bio.ciclo_id, _user)
     registrar_auditoria(db, "EXCLUIR", "Biometria", bio.id, _user, dados_anteriores=snapshot(bio))
     db.delete(bio)
     db.flush()

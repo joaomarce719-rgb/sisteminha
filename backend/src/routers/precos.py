@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.database import get_db
+from src.services.escopo import org_do_usuario
 from src.services.audit import registrar_auditoria, snapshot
 from src.models.enums import RoleUsuario
 from src.models.tabela_preco import TabelaPrecoMercado
@@ -31,7 +32,7 @@ async def criar_faixa_preco(
             detail="faixa_gramatura_min deve ser menor que faixa_gramatura_max.",
         )
 
-    preco = TabelaPrecoMercado(**payload.model_dump())
+    preco = TabelaPrecoMercado(**payload.model_dump(), organizacao_id=org_do_usuario(_user))
     db.add(preco)
     db.flush()
     db.refresh(preco)
@@ -47,8 +48,10 @@ async def listar_precos(
     _user=Depends(has_role([RoleUsuario.GESTOR])),
 ):
     """Lista faixas de preço (somente GESTOR — RN-11)."""
-    query = select(TabelaPrecoMercado).order_by(
-        TabelaPrecoMercado.faixa_gramatura_min
+    query = (
+        select(TabelaPrecoMercado)
+        .where(TabelaPrecoMercado.organizacao_id == org_do_usuario(_user))
+        .order_by(TabelaPrecoMercado.faixa_gramatura_min)
     )
     if vigentes:
         hoje = date.today()
@@ -73,7 +76,7 @@ async def atualizar_preco(
         select(TabelaPrecoMercado).where(TabelaPrecoMercado.id == preco_id)
     )
     preco = result.scalar_one_or_none()
-    if not preco:
+    if not preco or preco.organizacao_id != org_do_usuario(_user):
         raise HTTPException(status_code=404, detail="Faixa de preço não encontrada.")
 
     antes = snapshot(preco)

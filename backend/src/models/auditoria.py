@@ -28,6 +28,11 @@ class LogAuditoria(Base):
         nullable=True,
         index=True,
     )
+    organizacao_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        index=True,
+    )
     usuario_nome: Mapped[str | None] = mapped_column(
         String(150),
         nullable=True,

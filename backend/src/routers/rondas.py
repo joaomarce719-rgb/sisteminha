@@ -8,6 +8,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.database import get_db
+from src.services.escopo import (
+    ciclo_da_organizacao,
+    ids_ciclos_da_organizacao,
+    verificar_ciclo_da_organizacao,
+)
 from src.services.audit import registrar_auditoria, snapshot
 from src.models.ciclo_produtivo import CicloProdutivo
 from src.models.enums import RoleUsuario, StatusCiclo
@@ -69,10 +74,7 @@ async def registrar_ronda(
 ):
     """Registra ronda noturna com parâmetros de água e aeradores (RF-12, RF-13)."""
     # Validar ciclo
-    result = db.execute(select(CicloProdutivo).where(CicloProdutivo.id == payload.ciclo_id))
-    ciclo = result.scalar_one_or_none()
-    if not ciclo:
-        raise HTTPException(status_code=404, detail="Ciclo não encontrado.")
+    ciclo = ciclo_da_organizacao(db, payload.ciclo_id, current_user)
     if ciclo.status != StatusCiclo.ATIVO:
         raise HTTPException(status_code=400, detail="Ciclo não está ativo.")
 
@@ -165,7 +167,7 @@ def _biomassa_estimada_kg_ha(ciclo: CicloProdutivo) -> float:
     return biomassa / (ciclo.viveiro.area_util_m2 / 10_000)
 
 
-@router.get("/ciclo/{ciclo_id}", response_model=list[RondaNoturnaResponse])
+@router.get("/ciclo/{ciclo_id}", response_model=list[RondaNoturnaResponse], dependencies=[Depends(verificar_ciclo_da_organizacao)])
 async def listar_rondas_ciclo(
     ciclo_id: UUID,
     db: Session = Depends(get_db),
@@ -191,7 +193,10 @@ async def painel_noturno(
 
     result = db.execute(
         select(RondaNoturna)
-        .where(RondaNoturna.data_hora_ronda >= corte)
+        .where(
+            RondaNoturna.data_hora_ronda >= corte,
+            RondaNoturna.ciclo_id.in_(ids_ciclos_da_organizacao(_user)),
+        )
         .order_by(RondaNoturna.data_hora_ronda)
     )
     rondas = result.scalars().all()

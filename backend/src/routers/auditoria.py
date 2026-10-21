@@ -6,6 +6,8 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from src.database import get_db
+from src.services.auth_service import is_superadmin
+from src.services.escopo import org_do_usuario
 from src.dependencies import require_gestor
 from src.models.auditoria import LogAuditoria
 from src.models.usuario import Usuario
@@ -32,6 +34,9 @@ def listar_logs_auditoria(
     filtro_acao = action or acao
 
     query = select(LogAuditoria).order_by(desc(LogAuditoria.created_at))
+    if not is_superadmin(_usuario):
+        # GESTOR vê a trilha da própria organização; superadmin vê toda a plataforma
+        query = query.where(LogAuditoria.organizacao_id == org_do_usuario(_usuario))
 
     if filtro_entidade:
         query = query.where(LogAuditoria.entidade.ilike(f"%{filtro_entidade}%"))

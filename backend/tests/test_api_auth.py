@@ -39,7 +39,11 @@ def test_autocadastro_email_existente_nao_vaza_dados(client):
 
 def test_aprovacao_define_papel(client, gestor, login):
     email = f"{unico('aprov')}@x.com"
-    client.post("/api/v1/auth/register", json={"email": email, "senha": "abc12345"})
+    r = client.post(
+        "/api/v1/auth/register",
+        json={"email": email, "senha": "abc12345", "codigo_organizacao": "SAD-MATRIZ"},
+    )
+    assert r.status_code == 201
     user_id = _usuarios(client, gestor)[email]
 
     r = client.put(

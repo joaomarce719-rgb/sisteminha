@@ -7,6 +7,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.database import get_db
+from src.services.escopo import (
+    ciclo_da_organizacao,
+    ids_ciclos_da_organizacao,
+    verificar_ciclo_da_organizacao,
+)
 from src.services.audit import registrar_auditoria, snapshot
 from src.models.ciclo_produtivo import CicloProdutivo
 from src.models.enums import RoleUsuario, StatusAlimentar, StatusCiclo
@@ -34,14 +39,29 @@ from src.services.fuzzy_engine import (
     inferir_ajuste_sobrevivencia,
 )
 
-router = APIRouter(prefix="/api/v1/ciclos/{ciclo_id}/manejos-alimentares", tags=["Manejo Alimentar"])
+router = APIRouter(
+    prefix="/api/v1/ciclos/{ciclo_id}/manejos-alimentares",
+    tags=["Manejo Alimentar"],
+    dependencies=[Depends(verificar_ciclo_da_organizacao)],
+)
 
 
 def _obter_pontos_alimentares(ciclo: CicloProdutivo, db: Session) -> list[tuple[float, float]] | None:
     """Extrai pontos (peso_g, taxa_pct) da tabela do ciclo ou da tabela padrão."""
     if ciclo.tabela_alimentar and ciclo.tabela_alimentar.faixas:
         return [(float(f["peso_g"]), float(f["taxa_pct"])) for f in ciclo.tabela_alimentar.faixas]
-    padrao = db.scalar(select(TabelaAlimentar).where(TabelaAlimentar.is_padrao.is_(True)).limit(1))
+    org_id = ciclo.viveiro.organizacao_id
+    padrao = db.scalar(
+        select(TabelaAlimentar)
+        .where(
+            TabelaAlimentar.is_padrao.is_(True),
+            TabelaAlimentar.ativo.is_(True),
+            (TabelaAlimentar.organizacao_id == org_id) | TabelaAlimentar.organizacao_id.is_(None),
+        )
+        # A padrão da organização tem precedência sobre a referência global
+        .order_by(TabelaAlimentar.organizacao_id.is_(None))
+        .limit(1)
+    )
     if padrao and padrao.faixas:
         return [(float(f["peso_g"]), float(f["taxa_pct"])) for f in padrao.faixas]
     return None
@@ -215,6 +235,7 @@ async def registrar_manejo_global(
 ):
     if not payload.ciclo_id:
         raise HTTPException(status_code=422, detail="ciclo_id é obrigatório.")
+    ciclo_da_organizacao(db, payload.ciclo_id, _user)
     return await registrar_manejo(payload.ciclo_id, payload, db, _user)
 
 
@@ -225,6 +246,7 @@ async def listar_manejos_global(
     _user=Depends(has_role([RoleUsuario.CAMPO, RoleUsuario.VIGIA, RoleUsuario.GESTOR])),
 ):
     query = select(ManejoAlimentar).order_by(ManejoAlimentar.data_registro.desc())
+    query = query.where(ManejoAlimentar.ciclo_id.in_(ids_ciclos_da_organizacao(_user)))
     if ciclo_id:
         query = query.where(ManejoAlimentar.ciclo_id == ciclo_id)
     result = db.execute(query)
@@ -241,6 +263,7 @@ async def deletar_manejo(
     man = result.scalar_one_or_none()
     if not man:
         raise HTTPException(status_code=404, detail="Manejo não encontrado.")
+    ciclo_da_organizacao(db, man.ciclo_id, _user)
     registrar_auditoria(db, "EXCLUIR", "ManejoAlimentar", man.id, _user, dados_anteriores=snapshot(man))
     db.delete(man)
     db.flush()

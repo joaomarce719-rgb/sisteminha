@@ -1,5 +1,6 @@
 import logging
 import sqlite3
+from contextlib import contextmanager
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, Session
 
@@ -97,17 +98,43 @@ def executar_migracoes() -> None:
 
     cfg = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
     cfg.attributes["configurar_logging"] = False
-    with engine.begin() as conn:
+    with conexao_para_migracao() as conn:
         cfg.attributes["connection"] = conn
-        tabelas = set(inspect(conn).get_table_names())
-        if tabelas and "alembic_version" not in tabelas:
-            logger.warning(
-                "Banco sem controle de versão: criando tabelas ausentes e marcando a revisão %s.",
-                REVISAO_BASE,
-            )
-            Base.metadata.create_all(bind=conn)
-            command.stamp(cfg, REVISAO_BASE)
-        command.upgrade(cfg, "head")
+        with conn.begin():
+            tabelas = set(inspect(conn).get_table_names())
+            if tabelas and "alembic_version" not in tabelas:
+                logger.warning(
+                    "Banco sem controle de versão: criando tabelas ausentes e marcando a revisão %s.",
+                    REVISAO_BASE,
+                )
+                Base.metadata.create_all(bind=conn)
+                command.stamp(cfg, REVISAO_BASE)
+            command.upgrade(cfg, "head")
+
+
+@contextmanager
+def conexao_para_migracao():
+    """Conexão para migrações; no SQLite desliga as FKs durante o ALTER em batch.
+
+    O modo batch recria tabelas (DROP + RENAME), o que falharia com FKs ativas.
+    A integridade é verificada ao final com PRAGMA foreign_key_check.
+    """
+    with engine.connect() as conn:
+        sqlite = conn.dialect.name == "sqlite"
+        if sqlite:
+            conn.exec_driver_sql("PRAGMA foreign_keys=OFF")
+            conn.commit()
+        try:
+            yield conn
+            if sqlite:
+                violacoes = conn.exec_driver_sql("PRAGMA foreign_key_check").fetchall()
+                conn.commit()
+                if violacoes:
+                    raise RuntimeError(f"Migração deixou chaves estrangeiras inválidas: {violacoes[:5]}")
+        finally:
+            if sqlite:
+                conn.exec_driver_sql("PRAGMA foreign_keys=ON")
+                conn.commit()
 
 
 def init_db() -> None:
@@ -177,14 +204,16 @@ def init_db() -> None:
             # 3. Viveiros (Apenas os criados pelo usuário)
 
             # 4. Tabela de Preços
-            preco = db.scalars(select(TabelaPrecoMercado)).first()
+            preco = db.scalars(
+                select(TabelaPrecoMercado).where(TabelaPrecoMercado.organizacao_id == org.id)
+            ).first()
             if not preco:
                 db.add_all([
-                    TabelaPrecoMercado(faixa_gramatura_min=8.0, faixa_gramatura_max=10.0, preco_por_kg=18.50, vigencia_inicio=date.today()),
-                    TabelaPrecoMercado(faixa_gramatura_min=10.0, faixa_gramatura_max=12.0, preco_por_kg=21.00, vigencia_inicio=date.today()),
-                    TabelaPrecoMercado(faixa_gramatura_min=12.0, faixa_gramatura_max=14.0, preco_por_kg=24.50, vigencia_inicio=date.today()),
-                    TabelaPrecoMercado(faixa_gramatura_min=14.0, faixa_gramatura_max=16.0, preco_por_kg=28.00, vigencia_inicio=date.today()),
-                    TabelaPrecoMercado(faixa_gramatura_min=16.0, faixa_gramatura_max=20.0, preco_por_kg=32.00, vigencia_inicio=date.today()),
+                    TabelaPrecoMercado(organizacao_id=org.id, faixa_gramatura_min=8.0, faixa_gramatura_max=10.0, preco_por_kg=18.50, vigencia_inicio=date.today()),
+                    TabelaPrecoMercado(organizacao_id=org.id, faixa_gramatura_min=10.0, faixa_gramatura_max=12.0, preco_por_kg=21.00, vigencia_inicio=date.today()),
+                    TabelaPrecoMercado(organizacao_id=org.id, faixa_gramatura_min=12.0, faixa_gramatura_max=14.0, preco_por_kg=24.50, vigencia_inicio=date.today()),
+                    TabelaPrecoMercado(organizacao_id=org.id, faixa_gramatura_min=14.0, faixa_gramatura_max=16.0, preco_por_kg=28.00, vigencia_inicio=date.today()),
+                    TabelaPrecoMercado(organizacao_id=org.id, faixa_gramatura_min=16.0, faixa_gramatura_max=20.0, preco_por_kg=32.00, vigencia_inicio=date.today()),
                 ])
 
             # 5. Tabela alimentar padrão (Clifford 1992)

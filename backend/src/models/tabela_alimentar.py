@@ -3,7 +3,7 @@
 import uuid
 from typing import Any
 
-from sqlalchemy import Boolean, Integer, String
+from sqlalchemy import Boolean, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
@@ -17,6 +17,13 @@ class TabelaAlimentar(AuditMixin, Base):
 
     __tablename__ = "tabelas_alimentares"
 
+    # NULL = tabela de referência global (ex.: Clifford 1992), somente leitura
+    organizacao_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organizacoes.id"),
+        nullable=True,
+        index=True,
+    )
     nome: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
     versao: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     descricao: Mapped[str | None] = mapped_column(String(255), nullable=True)

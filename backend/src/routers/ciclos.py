@@ -8,6 +8,11 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from src.database import get_db
+from src.services.escopo import (
+    org_do_usuario,
+    verificar_ciclo_da_organizacao,
+    viveiro_da_organizacao,
+)
 from src.services.audit import registrar_auditoria, snapshot
 from src.models.biometria import Biometria
 from src.models.ciclo_produtivo import CicloProdutivo
@@ -33,10 +38,7 @@ async def criar_ciclo(
 ):
     """Abre um novo ciclo produtivo em um viveiro (RF-02)."""
     # Verificar viveiro
-    viv_result = db.execute(select(Viveiro).where(Viveiro.id == payload.viveiro_id))
-    viveiro = viv_result.scalar_one_or_none()
-    if not viveiro:
-        raise HTTPException(status_code=404, detail="Viveiro não encontrado.")
+    viveiro = viveiro_da_organizacao(db, payload.viveiro_id, _user)
     if not viveiro.status_ativo:
         raise HTTPException(status_code=400, detail="Viveiro inativo.")
 
@@ -50,7 +52,11 @@ async def criar_ciclo(
     if payload.tabela_alimentar_id is not None:
         from src.models.tabela_alimentar import TabelaAlimentar
         tabela = db.get(TabelaAlimentar, payload.tabela_alimentar_id)
-        if not tabela or not tabela.ativo:
+        if (
+            not tabela
+            or not tabela.ativo
+            or tabela.organizacao_id not in (None, viveiro.organizacao_id)
+        ):
             raise HTTPException(status_code=404, detail="Tabela alimentar não encontrada ou inativa.")
 
     # Verificar densidade (RN-01)
@@ -110,7 +116,12 @@ async def listar_ciclos(
     _user=Depends(get_current_user),
 ):
     """Lista ciclos com filtros opcionais."""
-    query = select(CicloProdutivo).order_by(CicloProdutivo.data_povoamento.desc())
+    query = (
+        select(CicloProdutivo)
+        .join(Viveiro, CicloProdutivo.viveiro_id == Viveiro.id)
+        .where(Viveiro.organizacao_id == org_do_usuario(_user))
+        .order_by(CicloProdutivo.data_povoamento.desc())
+    )
     if viveiro_id:
         query = query.where(CicloProdutivo.viveiro_id == viveiro_id)
     if status_filtro:
@@ -119,7 +130,7 @@ async def listar_ciclos(
     return result.scalars().all()
 
 
-@router.get("/{ciclo_id}", response_model=CicloResponse)
+@router.get("/{ciclo_id}", dependencies=[Depends(verificar_ciclo_da_organizacao)], response_model=CicloResponse)
 async def obter_ciclo(
     ciclo_id: UUID,
     db: Session = Depends(get_db),
@@ -133,7 +144,7 @@ async def obter_ciclo(
     return ciclo
 
 
-@router.post("/{ciclo_id}/encerrar", response_model=CicloResponse)
+@router.post("/{ciclo_id}/encerrar", dependencies=[Depends(verificar_ciclo_da_organizacao)], response_model=CicloResponse)
 async def encerrar_ciclo(
     ciclo_id: UUID,
     payload: CicloEncerrar,
@@ -183,7 +194,7 @@ async def encerrar_ciclo(
     return ciclo
 
 
-@router.post("/{ciclo_id}/pausar", response_model=CicloResponse)
+@router.post("/{ciclo_id}/pausar", dependencies=[Depends(verificar_ciclo_da_organizacao)], response_model=CicloResponse)
 async def pausar_ciclo(
     ciclo_id: UUID,
     db: Session = Depends(get_db),
@@ -214,7 +225,7 @@ async def pausar_ciclo(
     return ciclo
 
 
-@router.post("/{ciclo_id}/retomar", response_model=CicloResponse)
+@router.post("/{ciclo_id}/retomar", dependencies=[Depends(verificar_ciclo_da_organizacao)], response_model=CicloResponse)
 async def retomar_ciclo(
     ciclo_id: UUID,
     db: Session = Depends(get_db),
@@ -247,7 +258,7 @@ async def retomar_ciclo(
     return ciclo
 
 
-@router.get("/{ciclo_id}/metricas-atuais", response_model=MetricasAtuaisResponse)
+@router.get("/{ciclo_id}/metricas-atuais", dependencies=[Depends(verificar_ciclo_da_organizacao)], response_model=MetricasAtuaisResponse)
 async def metricas_atuais(
     ciclo_id: UUID,
     db: Session = Depends(get_db),
@@ -323,9 +334,11 @@ async def metricas_atuais(
     if peso_medio is not None:
         preco_result = db.execute(
             select(TabelaPrecoMercado).where(
+                TabelaPrecoMercado.organizacao_id == viveiro.organizacao_id,
                 TabelaPrecoMercado.faixa_gramatura_min <= peso_medio,
                 TabelaPrecoMercado.faixa_gramatura_max >= peso_medio,
                 TabelaPrecoMercado.vigencia_inicio <= hoje,
+                (TabelaPrecoMercado.vigencia_fim.is_(None)) | (TabelaPrecoMercado.vigencia_fim >= hoje),
             ).order_by(TabelaPrecoMercado.vigencia_inicio.desc()).limit(1)
         )
         preco_row = preco_result.scalar_one_or_none()
@@ -367,7 +380,7 @@ async def metricas_atuais(
     )
 
 
-@router.get("/{ciclo_id}/exportar-csv")
+@router.get("/{ciclo_id}/exportar-csv", dependencies=[Depends(verificar_ciclo_da_organizacao)])
 async def exportar_ciclo_csv(
     ciclo_id: UUID,
     db: Session = Depends(get_db),
@@ -430,7 +443,7 @@ async def exportar_ciclo_csv(
     )
 
 
-@router.delete("/{ciclo_id}", status_code=status.HTTP_200_OK)
+@router.delete("/{ciclo_id}", dependencies=[Depends(verificar_ciclo_da_organizacao)], status_code=status.HTTP_200_OK)
 async def deletar_ciclo(
     ciclo_id: UUID,
     db: Session = Depends(get_db),

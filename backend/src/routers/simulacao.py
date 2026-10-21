@@ -8,6 +8,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.database import get_db
+from src.services.escopo import (
+    ciclo_da_organizacao,
+    ids_ciclos_da_organizacao,
+    verificar_ciclo_da_organizacao,
+)
 from src.services.audit import registrar_auditoria, snapshot
 from src.models.ciclo_produtivo import CicloProdutivo
 from src.models.enums import CategoriaCusto, RoleUsuario, StatusCiclo
@@ -31,7 +36,11 @@ from src.services.decision_engine import (
     simular_delta_v,
 )
 
-router = APIRouter(prefix="/api/v1/ciclos/{ciclo_id}/simular-despesca", tags=["Simulação de Despesca"])
+router = APIRouter(
+    prefix="/api/v1/ciclos/{ciclo_id}/simular-despesca",
+    tags=["Simulação de Despesca"],
+    dependencies=[Depends(verificar_ciclo_da_organizacao)],
+)
 
 
 AVISO_APOIO_DECISAO = (
@@ -96,6 +105,7 @@ async def _executar_simulacao(
     # Preço de mercado
     precos_result = db.execute(
         select(TabelaPrecoMercado).where(
+            TabelaPrecoMercado.organizacao_id == ciclo.viveiro.organizacao_id,
             TabelaPrecoMercado.vigencia_inicio <= hoje,
             (TabelaPrecoMercado.vigencia_fim.is_(None))
             | (TabelaPrecoMercado.vigencia_fim >= hoje),
@@ -274,6 +284,7 @@ async def executar_simulacao_global(
     _user=Depends(has_role([RoleUsuario.GESTOR])),
 ):
     """Executa a simulação ΔV de um ciclo (mesmo cálculo da rota aninhada, somente GESTOR)."""
+    ciclo_da_organizacao(db, payload.ciclo_id, _user)
     sim = await _executar_simulacao(
         payload.ciclo_id,
         payload.dias_horizonte,
@@ -317,6 +328,7 @@ async def listar_simulacoes_global(
     _user=Depends(has_role([RoleUsuario.GESTOR])),
 ):
     query = select(SimulacaoDespesca).order_by(SimulacaoDespesca.data_simulacao.desc())
+    query = query.where(SimulacaoDespesca.ciclo_id.in_(ids_ciclos_da_organizacao(_user)))
     if ciclo_id:
         query = query.where(SimulacaoDespesca.ciclo_id == ciclo_id)
     sims = db.scalars(query).all()
@@ -355,6 +367,7 @@ async def deletar_simulacao(
     sim = result.scalar_one_or_none()
     if not sim:
         raise HTTPException(status_code=404, detail="Simulação não encontrada.")
+    ciclo_da_organizacao(db, sim.ciclo_id, _user)
     registrar_auditoria(db, "EXCLUIR", "SimulacaoDespesca", sim.id, _user, dados_anteriores=snapshot(sim))
     db.delete(sim)
     db.flush()

@@ -108,6 +108,7 @@ export async function registrarUsuario(payload: {
   email: string;
   senha: string;
   telefone_emergencia?: string;
+  codigo_organizacao?: string;
 }) {
   return apiFetch<Usuario>("/auth/register", {
     method: "POST",

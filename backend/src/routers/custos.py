@@ -7,6 +7,11 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from src.database import get_db
+from src.services.escopo import (
+    ciclo_da_organizacao,
+    ids_ciclos_da_organizacao,
+    verificar_ciclo_da_organizacao,
+)
 from src.services.audit import registrar_auditoria, snapshot
 from src.models.custo_operacional import CustoOperacional
 from src.models.enums import RoleUsuario
@@ -14,7 +19,11 @@ from src.schemas.custo import CustoCreate, CustoListResponse, CustoResumoRespons
 from src.services.auth_service import has_role
 from src.services.regras_ciclo import obter_ciclo
 
-router = APIRouter(prefix="/api/v1/ciclos/{ciclo_id}/custos", tags=["Custos Operacionais"])
+router = APIRouter(
+    prefix="/api/v1/ciclos/{ciclo_id}/custos",
+    tags=["Custos Operacionais"],
+    dependencies=[Depends(verificar_ciclo_da_organizacao)],
+)
 
 
 
@@ -151,6 +160,7 @@ async def lancar_custo_global(
 ):
     if not payload.ciclo_id:
         raise HTTPException(status_code=422, detail="ciclo_id é obrigatório.")
+    ciclo_da_organizacao(db, payload.ciclo_id, _user)
     return await lancar_custo(payload.ciclo_id, payload, db, _user)
 
 
@@ -161,6 +171,7 @@ async def listar_custos_global(
     _user=Depends(has_role([RoleUsuario.GESTOR])),
 ):
     query = select(CustoOperacional).order_by(CustoOperacional.data_lancamento.desc())
+    query = query.where(CustoOperacional.ciclo_id.in_(ids_ciclos_da_organizacao(_user)))
     if ciclo_id:
         query = query.where(CustoOperacional.ciclo_id == ciclo_id)
     custos = db.scalars(query).all()
@@ -188,6 +199,7 @@ async def deletar_custo(
     custo = result.scalar_one_or_none()
     if not custo:
         raise HTTPException(status_code=404, detail="Custo não encontrado.")
+    ciclo_da_organizacao(db, custo.ciclo_id, _user)
     registrar_auditoria(db, "EXCLUIR", "CustoOperacional", custo.id, _user, dados_anteriores=snapshot(custo))
     db.delete(custo)
     db.flush()

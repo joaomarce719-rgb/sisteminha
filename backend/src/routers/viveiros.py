@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.database import get_db
+from src.services.escopo import org_do_usuario, viveiro_da_organizacao
 from src.services.audit import registrar_auditoria, snapshot
 from src.models.enums import RoleUsuario, StatusCiclo
 from src.models.viveiro import Viveiro
@@ -25,8 +26,12 @@ async def criar_viveiro(
 ):
     """Cadastra um novo viveiro (somente GESTOR)."""
     # Verificar duplicidade
+    org_id = org_do_usuario(_user)
     exists = db.execute(
-        select(Viveiro).where(Viveiro.identificacao == payload.identificacao)
+        select(Viveiro).where(
+            Viveiro.organizacao_id == org_id,
+            Viveiro.identificacao == payload.identificacao,
+        )
     )
     if exists.scalar_one_or_none():
         raise HTTPException(
@@ -34,7 +39,7 @@ async def criar_viveiro(
             detail=f"Viveiro '{payload.identificacao}' já existe.",
         )
 
-    viveiro = Viveiro(**payload.model_dump())
+    viveiro = Viveiro(**payload.model_dump(), organizacao_id=org_id)
     db.add(viveiro)
     db.flush()
     db.refresh(viveiro)
@@ -50,7 +55,9 @@ async def listar_viveiros(
 ):
     """Lista todos os viveiros com paginação e KPIs agregados."""
     result = db.execute(
-        select(Viveiro).order_by(Viveiro.identificacao)
+        select(Viveiro)
+        .where(Viveiro.organizacao_id == org_do_usuario(_user))
+        .order_by(Viveiro.identificacao)
     )
     viveiros = result.scalars().all()
     ativos_count = sum(1 for v in viveiros if v.status_ativo)
@@ -75,10 +82,7 @@ async def obter_viveiro(
     _user=Depends(get_current_user),
 ):
     """Retorna um viveiro específico por ID."""
-    result = db.execute(select(Viveiro).where(Viveiro.id == viveiro_id))
-    viveiro = result.scalar_one_or_none()
-    if not viveiro:
-        raise HTTPException(status_code=404, detail="Viveiro não encontrado.")
+    viveiro = viveiro_da_organizacao(db, viveiro_id, _user)
     return viveiro
 
 
@@ -90,10 +94,7 @@ async def atualizar_viveiro(
     _user=Depends(has_role([RoleUsuario.GESTOR])),
 ):
     """Atualiza dados de um viveiro (somente GESTOR)."""
-    result = db.execute(select(Viveiro).where(Viveiro.id == viveiro_id))
-    viveiro = result.scalar_one_or_none()
-    if not viveiro:
-        raise HTTPException(status_code=404, detail="Viveiro não encontrado.")
+    viveiro = viveiro_da_organizacao(db, viveiro_id, _user)
 
     antes = snapshot(viveiro)
     update_data = payload.model_dump(exclude_unset=True)
@@ -114,10 +115,7 @@ async def deletar_viveiro(
     _user=Depends(has_role([RoleUsuario.GESTOR])),
 ):
     """Exclui um viveiro por ID."""
-    result = db.execute(select(Viveiro).where(Viveiro.id == viveiro_id))
-    viveiro = result.scalar_one_or_none()
-    if not viveiro:
-        raise HTTPException(status_code=404, detail="Viveiro não encontrado.")
+    viveiro = viveiro_da_organizacao(db, viveiro_id, _user)
     if viveiro.ciclos:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

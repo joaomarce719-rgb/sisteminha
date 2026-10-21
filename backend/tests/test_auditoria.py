@@ -9,11 +9,16 @@ def _logs(client, headers, **filtros):
     return r.json()
 
 
-def test_falha_de_login_registrada(client, gestor):
+def test_falha_de_login_registrada(client, gestor, admin):
+    # E-mail inexistente: sem organização, visível apenas para a Administração Central
     email = f"{unico('ninguem')}@x.com"
     client.post("/api/v1/auth/login", json={"email": email, "senha": "errada"})
-    logs = _logs(client, gestor, acao="LOGIN_FALHA")["items"]
-    assert any(log["dados_novos"]["email"] == email for log in logs)
+    assert any(log["dados_novos"]["email"] == email for log in _logs(client, admin, acao="LOGIN_FALHA")["items"])
+    assert not any(log["dados_novos"]["email"] == email for log in _logs(client, gestor, acao="LOGIN_FALHA")["items"])
+
+    # Conta existente: aparece para o gestor da organização dela
+    client.post("/api/v1/auth/login", json={"email": "campo@sad.com", "senha": "errada"})
+    assert any(log["dados_novos"]["email"] == "campo@sad.com" for log in _logs(client, gestor, acao="LOGIN_FALHA")["items"])
 
 
 def test_ciclo_de_vida_do_viveiro_auditado(client, gestor):

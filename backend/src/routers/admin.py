@@ -18,7 +18,7 @@ from src.models.usuario import Usuario
 from src.models.viveiro import Viveiro
 from src.schemas.auth import UsuarioCreate, UsuarioResponse, UsuarioUpdate
 from src.routers.auth import excluir_usuario_por_id, verificar_alvo_gerenciavel
-from src.services.auth_service import has_role, hash_password, require_superadmin
+from src.services.auth_service import has_role, hash_password, is_superadmin, require_superadmin
 
 router = APIRouter(prefix="/api/v1/admin", tags=["Administração & Governança"])
 
@@ -59,6 +59,8 @@ class MetricasGlobaisAdmin(BaseModel):
 class AprovarUsuarioRequest(BaseModel):
     papel: RoleUsuario = RoleUsuario.CAMPO
     ativo: bool = True
+    # Somente superadmin: organização para cadastros ainda sem vínculo
+    organizacao_id: UUID | None = None
 
 
 class GestorAdminCreate(BaseModel):
@@ -257,6 +259,7 @@ async def criar_usuario(
         senha_hash=hash_password(senha_bruta),
         papel=payload.papel,
         telefone_emergencia=payload.telefone_emergencia,
+        organizacao_id=_user.organizacao_id,
         ativo=True,
     )
     db.add(user)
@@ -271,9 +274,11 @@ async def listar_usuarios(
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
 ):
-    """Lista todos os usuários do sistema (somente GESTOR)."""
-    result = db.execute(select(Usuario).order_by(Usuario.nome_completo))
-    return result.scalars().all()
+    """Lista os usuários da organização (superadmin vê todos, inclusive cadastros sem vínculo)."""
+    query = select(Usuario).order_by(Usuario.nome_completo)
+    if not is_superadmin(_user):
+        query = query.where(Usuario.organizacao_id == _user.organizacao_id)
+    return db.scalars(query).all()
 
 
 @router.put("/usuarios/{user_id}", response_model=UsuarioResponse)
@@ -315,6 +320,10 @@ async def aprovar_usuario(
     verificar_alvo_gerenciavel(user, _user)
 
     antes = snapshot(user)
+    if user.organizacao_id is None:
+        user.organizacao_id = (
+            payload.organizacao_id if is_superadmin(_user) and payload.organizacao_id else _user.organizacao_id
+        )
     user.papel = payload.papel
     user.ativo = payload.ativo
     db.add(user)
@@ -455,7 +464,10 @@ async def listar_operadores_campo(
     """Lista apenas operadores normais de campo e vigias."""
     operadores = db.scalars(
         select(Usuario)
-        .where(Usuario.papel.in_([RoleUsuario.CAMPO, RoleUsuario.VIGIA]))
+        .where(
+            Usuario.papel.in_([RoleUsuario.CAMPO, RoleUsuario.VIGIA]),
+            Usuario.organizacao_id == _user.organizacao_id,
+        )
         .order_by(Usuario.nome_completo)
     ).all()
     return list(operadores)
@@ -483,6 +495,7 @@ async def criar_operador_normal(
         senha_hash=hash_password(payload.senha),
         papel=papel,
         telefone_emergencia=payload.telefone_emergencia,
+        organizacao_id=_user.organizacao_id,
         ativo=True,
     )
     db.add(user)

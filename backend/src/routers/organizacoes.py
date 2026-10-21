@@ -16,6 +16,7 @@ from src.schemas.organizacao import (
     OrganizacaoUpdate,
 )
 from src.services.audit import registrar_auditoria
+from src.services.auth_service import is_superadmin, require_superadmin
 
 router = APIRouter(prefix="/api/v1/organizacoes", tags=["Organizações"])
 
@@ -26,8 +27,18 @@ def listar_organizacoes(
     db: Session = Depends(get_db),
     _user: Usuario = Depends(get_current_usuario),
 ):
-    """Lista organizações cadastradas."""
-    return list(db.scalars(select(Organizacao).order_by(Organizacao.nome)).all())
+    """Lista organizações: a do usuário (superadmin vê todas)."""
+    query = select(Organizacao).order_by(Organizacao.nome)
+    if not is_superadmin(_user):
+        query = query.where(Organizacao.id == _user.organizacao_id)
+    return list(db.scalars(query).all())
+
+
+def _organizacao_acessivel(db: Session, org_id: UUID, user: Usuario) -> Organizacao:
+    org = db.get(Organizacao, org_id)
+    if not org or (org.id != user.organizacao_id and not is_superadmin(user)):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organização não encontrada")
+    return org
 
 
 @router.get("/{org_id}", response_model=OrganizacaoResponse)
@@ -37,10 +48,7 @@ def obter_organizacao(
     _user: Usuario = Depends(get_current_usuario),
 ):
     """Obtém detalhes de uma organização."""
-    org = db.get(Organizacao, org_id)
-    if not org:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organização não encontrada")
-    return org
+    return _organizacao_acessivel(db, org_id, _user)
 
 
 @router.post("", response_model=OrganizacaoResponse, status_code=status.HTTP_201_CREATED)
@@ -48,9 +56,9 @@ def obter_organizacao(
 def criar_organizacao(
     payload: OrganizacaoCreate,
     db: Session = Depends(get_db),
-    user: Usuario = Depends(require_gestor),
+    user: Usuario = Depends(require_superadmin),
 ):
-    """Cria uma organização (apenas GESTOR)."""
+    """Cria uma organização (apenas Administração Central)."""
     org = Organizacao(
         nome=payload.nome,
         identificador=payload.identificador,
@@ -84,10 +92,8 @@ def atualizar_organizacao(
     db: Session = Depends(get_db),
     user: Usuario = Depends(require_gestor),
 ):
-    """Atualiza uma organização (apenas GESTOR)."""
-    org = db.get(Organizacao, org_id)
-    if not org:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organização não encontrada")
+    """Atualiza a própria organização (GESTOR) ou qualquer uma (superadmin)."""
+    org = _organizacao_acessivel(db, org_id, user)
 
     dados_ant = {
         "nome": org.nome,

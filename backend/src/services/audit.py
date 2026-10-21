@@ -56,6 +56,7 @@ def registrar_auditoria(
     """Registra uma entrada na trilha de auditoria persistente."""
     log = LogAuditoria(
         usuario_id=usuario.id if usuario else None,
+        organizacao_id=usuario.organizacao_id if usuario else None,
         usuario_nome=usuario.nome_completo if usuario else "Sistema / Anônimo",
         acao=acao,
         entidade=entidade,

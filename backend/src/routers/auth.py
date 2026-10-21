@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from src.database import get_db
 from src.services.audit import registrar_auditoria, snapshot
+from src.models.organizacao import Organizacao
 from src.models.usuario import Usuario
 from src.schemas.auth import (
     AlterarSenhaRequest,
@@ -162,12 +163,31 @@ async def registrar_usuario(
 
     primeiro_usuario = db.execute(select(Usuario.id).limit(1)).scalar_one_or_none() is None
 
+    # Código (identificador) da organização: vincula o cadastro para aprovação do gestor dela
+    organizacao_id = None
+    codigo = (data.get("codigo_organizacao") or "").strip()
+    if codigo:
+        organizacao_id = db.scalar(
+            select(Organizacao.id).where(func.lower(Organizacao.identificador) == codigo.lower())
+        )
+        if organizacao_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Código de organização inválido.",
+            )
+    elif primeiro_usuario:
+        org = Organizacao(nome="Organização Principal", status_ativo=True)
+        db.add(org)
+        db.flush()
+        organizacao_id = org.id
+
     user = Usuario(
         nome_completo=nome,
         email=email,
         senha_hash=hash_password(senha),
         papel=RoleUsuario.GESTOR if primeiro_usuario else RoleUsuario.CAMPO,
         telefone_emergencia=telefone,
+        organizacao_id=organizacao_id,
         ativo=primeiro_usuario,
     )
     db.add(user)
@@ -209,7 +229,9 @@ from uuid import UUID
 
 
 def verificar_alvo_gerenciavel(alvo: Usuario, atual: Usuario) -> None:
-    """Impede que um GESTOR comum altere contas de superadmin ou exclua a própria conta."""
+    """GESTOR comum só gerencia contas da própria organização e nunca as de superadmin."""
+    if not is_superadmin(atual) and alvo.organizacao_id != atual.organizacao_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado.")
     if is_superadmin(alvo) and not is_superadmin(atual):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
