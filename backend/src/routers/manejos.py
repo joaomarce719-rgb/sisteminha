@@ -10,6 +10,7 @@ from src.database import get_db
 from src.models.ciclo_produtivo import CicloProdutivo
 from src.models.enums import RoleUsuario, StatusAlimentar, StatusCiclo
 from src.models.manejo_alimentar import ManejoAlimentar
+from src.models.tabela_alimentar import TabelaAlimentar
 from src.schemas.manejo_alimentar import (
     ManejoAlimentarCreate,
     ManejoAlimentarResponse,
@@ -20,6 +21,7 @@ from src.services.decision_engine import (
     calcular_biomassa_kg,
     calcular_populacao_atual,
     calcular_racao_diaria,
+    taxa_alimentar,
     taxa_alimentar_clifford,
     calcular_ganho_diario,
     calcular_ganho_semanal,
@@ -32,6 +34,17 @@ from src.services.fuzzy_engine import (
 router = APIRouter(prefix="/api/v1/ciclos/{ciclo_id}/manejos-alimentares", tags=["Manejo Alimentar"])
 
 
+def _obter_pontos_alimentares(ciclo: CicloProdutivo, db: Session) -> list[tuple[float, float]] | None:
+    """Extrai pontos (peso_g, taxa_pct) da tabela do ciclo ou da tabela padrão."""
+    if ciclo.tabela_alimentar and ciclo.tabela_alimentar.faixas:
+        return [(float(f["peso_g"]), float(f["taxa_pct"])) for f in ciclo.tabela_alimentar.faixas]
+    padrao = db.scalar(select(TabelaAlimentar).where(TabelaAlimentar.is_padrao.is_(True)).limit(1))
+    if padrao and padrao.faixas:
+        return [(float(f["peso_g"]), float(f["taxa_pct"])) for f in padrao.faixas]
+    return None
+
+
+@router.post("", response_model=ManejoAlimentarResponse, status_code=201)
 @router.post("/", response_model=ManejoAlimentarResponse, status_code=201)
 async def registrar_manejo(
     ciclo_id: UUID,
@@ -63,9 +76,10 @@ async def registrar_manejo(
     pop_atual = calcular_populacao_atual(ciclo.quantidade_pos_larvas, taxa_sobrev_anterior)
     biomassa = calcular_biomassa_kg(pop_atual, peso_medio)
 
-    # Taxa Clifford e consumo esperado
-    taxa_clifford = taxa_alimentar_clifford(peso_medio)
-    racao_esperada = calcular_racao_diaria(biomassa, peso_medio)
+    # Taxa alimentar e consumo esperado (Clifford ou tabela calibrada)
+    pontos_calibracao = _obter_pontos_alimentares(ciclo, db)
+    taxa_clifford = taxa_alimentar(peso_medio, pontos_calibracao)
+    racao_esperada = calcular_racao_diaria(biomassa, peso_medio, pontos_calibracao)
     taxa_alimentar_pct = (payload.quantidade_racao_kg / biomassa * 100) if biomassa > 0 else 0
 
     # Delta consumo para fuzzy
@@ -95,7 +109,9 @@ async def registrar_manejo(
     else:
         status_alimentar = StatusAlimentar.NORMAL
 
+    import uuid
     manejo = ManejoAlimentar(
+        id=uuid.uuid4(),
         ciclo_id=ciclo_id,
         data_registro=payload.data_registro,
         quantidade_racao_kg=payload.quantidade_racao_kg,
@@ -103,6 +119,7 @@ async def registrar_manejo(
         sobra_bandeja_nivel=payload.sobra_bandeja_nivel,
         status_alimentar_ajustado=status_alimentar,
         taxa_sobrevivencia_estimada_fuzzy=nova_taxa_sobrev,
+        observacoes=payload.observacoes,
     )
     db.add(manejo)
     db.flush()
@@ -110,6 +127,7 @@ async def registrar_manejo(
     return manejo
 
 
+@router.get("", response_model=list[ManejoAlimentarResponse])
 @router.get("/", response_model=list[ManejoAlimentarResponse])
 async def listar_manejos(
     ciclo_id: UUID,
@@ -148,8 +166,9 @@ async def recomendacao_alimentar(
 
     pop_atual = calcular_populacao_atual(ciclo.quantidade_pos_larvas, taxa_sobrev)
     biomassa = calcular_biomassa_kg(pop_atual, peso_medio)
-    taxa_clifford_pct = taxa_alimentar_clifford(peso_medio)
-    racao_sugerida = calcular_racao_diaria(biomassa, peso_medio)
+    pontos_calibracao = _obter_pontos_alimentares(ciclo, db)
+    taxa_clifford_pct = taxa_alimentar(peso_medio, pontos_calibracao)
+    racao_sugerida = calcular_racao_diaria(biomassa, peso_medio, pontos_calibracao)
 
     # Ajuste baseado em sobras recentes
     ajuste_texto = "Manter ração sugerida."
@@ -170,3 +189,46 @@ async def recomendacao_alimentar(
         biomassa_estimada_kg=round(biomassa, 2),
         ajuste_sugerido=ajuste_texto,
     )
+
+
+global_router = APIRouter(prefix="/api/v1/manejos", tags=["Manejo Alimentar"])
+
+
+@global_router.post("/", response_model=ManejoAlimentarResponse, status_code=201)
+async def registrar_manejo_global(
+    payload: ManejoAlimentarCreate,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.CAMPO, RoleUsuario.GESTOR])),
+):
+    if not payload.ciclo_id:
+        raise HTTPException(status_code=422, detail="ciclo_id é obrigatório.")
+    return await registrar_manejo(payload.ciclo_id, payload, db, _user)
+
+
+@global_router.get("/", response_model=list[ManejoAlimentarResponse])
+async def listar_manejos_global(
+    ciclo_id: UUID | None = None,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.CAMPO, RoleUsuario.VIGIA, RoleUsuario.GESTOR])),
+):
+    query = select(ManejoAlimentar).order_by(ManejoAlimentar.data_registro.desc())
+    if ciclo_id:
+        query = query.where(ManejoAlimentar.ciclo_id == ciclo_id)
+    result = db.execute(query)
+    return result.scalars().all()
+
+
+@global_router.delete("/{manejo_id}", status_code=200)
+async def deletar_manejo(
+    manejo_id: UUID,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.GESTOR])),
+):
+    result = db.execute(select(ManejoAlimentar).where(ManejoAlimentar.id == manejo_id))
+    man = result.scalar_one_or_none()
+    if not man:
+        raise HTTPException(status_code=404, detail="Manejo não encontrado.")
+    db.delete(man)
+    db.flush()
+    return {"detail": "Manejo excluído com sucesso.", "id": str(manejo_id)}
+

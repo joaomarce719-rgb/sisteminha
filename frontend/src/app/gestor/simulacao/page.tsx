@@ -11,14 +11,31 @@ import {
   Scale,
   CalendarDays,
   Target,
-  ChevronDown,
-  Info,
-  CheckCircle2,
-  XCircle,
+  Sparkles,
   BarChart3,
+  CheckCircle2,
+  Clock,
+  ArrowRight,
 } from "lucide-react";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  Legend,
+} from "recharts";
 import { ciclosApi, simulacaoApi, viveirosApi } from "@/lib/api";
 import type { CicloProdutivo, Viveiro, SimulacaoResponse, SimulacaoComparativa } from "@/lib/types";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { MetricCard } from "@/components/ui/metric-card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { toast } from "@/components/ui/toast";
 
 function fmtMoney(v: number) {
   return `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -31,7 +48,6 @@ export default function SimulacaoPage() {
   const [loading, setLoading] = useState(true);
   const [simulating, setSimulating] = useState(false);
   const [result, setResult] = useState<SimulacaoComparativa | null>(null);
-  const [error, setError] = useState("");
 
   // Custom simulation
   const [customDias, setCustomDias] = useState("7");
@@ -50,7 +66,6 @@ export default function SimulacaoPage() {
         setCiclos(cycs);
         if (cycs.length > 0) setSelectedCiclo(cycs[0].id);
       } catch {
-        // handle
       } finally {
         setLoading(false);
       }
@@ -63,15 +78,15 @@ export default function SimulacaoPage() {
 
   const handleComparativo = async () => {
     if (!selectedCiclo) return;
-    setError("");
     setSimulating(true);
     setResult(null);
     setCustomResult(null);
     try {
       const data = await simulacaoApi.comparativo(selectedCiclo);
       setResult(data);
+      toast.success("Simulação comparativa executada!", "Cenários de 7, 10 e 15 dias calculados pelo algoritmo ΔV.");
     } catch (err: any) {
-      setError(err.message || "Erro ao simular");
+      toast.error("Falha ao executar simulação", err.message || "Tente novamente");
     } finally {
       setSimulating(false);
     }
@@ -79,7 +94,6 @@ export default function SimulacaoPage() {
 
   const handleCustom = async () => {
     if (!selectedCiclo) return;
-    setError("");
     setCustomLoading(true);
     try {
       const data = await simulacaoApi.simular(
@@ -88,240 +102,389 @@ export default function SimulacaoPage() {
         customPreco ? parseFloat(customPreco) : undefined
       );
       setCustomResult(data);
+      toast.success("Cenário customizado calculado!");
     } catch (err: any) {
-      setError(err.message || "Erro ao simular");
+      toast.error("Erro na simulação customizada", err.message || "Tente novamente");
     } finally {
       setCustomLoading(false);
     }
   };
 
+  const chartData = result
+    ? result.simulacoes.map((s) => ({
+        cenario: `+${s.dias_horizonte} dias`,
+        lucro: s.lucro_projetado_rs,
+        receita: s.receita_projetada_rs,
+        custoAdicional: s.custo_adicional_projetado_rs,
+        deltaV: s.delta_v_rs,
+      }))
+    : [];
+
+  const melhorCenario = result?.melhor_cenario;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-32">
-        <Loader2 className="w-8 h-8 text-ocean-400 animate-spin" />
+        <Loader2 className="w-8 h-8 text-sky-500 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">
-          Simulador ΔV — Despesca
-        </h1>
-        <p className="text-[var(--text-secondary)] text-sm mt-1">
-          Compare cenários de horizonte e decida o melhor momento para despescar
-        </p>
+    <div className="max-w-6xl mx-auto space-y-6">
+      {/* ── Page Header ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-slate-200">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              Motor de Decisão Preditivo
+            </span>
+            <span className="h-1 w-1 rounded-full bg-slate-300" />
+            <span className="text-xs font-semibold text-emerald-600">
+              Algoritmo Bioeconômico ΔV
+            </span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+            Simulador de Ponto Ótimo de Despesca
+          </h1>
+          <p className="text-slate-500 text-xs mt-1">
+            Modela ganho de biomassa diária vs. custos incrementais de ração e energia para maximizar o lucro líquido.
+          </p>
+        </div>
       </div>
 
       {ciclos.length === 0 ? (
-        <div className="glass-card p-12 text-center">
-          <Shell className="w-12 h-12 text-[var(--text-muted)] mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Nenhum ciclo ativo</h3>
-          <p className="text-sm text-[var(--text-muted)]">Inicie um ciclo produtivo para poder usar o simulador</p>
-        </div>
+        <Card className="p-10 text-center">
+          <Shell className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+          <h3 className="font-bold text-slate-800">Nenhum ciclo produtivo ativo</h3>
+          <p className="text-xs text-slate-500 mt-1">Inicie um ciclo em um viveiro para simular a despesca.</p>
+        </Card>
       ) : (
         <>
-          {/* Selector */}
-          <div className="glass-card p-5 mb-6">
-            <div className="flex flex-col sm:flex-row gap-4 items-end">
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
-                  Selecione o ciclo
-                </label>
-                <select
-                  value={selectedCiclo}
-                  onChange={(e) => { setSelectedCiclo(e.target.value); setResult(null); setCustomResult(null); }}
-                  className="w-full px-4 py-3 rounded-xl bg-white/5 border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-ocean-500 transition-all appearance-none"
+          {/* ── Card Seletor e Ação de Simulação ── */}
+          <Card>
+            <CardContent className="p-5">
+              <div className="flex flex-col sm:flex-row gap-4 items-end">
+                <div className="flex-1 w-full">
+                  <Label>Selecione o Ciclo Ativo para Análise</Label>
+                  <select
+                    value={selectedCiclo}
+                    onChange={(e) => {
+                      setSelectedCiclo(e.target.value);
+                      setResult(null);
+                      setCustomResult(null);
+                    }}
+                    className="w-full mt-1.5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-800 focus:border-sky-500 focus:outline-none"
+                  >
+                    {ciclos.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {getViveiroName(c.viveiro_id)} — Lote #{c.id.substring(0, 6)} (Povoamento: {new Date(c.data_povoamento).toLocaleDateString("pt-BR")})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <Button
+                  onClick={handleComparativo}
+                  disabled={simulating || !selectedCiclo}
+                  className="w-full sm:w-auto h-11 px-6 font-bold"
                 >
-                  {ciclos.map((c) => (
-                    <option key={c.id} value={c.id} className="bg-[var(--bg-secondary)]">
-                      {getViveiroName(c.viveiro_id)} — Povoado em {new Date(c.data_povoamento).toLocaleDateString("pt-BR")}
-                    </option>
-                  ))}
-                </select>
+                  {simulating ? (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Calculando Curva...
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4" />
+                      Calcular Horizontes (7, 10 e 15 dias)
+                    </div>
+                  )}
+                </Button>
               </div>
-              <button
-                onClick={handleComparativo}
-                disabled={simulating || !selectedCiclo}
-                className="px-6 py-3 rounded-xl bg-gradient-to-r from-ocean-600 to-ocean-500 text-white font-semibold flex items-center gap-2 hover:from-ocean-500 hover:to-ocean-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-ocean-500/20 active:scale-[0.98]"
+            </CardContent>
+          </Card>
+
+          {/* ── Card de Decisão Executiva em Destaque ── */}
+          {result && melhorCenario && (
+            <div className="space-y-6">
+              <div
+                className={`rounded-2xl p-6 border-2 shadow-lg transition-all ${
+                  melhorCenario.recomendacao === "DESPESCA_IMEDIATA"
+                    ? "bg-amber-50 border-amber-300 text-amber-950 shadow-amber-500/10"
+                    : "bg-emerald-50 border-emerald-300 text-emerald-950 shadow-emerald-500/10"
+                }`}
               >
-                {simulating ? <Loader2 className="w-5 h-5 animate-spin" /> : <BarChart3 className="w-5 h-5" />}
-                Comparativo (7, 10, 15 dias)
-              </button>
-            </div>
-          </div>
-
-          {error && (
-            <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm mb-6">
-              <AlertTriangle className="w-4 h-4 shrink-0" /> {error}
-            </div>
-          )}
-
-          {/* Comparativo Results */}
-          {result && (
-            <div className="mb-8">
-              <h2 className="text-lg font-bold text-[var(--text-primary)] mb-4">
-                Resultado Comparativo
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {result.simulacoes.map((sim) => {
-                  const isBest = result.melhor_cenario?.dias_horizonte === sim.dias_horizonte;
-                  const isDespesca = sim.recomendacao === "DESPESCA_IMEDIATA";
-                  return (
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-start gap-3.5">
                     <div
-                      key={sim.dias_horizonte}
-                      className={`glass-card p-5 relative transition-all ${
-                        isBest ? "border-pond-500/40 shadow-lg shadow-pond-500/10" : ""
+                      className={`h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 border ${
+                        melhorCenario.recomendacao === "DESPESCA_IMEDIATA"
+                          ? "bg-amber-100 text-amber-700 border-amber-200"
+                          : "bg-emerald-100 text-emerald-700 border-emerald-200"
                       }`}
                     >
-                      {isBest && (
-                        <div className="absolute -top-3 left-4 px-3 py-0.5 rounded-full bg-pond-500 text-white text-xs font-bold">
-                          ✨ Melhor cenário
-                        </div>
+                      {melhorCenario.recomendacao === "DESPESCA_IMEDIATA" ? (
+                        <TrendingDown className="h-6 w-6" />
+                      ) : (
+                        <TrendingUp className="h-6 w-6" />
                       )}
+                    </div>
 
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-bold text-[var(--text-primary)]">
-                          {sim.dias_horizonte} dias
-                        </h3>
-                        <span
-                          className={`text-xs px-2.5 py-1 rounded-full font-bold ${
-                            isDespesca ? "badge-danger" : "badge-success"
-                          }`}
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant={melhorCenario.recomendacao === "DESPESCA_IMEDIATA" ? "warning" : "success"}
+                          className="text-[11px] font-black"
                         >
-                          {isDespesca ? "Despescar Já" : "Manter Cultivo"}
+                          {melhorCenario.recomendacao === "DESPESCA_IMEDIATA" ? "DESPESCA RECOMENDADA" : "MANTER CULTIVO"}
+                        </Badge>
+                        <span className="text-xs text-slate-500 font-bold">
+                          Horizonte ótimo: +{melhorCenario.dias_horizonte} dias
                         </span>
                       </div>
 
-                      <div className="space-y-3">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-[var(--text-muted)]">Peso projetado</span>
-                          <span className="text-[var(--text-primary)] font-semibold tabular-nums">
-                            {sim.peso_medio_projetado_g.toFixed(1)} g
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-[var(--text-muted)]">Biomassa proj.</span>
-                          <span className="text-[var(--text-primary)] font-semibold tabular-nums">
-                            {sim.biomassa_projetada_kg.toLocaleString("pt-BR")} kg
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-[var(--text-muted)]">Receita proj.</span>
-                          <span className="text-pond-400 font-semibold tabular-nums">
-                            {fmtMoney(sim.receita_projetada_rs)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-[var(--text-muted)]">Custo adicional</span>
-                          <span className="text-red-400 font-semibold tabular-nums">
-                            {fmtMoney(sim.custo_adicional_projetado_rs)}
-                          </span>
-                        </div>
+                      <h2 className="text-xl font-black mt-1">
+                        {melhorCenario.recomendacao === "DESPESCA_IMEDIATA"
+                          ? "Despesca Imediata Recomendada para este Viveiro"
+                          : `Manter Cultivo por mais ${melhorCenario.dias_horizonte} dias para Maximizar Lucro`}
+                      </h2>
 
-                        <div className="border-t border-[var(--border-subtle)] pt-3 mt-3">
-                          <div className="flex justify-between text-sm">
-                            <span className="text-[var(--text-muted)]">Lucro projetado</span>
-                            <span
-                              className={`font-bold tabular-nums ${
-                                sim.lucro_projetado_rs >= 0 ? "text-pond-400" : "text-red-400"
-                              }`}
-                            >
-                              {fmtMoney(sim.lucro_projetado_rs)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between text-sm mt-2">
-                            <span className="font-medium text-ocean-400">ΔV</span>
-                            <span
-                              className={`text-lg font-black tabular-nums ${
-                                sim.delta_v_rs > 0 ? "text-pond-400" : "text-red-400"
-                              }`}
-                            >
-                              {sim.delta_v_rs > 0 ? "+" : ""}
-                              {fmtMoney(sim.delta_v_rs)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <p className="text-xs text-[var(--text-muted)] mt-3 italic">{sim.justificativa}</p>
+                      <p className="text-xs opacity-90 mt-1 max-w-2xl leading-relaxed">
+                        {melhorCenario.justificativa}
+                      </p>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                  </div>
 
-          {/* Custom simulation */}
-          <div className="glass-card p-5">
-            <h2 className="text-lg font-bold text-[var(--text-primary)] mb-4">
-              Simulação Customizada
-            </h2>
-            <div className="flex flex-col sm:flex-row gap-4 items-end">
-              <div>
-                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Horizonte (dias)</label>
-                <select
-                  value={customDias}
-                  onChange={(e) => setCustomDias(e.target.value)}
-                  className="px-4 py-3 rounded-xl bg-white/5 border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-ocean-500 transition-all"
-                >
-                  <option value="7" className="bg-[var(--bg-secondary)]">7 dias</option>
-                  <option value="10" className="bg-[var(--bg-secondary)]">10 dias</option>
-                  <option value="15" className="bg-[var(--bg-secondary)]">15 dias</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Preço custom (R$/kg)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  inputMode="decimal"
-                  value={customPreco}
-                  onChange={(e) => setCustomPreco(e.target.value)}
-                  placeholder="Usar tabela"
-                  className="px-4 py-3 rounded-xl bg-white/5 border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-ocean-500 transition-all w-40"
-                />
-              </div>
-              <button
-                onClick={handleCustom}
-                disabled={customLoading || !selectedCiclo}
-                className="px-5 py-3 rounded-xl bg-shrimp-500/15 text-shrimp-400 border border-shrimp-500/25 font-semibold flex items-center gap-2 hover:bg-shrimp-500/25 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-              >
-                {customLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Target className="w-5 h-5" />}
-                Simular
-              </button>
-            </div>
-
-            {customResult && (
-              <div className="mt-5 p-4 rounded-xl bg-white/5 border border-[var(--border-subtle)]">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-3">
-                  <div>
-                    <p className="text-xs text-[var(--text-muted)]">Peso projetado</p>
-                    <p className="text-lg font-bold text-[var(--text-primary)] tabular-nums">{customResult.peso_medio_projetado_g.toFixed(1)} g</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-[var(--text-muted)]">Lucro projetado</p>
-                    <p className={`text-lg font-bold tabular-nums ${customResult.lucro_projetado_rs >= 0 ? "text-pond-400" : "text-red-400"}`}>{fmtMoney(customResult.lucro_projetado_rs)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-[var(--text-muted)]">ΔV</p>
-                    <p className={`text-xl font-black tabular-nums ${customResult.delta_v_rs > 0 ? "text-pond-400" : "text-red-400"}`}>
-                      {customResult.delta_v_rs > 0 ? "+" : ""}{fmtMoney(customResult.delta_v_rs)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-[var(--text-muted)]">Recomendação</p>
-                    <span className={`text-sm px-2.5 py-1 rounded-full font-bold inline-block mt-1 ${customResult.recomendacao === "DESPESCA_IMEDIATA" ? "badge-danger" : "badge-success"}`}>
-                      {customResult.recomendacao === "DESPESCA_IMEDIATA" ? "Despescar Já" : "Manter Cultivo"}
+                  <div className="bg-white/80 backdrop-blur-sm p-4 rounded-xl border border-black/5 text-right shrink-0">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Ganho Financeiro Adicional (ΔV)
+                    </span>
+                    <span
+                      className={`text-2xl font-black tabular-nums block mt-0.5 ${
+                        melhorCenario.delta_v_rs > 0 ? "text-emerald-600" : "text-amber-600"
+                      }`}
+                    >
+                      {melhorCenario.delta_v_rs > 0 ? "+" : ""}
+                      {fmtMoney(melhorCenario.delta_v_rs)}
+                    </span>
+                    <span className="text-[11px] text-slate-500 font-semibold">
+                      Lucro final projetado: {fmtMoney(melhorCenario.lucro_projetado_rs)}
                     </span>
                   </div>
                 </div>
-                <p className="text-sm text-[var(--text-secondary)] italic">{customResult.justificativa}</p>
               </div>
-            )}
-          </div>
+
+              {/* ── Cards dos Cenários Comparativos ── */}
+              <div>
+                <h3 className="text-base font-bold text-slate-900 mb-3 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-sky-600" />
+                  Comparativo de Horizontes Simulados
+                </h3>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {result.simulacoes.map((sim) => {
+                    const isBest = result.melhor_cenario?.dias_horizonte === sim.dias_horizonte;
+                    const isDespesca = sim.recomendacao === "DESPESCA_IMEDIATA";
+
+                    return (
+                      <Card
+                        key={sim.dias_horizonte}
+                        className={`relative transition-all ${
+                          isBest
+                            ? "border-2 border-emerald-500 shadow-md ring-2 ring-emerald-500/10"
+                            : "hover:border-slate-300"
+                        }`}
+                      >
+                        {isBest && (
+                          <div className="absolute -top-3 left-4 px-3 py-0.5 rounded-full bg-emerald-600 text-white text-[11px] font-black shadow-sm">
+                            ✨ Ponto Ótimo Econômico
+                          </div>
+                        )}
+
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center justify-between">
+                            <CardTitle className="text-lg font-black text-slate-900">
+                              +{sim.dias_horizonte} dias de cultivo
+                            </CardTitle>
+                            <Badge variant={isDespesca ? "destructive" : "success"}>
+                              {isDespesca ? "Despescar" : "Manter"}
+                            </Badge>
+                          </div>
+                        </CardHeader>
+
+                        <CardContent className="space-y-3 pt-0 text-xs">
+                          <div className="flex justify-between border-b border-slate-100 pb-2">
+                            <span className="text-slate-500">Peso médio esperado:</span>
+                            <span className="font-extrabold text-slate-900 tabular-nums">
+                              {sim.peso_medio_projetado_g.toFixed(1)} g
+                            </span>
+                          </div>
+
+                          <div className="flex justify-between border-b border-slate-100 pb-2">
+                            <span className="text-slate-500">Biomassa projetada:</span>
+                            <span className="font-extrabold text-slate-900 tabular-nums">
+                              {sim.biomassa_projetada_kg.toLocaleString("pt-BR")} kg
+                            </span>
+                          </div>
+
+                          <div className="flex justify-between border-b border-slate-100 pb-2">
+                            <span className="text-slate-500">Receita bruta esperada:</span>
+                            <span className="font-bold text-sky-600 tabular-nums">
+                              {fmtMoney(sim.receita_projetada_rs)}
+                            </span>
+                          </div>
+
+                          <div className="flex justify-between border-b border-slate-100 pb-2">
+                            <span className="text-slate-500">Custo adicional de ração/energia:</span>
+                            <span className="font-bold text-red-500 tabular-nums">
+                              {fmtMoney(sim.custo_adicional_projetado_rs)}
+                            </span>
+                          </div>
+
+                          <div className="pt-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100 flex items-center justify-between">
+                            <div>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                                Variação Líquida (ΔV)
+                              </span>
+                              <span
+                                className={`text-base font-black tabular-nums ${
+                                  sim.delta_v_rs > 0 ? "text-emerald-600" : "text-red-500"
+                                }`}
+                              >
+                                {sim.delta_v_rs > 0 ? "+" : ""}
+                                {fmtMoney(sim.delta_v_rs)}
+                              </span>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                                Lucro Total
+                              </span>
+                              <span className="text-sm font-extrabold text-slate-900 tabular-nums">
+                                {fmtMoney(sim.lucro_projetado_rs)}
+                              </span>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* ── Gráfico Comparativo Recharts ── */}
+              {chartData.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <BarChart3 className="w-4 h-4 text-sky-600" />
+                      Projeção Econômica por Horizonte de Dias
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-64 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <XAxis dataKey="cenario" stroke="#64748b" fontSize={12} />
+                          <YAxis stroke="#64748b" fontSize={12} tickFormatter={(val) => `R$ ${(val / 1000).toFixed(0)}k`} />
+                          <Tooltip
+                            formatter={(value: any) => [fmtMoney(Number(value)), ""]}
+                            contentStyle={{ backgroundColor: "#ffffff", borderRadius: "12px", border: "1px solid #e2e8f0" }}
+                          />
+                          <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }} />
+                          <Bar dataKey="lucro" name="Lucro Operacional Projetado" fill="#10b981" radius={[6, 6, 0, 0]} />
+                          <Bar dataKey="deltaV" name="Ganho Marginal (ΔV)" fill="#0284c7" radius={[6, 6, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {/* ── Simulação Customizada ── */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Target className="w-4 h-4 text-sky-600" />
+                Simulação Customizada de Parâmetros
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col sm:flex-row gap-4 items-end">
+                <div className="w-full sm:w-48">
+                  <Label>Horizonte Desejado</Label>
+                  <select
+                    value={customDias}
+                    onChange={(e) => setCustomDias(e.target.value)}
+                    className="w-full mt-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none"
+                  >
+                    <option value="5">5 dias</option>
+                    <option value="7">7 dias</option>
+                    <option value="10">10 dias</option>
+                    <option value="15">15 dias</option>
+                    <option value="20">20 dias</option>
+                  </select>
+                </div>
+
+                <div className="w-full sm:w-48">
+                  <Label>Preço Custom (R$/kg)</Label>
+                  <Input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    value={customPreco}
+                    onChange={(e) => setCustomPreco(e.target.value)}
+                    placeholder="Usar tabela padrão"
+                    className="mt-1.5"
+                  />
+                </div>
+
+                <Button
+                  onClick={handleCustom}
+                  disabled={customLoading || !selectedCiclo}
+                  variant="outline"
+                  className="w-full sm:w-auto h-11"
+                >
+                  {customLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Target className="w-4 h-4" />}
+                  Simular Cenário
+                </Button>
+              </div>
+
+              {customResult && (
+                <div className="mt-5 p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div>
+                      <span className="text-slate-400 block font-semibold">Peso Projetado</span>
+                      <strong className="text-base text-slate-900 tabular-nums">
+                        {customResult.peso_medio_projetado_g.toFixed(1)} g
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block font-semibold">Lucro Projetado</span>
+                      <strong className="text-base text-slate-900 tabular-nums">
+                        {fmtMoney(customResult.lucro_projetado_rs)}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block font-semibold">Variação ΔV</span>
+                      <strong className={`text-base tabular-nums ${customResult.delta_v_rs > 0 ? "text-emerald-600" : "text-red-500"}`}>
+                        {customResult.delta_v_rs > 0 ? "+" : ""}{fmtMoney(customResult.delta_v_rs)}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block font-semibold">Decisão</span>
+                      <Badge variant={customResult.recomendacao === "DESPESCA_IMEDIATA" ? "warning" : "success"} className="mt-1">
+                        {customResult.recomendacao === "DESPESCA_IMEDIATA" ? "Despescar" : "Manter"}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </>
       )}
     </div>

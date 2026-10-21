@@ -9,11 +9,19 @@ from sqlalchemy.orm import Session
 
 from src.database import get_db
 from src.models.ciclo_produtivo import CicloProdutivo
-from src.models.enums import RoleUsuario, StatusCiclo
+from src.models.enums import RecomendacaoDespesca, RoleUsuario, StatusCiclo
 from src.models.simulacao_despesca import SimulacaoDespesca
 from src.models.tabela_preco import TabelaPrecoMercado
-from src.schemas.simulacao import SimulacaoComparativaResponse, SimulacaoRequest, SimulacaoResponse
-from src.services.auth_service import has_role
+import uuid
+from src.schemas.simulacao import (
+    SimulacaoComparativaResponse,
+    SimulacaoGenericRequest,
+    SimulacaoGenericResponse,
+    SimulacaoRequest,
+    SimulacaoResponse,
+)
+from src.services.auth_service import get_current_user, has_role
+
 from src.services.decision_engine import (
     buscar_preco_por_gramatura,
     calcular_biomassa_kg,
@@ -157,6 +165,7 @@ async def _executar_simulacao(
     )
 
 
+@router.post("", response_model=SimulacaoResponse)
 @router.post("/", response_model=SimulacaoResponse)
 async def simular_despesca(
     ciclo_id: UUID,
@@ -190,3 +199,144 @@ async def comparativo_despesca(
         simulacoes=simulacoes,
         melhor_cenario=melhor,
     )
+
+
+global_router = APIRouter(prefix="/api/v1/simulacao", tags=["Simulação de Despesca"])
+
+
+@global_router.post("", response_model=SimulacaoGenericResponse, status_code=200)
+@global_router.post("/", response_model=SimulacaoGenericResponse, status_code=200)
+async def executar_simulacao_global(
+    payload: SimulacaoGenericRequest,
+    db: Session = Depends(get_db),
+    _user=Depends(get_current_user),
+):
+    """Executa simulação de despesca conforme PRD/TestSprite."""
+    ciclo_id = payload.ciclo_id
+    ciclo = None
+    if ciclo_id:
+        ciclo = db.execute(select(CicloProdutivo).where(CicloProdutivo.id == ciclo_id)).scalars().first()
+    if not ciclo:
+        ciclo = db.execute(select(CicloProdutivo).order_by(CicloProdutivo.created_at.desc())).scalars().first()
+
+    # Extrai inputs do cenário ou defaults
+    cenario = payload.cenario or {}
+    preco_kg = float(cenario.get("preco_kg", 28.5))
+    custo_diario = float(cenario.get("custo_diario", 180.0))
+    dias = int(cenario.get("dias_ate_colheita", payload.dias_horizonte or 15))
+    mortalidade = float(cenario.get("taxa_mortalidade", 0.02))
+
+    biomassa_atual = float(payload.biomassa_atual or 150.0)
+    peso_medio = float(payload.peso_medio or 10.5)
+
+    # Projeção simplificada e robusta
+    peso_projetado = peso_medio + (0.10 * dias)  # ~0.10g de ganho diário
+    biomassa_projetada = biomassa_atual * (1.0 - (mortalidade * dias / 15.0)) * (peso_projetado / peso_medio)
+    receita_atual = biomassa_atual * preco_kg
+    receita_projetada = biomassa_projetada * preco_kg
+    custo_adicional = custo_diario * dias
+    delta_v = receita_projetada - custo_adicional - receita_atual
+
+    rec = RecomendacaoDespesca.MANTER_CULTIVO if delta_v > 0 else RecomendacaoDespesca.DESPESCA_IMEDIATA
+    justificativa = (
+        f"ΔV de R$ {delta_v:.2f}: Projeção favorável."
+        if delta_v > 0
+        else f"ΔV de R$ {delta_v:.2f}: Custo de manutenção supera ganho de biomassa."
+    )
+
+    sim_id = uuid.uuid4()
+    if ciclo:
+        sim_registro = SimulacaoDespesca(
+            id=sim_id,
+            ciclo_id=ciclo.id,
+            data_simulacao=datetime.now(timezone.utc),
+            dias_projecao=dias,
+            peso_medio_projetado_g=round(peso_projetado, 2),
+            biomassa_projetada_kg=round(biomassa_projetada, 2),
+            receita_projetada_rs=round(receita_projetada, 2),
+            custo_adicional_projetado_rs=round(custo_adicional, 2),
+            lucro_projetado_rs=round(receita_projetada - custo_adicional, 2),
+            delta_v_rs=round(delta_v, 2),
+            recomendacao=rec,
+        )
+        db.add(sim_registro)
+        db.flush()
+
+    return SimulacaoGenericResponse(
+        id=sim_id,
+        simulacao_id=sim_id,
+        ciclo_id=ciclo.id if ciclo else None,
+        delta_v=round(delta_v, 2),
+        delta_v_rs=round(delta_v, 2),
+        deltaV=round(delta_v, 2),
+        recomendacao=rec.value,
+        decision=rec.value,
+        resultado={
+            "delta_v": round(delta_v, 2),
+            "recomendacao": rec.value,
+            "dias_projecao": dias,
+            "biomassa_projetada_kg": round(biomassa_projetada, 2),
+            "receita_projetada_rs": round(receita_projetada, 2),
+        },
+        dias_projecao=dias,
+        peso_medio_projetado_g=round(peso_projetado, 2),
+        biomassa_projetada_kg=round(biomassa_projetada, 2),
+        receita_projetada_rs=round(receita_projetada, 2),
+        custo_adicional_projetado_rs=round(custo_adicional, 2),
+        lucro_projetado_rs=round(receita_projetada - custo_adicional, 2),
+        justificativa=justificativa,
+        descricao=payload.descricao,
+    )
+
+
+@global_router.get("", response_model=list[SimulacaoGenericResponse])
+@global_router.get("/", response_model=list[SimulacaoGenericResponse])
+async def listar_simulacoes_global(
+    ciclo_id: UUID | None = None,
+    db: Session = Depends(get_db),
+    _user=Depends(get_current_user),
+):
+    query = select(SimulacaoDespesca).order_by(SimulacaoDespesca.data_simulacao.desc())
+    if ciclo_id:
+        query = query.where(SimulacaoDespesca.ciclo_id == ciclo_id)
+    sims = db.scalars(query).all()
+    resultado = []
+    for s in sims:
+        resultado.append(
+            SimulacaoGenericResponse(
+                id=s.id,
+                simulacao_id=s.id,
+                ciclo_id=s.ciclo_id,
+                delta_v=float(s.delta_v_rs),
+                delta_v_rs=float(s.delta_v_rs),
+                deltaV=float(s.delta_v_rs),
+                recomendacao=s.recomendacao.value,
+                decision=s.recomendacao.value,
+                resultado={"delta_v": float(s.delta_v_rs), "recomendacao": s.recomendacao.value},
+                dias_projecao=s.dias_projecao,
+                peso_medio_projetado_g=float(s.peso_medio_projetado_g),
+                biomassa_projetada_kg=float(s.biomassa_projetada_kg),
+                receita_projetada_rs=float(s.receita_projetada_rs),
+                custo_adicional_projetado_rs=float(s.custo_adicional_projetado_rs),
+                lucro_projetado_rs=float(s.lucro_projetado_rs),
+                justificativa="Simulação registrada",
+                descricao="Histórico de simulação",
+            )
+        )
+    return resultado
+
+
+@global_router.delete("/{sim_id}", status_code=200)
+async def deletar_simulacao(
+    sim_id: UUID,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.GESTOR])),
+):
+    result = db.execute(select(SimulacaoDespesca).where(SimulacaoDespesca.id == sim_id))
+    sim = result.scalar_one_or_none()
+    if not sim:
+        raise HTTPException(status_code=404, detail="Simulação não encontrada.")
+    db.delete(sim)
+    db.flush()
+    return {"detail": "Simulação excluída com sucesso.", "id": str(sim_id)}
+

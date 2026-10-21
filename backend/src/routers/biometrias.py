@@ -28,6 +28,23 @@ async def _get_ciclo_ativo(ciclo_id: UUID, db: Session) -> CicloProdutivo:
     return ciclo
 
 
+def _build_biometria_response(bio: Biometria) -> BiometriaResponse:
+    return BiometriaResponse(
+        id=bio.id,
+        ciclo_id=bio.ciclo_id,
+        data_medicao=bio.data_medicao,
+        quantidade_amostrada=bio.quantidade_amostrada,
+        peso_total_amostra_g=bio.peso_total_amostra_g,
+        peso_medio_g=bio.peso_medio_g,
+        ganho_medio_semanal_g=bio.ganho_medio_semanal_g,
+        uniformidade_percentual=bio.uniformidade_percentual,
+        observacoes=bio.observacoes,
+        responsavel_id=bio.responsavel_id,
+        responsavel_nome=bio.responsavel.nome_completo if bio.responsavel else None,
+        created_at=bio.created_at,
+    )
+
+
 @router.post("/", response_model=BiometriaResponse, status_code=201)
 async def registrar_biometria(
     ciclo_id: UUID,
@@ -35,8 +52,13 @@ async def registrar_biometria(
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.CAMPO, RoleUsuario.GESTOR])),
 ):
-    """Registra uma amostragem biométrica (RF-03)."""
+    """Registra uma amostragem biométrica com tamanho da amostra (RF-007, RN-004)."""
     ciclo = await _get_ciclo_ativo(ciclo_id, db)
+
+    # Calcular peso médio se fornecido peso total da amostra
+    peso_medio = payload.peso_medio_g
+    if payload.peso_total_amostra_g and payload.quantidade_amostrada > 0:
+        peso_medio = round(payload.peso_total_amostra_g / payload.quantidade_amostrada, 2)
 
     # Calcular ganho em relação à última biometria
     biometrias = sorted(ciclo.biometrias, key=lambda b: b.data_medicao)
@@ -46,22 +68,25 @@ async def registrar_biometria(
         dias = (payload.data_medicao - ultima.data_medicao).days
         if dias > 0:
             ganho_diario = calcular_ganho_diario(
-                ultima.peso_medio_g, payload.peso_medio_g, dias
+                ultima.peso_medio_g, peso_medio, dias
             )
             ganho_semanal = round(calcular_ganho_semanal(ganho_diario), 2)
 
     bio = Biometria(
         ciclo_id=ciclo_id,
         data_medicao=payload.data_medicao,
-        peso_medio_g=payload.peso_medio_g,
+        quantidade_amostrada=payload.quantidade_amostrada,
+        peso_total_amostra_g=payload.peso_total_amostra_g,
+        peso_medio_g=peso_medio,
         ganho_medio_semanal_g=ganho_semanal,
         uniformidade_percentual=payload.uniformidade_percentual,
         observacoes=payload.observacoes,
+        responsavel_id=getattr(_user, "id", None),
     )
     db.add(bio)
     db.flush()
     db.refresh(bio)
-    return bio
+    return _build_biometria_response(bio)
 
 
 @router.get("/", response_model=list[BiometriaResponse])
@@ -76,4 +101,48 @@ async def listar_biometrias(
         .where(Biometria.ciclo_id == ciclo_id)
         .order_by(Biometria.data_medicao)
     )
-    return result.scalars().all()
+    return [_build_biometria_response(b) for b in result.scalars().all()]
+
+
+global_router = APIRouter(prefix="/api/v1/biometrias", tags=["Biometrias"])
+
+
+@global_router.post("/", response_model=BiometriaResponse, status_code=201)
+async def registrar_biometria_global(
+    payload: BiometriaCreate,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.CAMPO, RoleUsuario.GESTOR])),
+):
+    if not payload.ciclo_id:
+        raise HTTPException(status_code=422, detail="ciclo_id é obrigatório.")
+    return await registrar_biometria(payload.ciclo_id, payload, db, _user)
+
+
+@global_router.get("/", response_model=list[BiometriaResponse])
+async def listar_biometrias_global(
+    ciclo_id: UUID | None = None,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.CAMPO, RoleUsuario.VIGIA, RoleUsuario.GESTOR])),
+):
+    query = select(Biometria).order_by(Biometria.data_medicao.desc())
+    if ciclo_id:
+        query = query.where(Biometria.ciclo_id == ciclo_id)
+    result = db.execute(query)
+    return [_build_biometria_response(b) for b in result.scalars().all()]
+
+
+@global_router.delete("/{biometria_id}", status_code=200)
+async def deletar_biometria(
+    biometria_id: UUID,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.GESTOR])),
+):
+    result = db.execute(select(Biometria).where(Biometria.id == biometria_id))
+    bio = result.scalar_one_or_none()
+    if not bio:
+        raise HTTPException(status_code=404, detail="Biometria não encontrada.")
+    db.delete(bio)
+    db.flush()
+    return {"detail": "Biometria excluída com sucesso.", "id": str(biometria_id)}
+
+

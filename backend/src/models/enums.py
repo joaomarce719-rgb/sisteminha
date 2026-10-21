@@ -20,6 +20,7 @@ class StatusCiclo(str, enum.Enum):
     """Estados possíveis de um ciclo produtivo."""
     PLANEJADO = "PLANEJADO"
     ATIVO = "ATIVO"
+    PAUSADO = "PAUSADO"
     FINALIZADO = "FINALIZADO"
     CANCELADO = "CANCELADO"
 

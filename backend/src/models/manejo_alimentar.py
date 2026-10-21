@@ -3,7 +3,7 @@
 import uuid
 from datetime import date
 
-from sqlalchemy import Date, Float
+from sqlalchemy import Date, Float, String
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy import ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
@@ -39,6 +39,9 @@ class ManejoAlimentar(AuditMixin, Base):
     )
     taxa_sobrevivencia_estimada_fuzzy: Mapped[float | None] = mapped_column(
         Float, nullable=True
+    )
+    observacoes: Mapped[str | None] = mapped_column(
+        String(500), nullable=True
     )
 
     # Relacionamento

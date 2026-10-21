@@ -16,6 +16,7 @@ from src.services.auth_service import has_role
 router = APIRouter(prefix="/api/v1/precos-mercado", tags=["Preços de Mercado"])
 
 
+@router.post("", response_model=PrecoResponse, status_code=201)
 @router.post("/", response_model=PrecoResponse, status_code=201)
 async def criar_faixa_preco(
     payload: PrecoCreate,
@@ -36,6 +37,7 @@ async def criar_faixa_preco(
     return preco
 
 
+@router.get("", response_model=list[PrecoResponse])
 @router.get("/", response_model=list[PrecoResponse])
 async def listar_precos(
     vigentes: bool = True,

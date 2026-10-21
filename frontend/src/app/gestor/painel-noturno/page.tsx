@@ -13,16 +13,20 @@ import {
   Eye,
   CalendarDays,
   Activity,
+  CheckCircle2,
 } from "lucide-react";
 import { rondasApi } from "@/lib/api";
 import type { RondaNoturna } from "@/lib/types";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { MetricCard } from "@/components/ui/metric-card";
+import { Badge } from "@/components/ui/badge";
 
-const COMP_LABELS: Record<string, { label: string; color: string }> = {
-  NORMAL_FUNDO: { label: "Normal (fundo)", color: "#28d280" },
-  FLOR_DAGUA_BOQUEANDO: { label: "Flor d'água / Boqueando", color: "#ef4444" },
-  NATACAO_AGITADA: { label: "Natação agitada", color: "#f59e0b" },
-  ECDISE_MASSIVA: { label: "Ecdise massiva", color: "#a78bfa" },
-  PRESENCA_BORDAS: { label: "Presença nas bordas", color: "#f59e0b" },
+const COMP_LABELS: Record<string, { label: string; bg: string; text: string; border: string }> = {
+  NORMAL_FUNDO: { label: "Normal (fundo)", bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200" },
+  FLOR_DAGUA_BOQUEANDO: { label: "Boqueando (superfície)", bg: "bg-red-50", text: "text-red-700", border: "border-red-200" },
+  NATACAO_AGITADA: { label: "Natação agitada", bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200" },
+  ECDISE_MASSIVA: { label: "Ecdise massiva", bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200" },
+  PRESENCA_BORDAS: { label: "Presença nas bordas", bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200" },
 };
 
 const ENERGIA_LABELS: Record<string, string> = {
@@ -41,19 +45,35 @@ interface PainelData {
 }
 
 function fmtDateTime(d: string) {
-  return new Date(d).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return new Date(d).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function O2Badge({ valor, classificacao }: { valor: number; classificacao: string }) {
-  const config = classificacao === "EMERGENCIA"
-    ? { bg: "bg-red-500/15", text: "text-red-400", border: "border-red-500/30", label: "Emergência" }
-    : classificacao === "ALERTA"
-    ? { bg: "bg-amber-500/15", text: "text-amber-400", border: "border-amber-500/30", label: "Alerta" }
-    : { bg: "bg-green-500/15", text: "text-green-400", border: "border-green-500/30", label: "Normal" };
-
+  if (classificacao === "EMERGENCIA") {
+    return (
+      <span className="inline-flex items-center gap-1 bg-red-100 text-red-800 border border-red-300 text-xs px-2.5 py-0.5 rounded-full font-bold animate-pulse">
+        <span className="w-1.5 h-1.5 rounded-full bg-red-600" />
+        {valor.toFixed(1)} mg/L (Crítico)
+      </span>
+    );
+  }
+  if (classificacao === "ALERTA") {
+    return (
+      <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 border border-amber-300 text-xs px-2.5 py-0.5 rounded-full font-semibold">
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-600" />
+        {valor.toFixed(1)} mg/L (Atenção)
+      </span>
+    );
+  }
   return (
-    <span className={`${config.bg} ${config.text} ${config.border} border text-xs px-2 py-0.5 rounded-full font-medium`}>
-      {valor.toFixed(1)} mg/L — {config.label}
+    <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs px-2.5 py-0.5 rounded-full font-semibold">
+      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+      {valor.toFixed(1)} mg/L (Ideal)
     </span>
   );
 }
@@ -67,123 +87,205 @@ export default function PainelNoturnoPage() {
       try {
         const data = await rondasApi.painelNoturno();
         setPainel(data);
-      } catch { } finally { setLoading(false); }
+      } catch {
+      } finally {
+        setLoading(false);
+      }
     }
     load();
   }, []);
 
-  if (loading) return <div className="flex items-center justify-center py-32"><Loader2 className="w-8 h-8 text-ocean-400 animate-spin" /></div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 bg-white rounded-2xl border border-slate-200">
+        <Loader2 className="w-8 h-8 text-ocean-600 animate-spin mb-2" />
+        <p className="text-xs text-slate-400 font-medium">Carregando telemetria noturna...</p>
+      </div>
+    );
+  }
 
   const totalAlertas = painel.reduce((sum, p) => sum + p.alertas_criticos, 0);
+  const totalRondas = painel.reduce((sum, p) => sum + p.rondas.length, 0);
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="flex items-center gap-3 mb-8">
-        <Moon className="w-8 h-8 text-ocean-400" />
+    <div className="max-w-6xl mx-auto space-y-6">
+      {/* Cabeçalho */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">Painel Noturno</h1>
-          <p className="text-[var(--text-secondary)] text-sm mt-0.5">
-            Rondas das últimas 12 horas — monitoramento de O₂ e aeradores
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-ocean-600 mb-1">
+            <Moon className="w-4 h-4" />
+            Vigia Noturno & Telemetria
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+            Painel Noturno de Monitoramento
+          </h1>
+          <p className="text-slate-500 text-sm mt-0.5">
+            Registro de rondas das últimas 12 horas — supervisão de oxigênio e aeração
           </p>
         </div>
+
+        <Badge variant={totalAlertas > 0 ? "destructive" : "success"} className="text-xs px-3 py-1">
+          {totalAlertas > 0 ? `${totalAlertas} Ocorrências Críticas` : "Parâmetros Estáveis"}
+        </Badge>
       </div>
 
-      {/* Alert summary */}
+      {/* Cards de Métricas Rápidas */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        <MetricCard
+          title="Rondas Registradas"
+          value={totalRondas}
+          subtitle="Últimas 12 horas"
+          icon={Activity}
+          accent="ocean"
+        />
+        <MetricCard
+          title="Viveiros Monitorados"
+          value={painel.length}
+          subtitle="Lotes ativos vistoriados"
+          icon={Shell}
+          accent="emerald"
+        />
+        <MetricCard
+          title="Alertas Críticos de O₂"
+          value={totalAlertas}
+          subtitle="O₂ abaixo de 2.5 mg/L"
+          icon={AlertTriangle}
+          accent={totalAlertas > 0 ? "red" : "emerald"}
+        />
+      </div>
+
+      {/* Alerta Destacado se houver emergências */}
       {totalAlertas > 0 && (
-        <div className="glass-card p-4 mb-6 border-l-4 border-l-red-500 flex items-center gap-3 pulse-alert">
-          <AlertTriangle className="w-6 h-6 text-red-400 shrink-0" />
+        <div className="rounded-2xl bg-red-50 border border-red-200 p-4 flex items-center gap-3 text-red-900 shadow-sm animate-pulse">
+          <AlertTriangle className="w-6 h-6 text-red-600 shrink-0" />
           <div>
-            <p className="font-bold text-red-400">
-              {totalAlertas} alerta{totalAlertas > 1 ? "s" : ""} crítico{totalAlertas > 1 ? "s" : ""} de O₂
-            </p>
-            <p className="text-sm text-[var(--text-muted)]">
-              Oxigênio dissolvido abaixo de 2.5 mg/L detectado
-            </p>
+            <div className="font-bold text-sm">
+              Atenção: {totalAlertas} registro(s) de hipóxia detectado(s) durante a ronda!
+            </div>
+            <div className="text-xs text-red-700 mt-0.5">
+              Oxigênio dissolvido em nível de emergência (&lt; 2.5 mg/L). Verifique os aeradores imediatamente.
+            </div>
           </div>
         </div>
       )}
 
+      {/* Lista de Viveiros e Rondas */}
       {painel.length === 0 ? (
-        <div className="glass-card p-12 text-center">
-          <Moon className="w-12 h-12 text-[var(--text-muted)] mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">Sem rondas recentes</h3>
-          <p className="text-sm text-[var(--text-muted)]">Nenhuma ronda registrada nas últimas 12 horas</p>
+        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-sm">
+          <Moon className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+          <h3 className="text-lg font-bold text-slate-900 mb-1">Nenhuma ronda recente</h3>
+          <p className="text-sm text-slate-500 max-w-sm mx-auto">
+            Não foram registradas rondas de vigia nas últimas 12 horas.
+          </p>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {painel.map((p) => (
-            <div key={p.viveiro_id} className="glass-card overflow-hidden">
-              {/* Viveiro header */}
-              <div className={`p-4 flex items-center justify-between border-b border-[var(--border-subtle)] ${p.alertas_criticos > 0 ? "bg-red-500/5" : ""}`}>
+            <div
+              key={p.viveiro_id}
+              className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm"
+            >
+              {/* Header do Viveiro */}
+              <div
+                className={`p-4 flex items-center justify-between border-b border-slate-100 ${
+                  p.alertas_criticos > 0 ? "bg-red-50/40" : "bg-slate-50/50"
+                }`}
+              >
                 <div className="flex items-center gap-3">
-                  <Shell className="w-5 h-5 text-ocean-400" />
-                  <h2 className="font-bold text-[var(--text-primary)]">{p.viveiro_identificacao}</h2>
-                  <span className="text-xs badge-info px-2 py-0.5 rounded-full font-medium">
-                    {p.rondas.length} ronda{p.rondas.length > 1 ? "s" : ""}
-                  </span>
-                  {p.alertas_criticos > 0 && (
-                    <span className="text-xs badge-danger px-2 py-0.5 rounded-full font-bold">
-                      {p.alertas_criticos} emergência{p.alertas_criticos > 1 ? "s" : ""}
+                  <div className="w-9 h-9 rounded-xl bg-ocean-50 text-ocean-600 flex items-center justify-center font-bold">
+                    <Shell className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="font-extrabold text-slate-900 text-base">{p.viveiro_identificacao}</h2>
+                    <span className="text-xs text-slate-500">
+                      {p.rondas.length} amostragem(ns) realizada(s)
                     </span>
-                  )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-4 text-sm text-[var(--text-muted)]">
+
+                <div className="flex items-center gap-3">
                   {p.o2_minimo != null && (
-                    <span>O₂: <span className="font-semibold text-[var(--text-primary)]">{p.o2_minimo.toFixed(1)}</span> – <span className="font-semibold text-[var(--text-primary)]">{p.o2_maximo?.toFixed(1)}</span> mg/L</span>
+                    <div className="text-xs text-slate-600 hidden sm:block">
+                      Faixa O₂: <strong className="text-slate-900">{p.o2_minimo.toFixed(1)}</strong> a{" "}
+                      <strong className="text-slate-900">{p.o2_maximo?.toFixed(1)} mg/L</strong>
+                    </div>
+                  )}
+
+                  {p.alertas_criticos > 0 ? (
+                    <Badge variant="destructive">
+                      {p.alertas_criticos} Crítico{p.alertas_criticos > 1 ? "s" : ""}
+                    </Badge>
+                  ) : (
+                    <Badge variant="success">Estável</Badge>
                   )}
                 </div>
               </div>
 
-              {/* Rondas */}
-              <div className="divide-y divide-[var(--border-subtle)]">
+              {/* Tabela / Lista de Rondas */}
+              <div className="divide-y divide-slate-100">
                 {p.rondas.map((r) => {
-                  const comp = COMP_LABELS[r.comportamento] || { label: r.comportamento, color: "#94a3b8" };
+                  const comp = COMP_LABELS[r.comportamento] || {
+                    label: r.comportamento,
+                    bg: "bg-slate-50",
+                    text: "text-slate-700",
+                    border: "border-slate-200",
+                  };
+
                   return (
-                    <div key={r.id} className="p-4 flex flex-wrap items-center gap-x-5 gap-y-2">
-                      <div className="flex items-center gap-2 min-w-[130px]">
-                        <CalendarDays className="w-4 h-4 text-[var(--text-muted)]" />
-                        <span className="text-sm font-medium text-[var(--text-primary)] tabular-nums">{fmtDateTime(r.data_hora_ronda)}</span>
+                    <div
+                      key={r.id}
+                      className="p-4 flex flex-wrap items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-6 flex-wrap">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 min-w-[120px]">
+                          <CalendarDays className="w-4 h-4 text-slate-400" />
+                          {fmtDateTime(r.data_hora_ronda)}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Droplets className="w-4 h-4 text-blue-500" />
+                          <O2Badge valor={r.oxigenio_dissolvido_mg_l} classificacao={r.classificacao_oxigenio} />
+                        </div>
+
+                        <div className="flex items-center gap-1.5 text-xs text-slate-700 font-medium">
+                          <Thermometer className="w-4 h-4 text-orange-500" />
+                          {r.temperatura_agua_c.toFixed(1)}°C
+                        </div>
+
+                        <span
+                          className={`text-xs px-2.5 py-0.5 rounded-full font-semibold border ${comp.bg} ${comp.text} ${comp.border}`}
+                        >
+                          {comp.label}
+                        </span>
+
+                        {r.aeradores_ligados != null && r.aeradores_instalados != null && (
+                          <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                            <Wind className="w-4 h-4 text-slate-400" />
+                            <span>
+                              {r.aeradores_ligados}/{r.aeradores_instalados} aeradores (
+                              {r.taxa_aeracao_pct}%)
+                            </span>
+                          </div>
+                        )}
                       </div>
 
-                      <div className="flex items-center gap-1.5">
-                        <Droplets className="w-4 h-4 text-blue-400" />
-                        <O2Badge valor={r.oxigenio_dissolvido_mg_l} classificacao={r.classificacao_oxigenio} />
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        <Thermometer className="w-4 h-4 text-orange-400" />
-                        <span className="text-sm text-[var(--text-primary)] tabular-nums">{r.temperatura_agua_c.toFixed(1)}°C</span>
-                      </div>
-
-                      <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: `${comp.color}20`, color: comp.color, border: `1px solid ${comp.color}40` }}>
-                        {comp.label}
-                      </span>
-
-                      {r.aeradores_ligados != null && r.aeradores_instalados != null && (
-                        <div className="flex items-center gap-1.5">
-                          <Wind className="w-4 h-4 text-[var(--text-muted)]" />
-                          <span className="text-xs text-[var(--text-secondary)]">
-                            {r.aeradores_ligados}/{r.aeradores_instalados} aeradores
-                            {r.taxa_aeracao_pct != null && ` (${r.taxa_aeracao_pct}%)`}
+                      <div className="flex items-center gap-3 text-xs text-slate-400">
+                        {r.falha_mecanica_detectada && (
+                          <span className="text-xs bg-red-100 text-red-700 border border-red-200 px-2 py-0.5 rounded-md font-bold">
+                            Falha mecânica
                           </span>
+                        )}
+                        <span className="flex items-center gap-1">
+                          <Eye className="w-3.5 h-3.5" />
+                          {r.vigia_nome}
+                        </span>
+                      </div>
+
+                      {r.observacoes && (
+                        <div className="w-full text-xs text-slate-500 italic bg-slate-50 p-2 rounded-lg border border-slate-100">
+                          Obs: {r.observacoes}
                         </div>
                       )}
-
-                      {r.fonte_energia && (
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${r.fonte_energia === "SEM_ENERGIA_QUEDA" ? "badge-danger" : r.fonte_energia === "GERADOR_DIESEL" ? "badge-warning" : "badge-success"}`}>
-                          {ENERGIA_LABELS[r.fonte_energia] || r.fonte_energia}
-                        </span>
-                      )}
-
-                      {r.falha_mecanica_detectada && (
-                        <span className="text-xs badge-danger px-2 py-0.5 rounded-full font-bold">⚠ Falha mecânica</span>
-                      )}
-
-                      <span className="text-xs text-[var(--text-muted)]">
-                        <Eye className="w-3.5 h-3.5 inline mr-1" />{r.vigia_nome}
-                      </span>
-
-                      {r.observacoes && <span className="text-xs text-[var(--text-muted)] italic w-full">💬 {r.observacoes}</span>}
                     </div>
                   );
                 })}

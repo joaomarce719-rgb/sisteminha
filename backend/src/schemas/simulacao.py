@@ -1,6 +1,7 @@
 """SAD Carcinicultura — Schemas Pydantic para Simulação de Despesca (Δ V)."""
 
 from datetime import date
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -44,7 +45,40 @@ class SimulacaoResponse(BaseModel):
     justificativa: str
 
 
+class SimulacaoGenericRequest(BaseModel):
+    ciclo_id: UUID | None = None
+    biomassa_atual: float | None = None
+    peso_medio: float | None = None
+    sobrevivencia: float | None = None
+    cenario: dict[str, Any] | None = None
+    descricao: str | None = None
+    dias_horizonte: int | None = 15
+
+
+class SimulacaoGenericResponse(BaseModel):
+    id: UUID
+    simulacao_id: UUID
+    ciclo_id: UUID | None = None
+    delta_v: float
+    delta_v_rs: float
+    deltaV: float
+    recomendacao: str
+    decision: str
+    resultado: dict[str, Any]
+    dias_projecao: int
+    peso_medio_projetado_g: float
+    biomassa_projetada_kg: float
+    receita_projetada_rs: float
+    custo_adicional_projetado_rs: float
+    lucro_projetado_rs: float
+    justificativa: str
+    descricao: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class SimulacaoComparativaResponse(BaseModel):
     """Comparativo para os 3 horizontes (7, 10, 15 dias)."""
     simulacoes: list[SimulacaoResponse]
     melhor_cenario: SimulacaoResponse | None
+

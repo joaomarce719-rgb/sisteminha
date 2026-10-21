@@ -9,12 +9,15 @@ from sqlalchemy.orm import Session
 from src.database import get_db
 from src.models.custo_operacional import CustoOperacional
 from src.models.enums import RoleUsuario
-from src.schemas.custo import CustoCreate, CustoResumoResponse, CustoResponse
+from src.schemas.custo import CustoCreate, CustoListResponse, CustoResumoResponse, CustoResponse
 from src.services.auth_service import has_role
+from src.services.audit import registrar_auditoria
 
 router = APIRouter(prefix="/api/v1/ciclos/{ciclo_id}/custos", tags=["Custos Operacionais"])
 
 
+
+@router.post("", response_model=CustoResponse, status_code=201)
 @router.post("/", response_model=CustoResponse, status_code=201)
 async def lancar_custo(
     ciclo_id: UUID,
@@ -29,10 +32,27 @@ async def lancar_custo(
     )
     db.add(custo)
     db.flush()
+
+    registrar_auditoria(
+        db=db,
+        acao="CRIAR_CUSTO",
+        entidade="CustoOperacional",
+        registro_id=custo.id,
+        usuario=_user,
+        dados_novos={
+            "ciclo_id": str(ciclo_id),
+            "data_lancamento": str(custo.data_lancamento),
+            "categoria": custo.categoria.value,
+            "descricao": custo.descricao,
+            "valor_rs": float(custo.valor_rs),
+        },
+    )
+
     db.refresh(custo)
     return custo
 
 
+@router.get("", response_model=list[CustoResponse])
 @router.get("/", response_model=list[CustoResponse])
 async def listar_custos(
     ciclo_id: UUID,
@@ -73,3 +93,113 @@ async def resumo_custos(
         )
         for row in rows
     ]
+
+
+@router.get("/exportar-csv")
+async def exportar_custos_csv(
+    ciclo_id: UUID,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.GESTOR])),
+):
+    """Exporta custos do ciclo em formato CSV delimitado para Excel (RF-025, UC-012)."""
+    import csv
+    import io
+    from fastapi.responses import Response
+
+    result = db.execute(
+        select(CustoOperacional)
+        .where(CustoOperacional.ciclo_id == ciclo_id)
+        .order_by(CustoOperacional.data_lancamento)
+    )
+    custos = result.scalars().all()
+
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=";")
+    writer.writerow(["ID", "Data_Lancamento", "Categoria", "Descricao", "Valor_RS"])
+    for c in custos:
+        writer.writerow([
+            str(c.id),
+            c.data_lancamento.isoformat(),
+            c.categoria.value,
+            c.descricao,
+            f"{float(c.valor_rs):.2f}".replace(".", ","),
+        ])
+
+    content = output.getvalue().encode("utf-8-sig")
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="custos_ciclo_{str(ciclo_id)[:8]}.csv"'
+        },
+    )
+
+
+global_router = APIRouter(prefix="/api/v1/custos", tags=["Custos Operacionais"])
+
+
+@global_router.post("/", response_model=CustoResponse, status_code=201)
+async def lancar_custo_global(
+    payload: CustoCreate,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.GESTOR])),
+):
+    ciclo_id = payload.ciclo_id
+    if not ciclo_id:
+        from src.models.ciclo_produtivo import CicloProdutivo
+        ciclo = db.scalar(select(CicloProdutivo).order_by(CicloProdutivo.created_at.desc()).limit(1))
+        if ciclo:
+            ciclo_id = ciclo.id
+
+    custo = CustoOperacional(
+        ciclo_id=ciclo_id,
+        data_lancamento=payload.data_lancamento,
+        categoria=payload.categoria,
+        descricao=payload.descricao,
+        valor_rs=payload.valor_rs,
+    )
+    db.add(custo)
+    db.flush()
+    db.refresh(custo)
+    return custo
+
+
+@global_router.get("/", response_model=CustoListResponse)
+async def listar_custos_global(
+    ciclo_id: UUID | None = None,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.GESTOR])),
+):
+    query = select(CustoOperacional).order_by(CustoOperacional.data_lancamento.desc())
+    if ciclo_id:
+        query = query.where(CustoOperacional.ciclo_id == ciclo_id)
+    custos = db.scalars(query).all()
+    total_rs = sum(float(c.valor_rs) for c in custos)
+    return {
+        "items": custos,
+        "total": len(custos),
+        "summary": {
+            "total_custos_rs": total_rs,
+            "total_valor": total_rs,
+            "quantidade": len(custos),
+            "roa": 0.0,
+            "roe": 0.0,
+        },
+    }
+
+
+@global_router.delete("/{custo_id}", status_code=200)
+async def deletar_custo(
+    custo_id: UUID,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.GESTOR])),
+):
+    result = db.execute(select(CustoOperacional).where(CustoOperacional.id == custo_id))
+    custo = result.scalar_one_or_none()
+    if not custo:
+        raise HTTPException(status_code=404, detail="Custo não encontrado.")
+    db.delete(custo)
+    db.flush()
+    return {"detail": "Custo excluído com sucesso.", "id": str(custo_id)}
+
+

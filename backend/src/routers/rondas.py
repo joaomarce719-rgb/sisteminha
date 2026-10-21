@@ -55,6 +55,7 @@ def _build_ronda_response(ronda: RondaNoturna) -> RondaNoturnaResponse:
     )
 
 
+@router.post("", response_model=RondaNoturnaResponse, status_code=201)
 @router.post("/", response_model=RondaNoturnaResponse, status_code=201)
 async def registrar_ronda(
     payload: RondaNoturnaCreate,

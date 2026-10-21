@@ -17,14 +17,18 @@ import src.models  # noqa: F401
 
 from src.routers import (
     admin,
+    auditoria,
     auth,
     biometrias,
     ciclos,
     custos,
     manejos,
+    organizacoes,
     precos,
+    propriedades,
     rondas,
     simulacao,
+    tabelas_alimentares,
     viveiros,
 )
 
@@ -63,14 +67,23 @@ app.add_middleware(
 
 # ── Routers ──────────────────────────────────────────
 app.include_router(auth.router)
+app.include_router(auth.users_router)
 app.include_router(viveiros.router)
+app.include_router(organizacoes.router)
+app.include_router(propriedades.router)
 app.include_router(ciclos.router)
 app.include_router(biometrias.router)
+app.include_router(biometrias.global_router)
 app.include_router(manejos.router)
+app.include_router(manejos.global_router)
 app.include_router(custos.router)
+app.include_router(custos.global_router)
 app.include_router(precos.router)
 app.include_router(simulacao.router)
+app.include_router(simulacao.global_router)
 app.include_router(rondas.router)
+app.include_router(tabelas_alimentares.router)
+app.include_router(auditoria.router)
 app.include_router(admin.router)
 
 

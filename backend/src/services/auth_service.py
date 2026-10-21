@@ -4,6 +4,7 @@ Implementa hashing de senhas (bcrypt via passlib), geração/validação de JWT
 e dependency injection para controle de acesso baseado em papéis.
 """
 
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException, status
@@ -24,7 +25,7 @@ settings = get_settings()
 # ── Hashing ──────────────────────────────────────────
 
 def hash_password(password: str) -> str:
-    salt = bcrypt.gensalt()
+    salt = bcrypt.gensalt(rounds=12)
     return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
 
 def verify_password(plain: str, hashed: str) -> bool:
@@ -79,10 +80,21 @@ async def get_current_user(
 ) -> Usuario:
     """Retorna o usuário autenticado a partir do token JWT."""
     payload = decode_token(token)
-    result = db.execute(
-        select(Usuario).where(Usuario.id == payload.sub)
-    )
-    user = result.scalar_one_or_none()
+    try:
+        user_id = uuid.UUID(str(payload.sub))
+    except (ValueError, AttributeError):
+        user_id = None
+
+    if user_id is not None:
+        result = db.execute(select(Usuario).where(Usuario.id == user_id))
+        user = result.scalar_one_or_none()
+    else:
+        user = None
+
+    if user is None and payload.email:
+        result = db.execute(select(Usuario).where(Usuario.email == payload.email))
+        user = result.scalar_one_or_none()
+
     if user is None or not user.ativo:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

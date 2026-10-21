@@ -1,0 +1,42 @@
+[
+  {
+    "id": "TC001",
+    "title": "test_authentication_api_login_with_valid_credentials",
+    "description": "Verify that POST /api/v1/auth/login with valid user credentials returns a 200 status and a JWT bearer token."
+  },
+  {
+    "id": "TC002",
+    "title": "test_viveiros_management_api_create_and_list_ponds",
+    "description": "Verify that POST /api/v1/viveiros/ with valid pond data creates a new pond and GET /api/v1/viveiros/ returns a paginated list with KPIs for authenticated users."
+  },
+  {
+    "id": "TC003",
+    "title": "test_ciclos_produtivos_api_start_pause_resume_cycle",
+    "description": "Verify that POST /api/v1/ciclos/ starts a new production cycle, POST /api/v1/ciclos/{ciclo_id}/pausar pauses the cycle, and POST /api/v1/ciclos/{ciclo_id}/retomar resumes the paused cycle for authenticated users."
+  },
+  {
+    "id": "TC004",
+    "title": "test_biometrias_api_record_and_list_biometric_samples",
+    "description": "Verify that POST /api/v1/biometrias/ records a new biometric sampling with valid data and GET /api/v1/biometrias/ returns the biometric history for authenticated users."
+  },
+  {
+    "id": "TC005",
+    "title": "test_manejo_alimentar_api_record_and_list_feeding_management",
+    "description": "Verify that POST /api/v1/manejos/ records feeding distribution and observations, and GET /api/v1/manejos/ returns feeding management history for authenticated users."
+  },
+  {
+    "id": "TC006",
+    "title": "test_custos_operacionais_api_record_and_list_operational_costs",
+    "description": "Verify that POST /api/v1/custos/ records an operational cost entry with valid data and GET /api/v1/custos/ returns operational costs and financial summaries for authenticated users."
+  },
+  {
+    "id": "TC007",
+    "title": "test_simulacao_despesca_api_execute_and_list_simulations",
+    "description": "Verify that POST /api/v1/simulacao/ executes a harvest decision simulation with valid inputs and GET /api/v1/simulacao/ returns historical simulation list for authenticated users."
+  },
+  {
+    "id": "TC008",
+    "title": "test_auditoria_api_query_audit_log_entries",
+    "description": "Verify that GET /api/v1/auditoria/ returns audit log entries filtered by action, entity, or date range for authenticated users."
+  }
+]

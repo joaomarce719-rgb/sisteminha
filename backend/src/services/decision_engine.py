@@ -30,13 +30,19 @@ _CLIFFORD_PESOS = _CLIFFORD_POINTS[:, 0]
 _CLIFFORD_TAXAS = _CLIFFORD_POINTS[:, 1]
 
 
-def taxa_alimentar_clifford(peso_medio_g: float) -> float:
-    """Retorna a taxa alimentar (%) por interpolação linear da tabela de Clifford.
-
-    Para pesos abaixo de 2g ou acima de 20g, extrapola linearmente
-    a partir dos dois pontos mais próximos.
-    """
+def taxa_alimentar(peso_medio_g: float, pontos: list[tuple[float, float]] | None = None) -> float:
+    """Retorna a taxa alimentar (%) por interpolação linear de pontos customizados ou da tabela Clifford."""
+    if pontos and len(pontos) >= 2:
+        pts = sorted(pontos, key=lambda p: p[0])
+        pesos = [p[0] for p in pts]
+        taxas = [p[1] for p in pts]
+        return float(np.interp(peso_medio_g, pesos, taxas))
     return float(np.interp(peso_medio_g, _CLIFFORD_PESOS, _CLIFFORD_TAXAS))
+
+
+def taxa_alimentar_clifford(peso_medio_g: float) -> float:
+    """Retorna a taxa alimentar (%) por interpolação linear da tabela de Clifford (1992)."""
+    return taxa_alimentar(peso_medio_g)
 
 
 # ── RN-01: Densidade de Estocagem ───────────────────
@@ -87,28 +93,39 @@ def classificar_fca(fca: float | None) -> ClassificacaoFCA | None:
 
 
 # ── RN-04: Ração Diária Sugerida ────────────────────
-def calcular_racao_diaria(biomassa_kg: float, peso_medio_g: float) -> float:
-    """Q (kg) = B × (Taxa_Clifford / 100)."""
-    taxa = taxa_alimentar_clifford(peso_medio_g)
+def calcular_racao_diaria(
+    biomassa_kg: float,
+    peso_medio_g: float,
+    pontos: list[tuple[float, float]] | None = None,
+) -> float:
+    """Q (kg) = B × (Taxa / 100)."""
+    taxa = taxa_alimentar(peso_medio_g, pontos)
     return biomassa_kg * (taxa / 100.0)
 
 
-# ── RN-06: Métricas Econômicas ──────────────────────
+# ── RN-06: Métricas Econômicas (RN-015: Indisponível se dados faltarem) ──
 @dataclass
 class MetricasEconomicas:
     custo_operacional_total: float
-    receita_bruta: float
-    lucro_operacional: float
+    receita_bruta: float | None
+    lucro_operacional: float | None
     margem_operacional_pct: float | None
 
 
 def calcular_metricas_economicas(
     custos: list[float],
-    biomassa_kg: float,
-    preco_venda_kg: float,
+    biomassa_kg: float | None,
+    preco_venda_kg: float | None,
 ) -> MetricasEconomicas:
-    """Calcula CO, RB, LO e MO conforme RN-06."""
+    """Calcula CO, RB, LO e MO conforme RN-06 e RN-015."""
     co_total = sum(custos)
+    if biomassa_kg is None or preco_venda_kg is None or preco_venda_kg <= 0:
+        return MetricasEconomicas(
+            custo_operacional_total=co_total,
+            receita_bruta=None,
+            lucro_operacional=None,
+            margem_operacional_pct=None,
+        )
     receita = biomassa_kg * preco_venda_kg
     lucro = receita - co_total
     margem = (lucro / receita * 100.0) if receita > 0 else None
@@ -118,6 +135,22 @@ def calcular_metricas_economicas(
         lucro_operacional=lucro,
         margem_operacional_pct=margem,
     )
+
+
+# ── RF-019 / RN-014: Retorno sobre Ativos (ROA) e Patrimônio (ROE) ──
+def calcular_roa(lucro_liquido: float | None, ativo_total: float | None) -> float | None:
+    """ROA = (Lucro Líquido / Ativo Total) * 100. Retorna None se insumos faltarem (Critério 4)."""
+    if lucro_liquido is None or ativo_total is None or ativo_total <= 0:
+        return None
+    return (lucro_liquido / ativo_total) * 100.0
+
+
+def calcular_roe(lucro_liquido: float | None, patrimonio_liquido: float | None) -> float | None:
+    """ROE = (Lucro Líquido / Patrimônio Líquido) * 100. Retorna None se insumos faltarem (Critério 4)."""
+    if lucro_liquido is None or patrimonio_liquido is None or patrimonio_liquido <= 0:
+        return None
+    return (lucro_liquido / patrimonio_liquido) * 100.0
+
 
 
 # ── RN-07: Algoritmo Delta V (ΔV) ──────────────────

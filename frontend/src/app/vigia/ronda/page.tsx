@@ -14,22 +14,30 @@ import {
   CalendarDays,
   Eye,
   Shell,
+  Wrench,
+  Power,
+  Sparkles,
 } from "lucide-react";
 import { ciclosApi, viveirosApi, rondasApi } from "@/lib/api";
 import type { CicloProdutivo, Viveiro, RondaNoturna } from "@/lib/types";
+import { StepperCounter } from "@/components/ui/stepper-counter";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { toast } from "@/components/ui/toast";
 
 const COMP_OPTIONS = [
-  { value: "NORMAL_FUNDO", label: "🟢 Normal (fundo)", desc: "Camarões nadando normalmente no fundo" },
-  { value: "FLOR_DAGUA_BOQUEANDO", label: "🔴 Flor d'água / Boqueando", desc: "Camarões na superfície, falta de O₂" },
-  { value: "NATACAO_AGITADA", label: "🟡 Natação agitada", desc: "Movimentação excessiva e desordenada" },
-  { value: "ECDISE_MASSIVA", label: "🟣 Ecdise massiva", desc: "Muitas cascas / muda simultânea" },
-  { value: "PRESENCA_BORDAS", label: "🟠 Presença nas bordas", desc: "Aglomeração nas bordas do viveiro" },
+  { value: "NORMAL_FUNDO", label: "Normal (Fundo)", desc: "Comportamento calmo no fundo", icon: "🟢", color: "emerald" },
+  { value: "FLOR_DAGUA_BOQUEANDO", label: "Boqueando / Flor d'água", desc: "Superfície por asfixia", icon: "🔴", color: "red" },
+  { value: "NATACAO_AGITADA", label: "Natação Agitada", desc: "Estresse ou predadores", icon: "🟡", color: "amber" },
+  { value: "ECDISE_MASSIVA", label: "Ecdise Massiva", desc: "Muda coletiva de carapaça", icon: "🟣", color: "purple" },
+  { value: "PRESENCA_BORDAS", label: "Presença nas Bordas", desc: "Aglomeração nos taludes", icon: "🟠", color: "orange" },
 ];
 
 const ENERGIA_OPTIONS = [
-  { value: "REDE_CONCESSIONARIA", label: "⚡ Rede elétrica" },
-  { value: "GERADOR_DIESEL", label: "🔧 Gerador diesel" },
-  { value: "SEM_ENERGIA_QUEDA", label: "❌ Sem energia (queda)" },
+  { value: "REDE_CONCESSIONARIA", label: "Rede Elétrica", icon: Zap },
+  { value: "GERADOR_DIESEL", label: "Gerador Diesel", icon: Wrench },
+  { value: "SEM_ENERGIA_QUEDA", label: "Queda / Sem Energia", icon: AlertTriangle },
 ];
 
 function fmtDateTime(d: string) {
@@ -43,21 +51,17 @@ export default function RondaPage() {
   const [rondas, setRondas] = useState<RondaNoturna[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState("");
 
-  const [form, setForm] = useState({
-    data_hora_ronda: new Date().toISOString().slice(0, 16),
-    oxigenio_dissolvido_mg_l: "",
-    temperatura_agua_c: "",
-    comportamento: "NORMAL_FUNDO",
-    aeradores_instalados: "",
-    aeradores_ligados: "",
-    fonte_energia: "REDE_CONCESSIONARIA",
-    falha_mecanica_detectada: false,
-    detalhes_falha: "",
-    observacoes: "",
-  });
+  const [dataHora, setDataHora] = useState(new Date().toISOString().slice(0, 16));
+  const [o2MgL, setO2MgL] = useState<number>(4.8);
+  const [tempC, setTempC] = useState<number>(28.5);
+  const [comportamento, setComportamento] = useState("NORMAL_FUNDO");
+  const [aeradoresInstalados, setAeradoresInstalados] = useState<number>(4);
+  const [aeradoresLigados, setAeradoresLigados] = useState<number>(4);
+  const [fonteEnergia, setFonteEnergia] = useState("REDE_CONCESSIONARIA");
+  const [falhaMecanica, setFalhaMecanica] = useState(false);
+  const [detalhesFalha, setDetalhesFalha] = useState("");
+  const [observacoes, setObservacoes] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -85,352 +89,341 @@ export default function RondaPage() {
     loadRondas();
   }, [selectedCiclo]);
 
-  const getViveiroName = (vId: string) =>
-    viveiros.find((v) => v.id === vId)?.identificacao || "—";
+  const cicloAtual = ciclos.find((c) => c.id === selectedCiclo);
+  const viveiroAtual = viveiros.find((v) => v.id === cicloAtual?.viveiro_id);
+
+  const isO2Emergencia = o2MgL < 2.5;
+  const isO2Alerta = o2MgL >= 2.5 && o2MgL < 4.0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-    setSuccess(false);
+    if (!selectedCiclo) {
+      toast.error("Selecione um viveiro com ciclo ativo");
+      return;
+    }
     setSubmitting(true);
     try {
       await rondasApi.criar({
         ciclo_id: selectedCiclo,
-        data_hora_ronda: new Date(form.data_hora_ronda).toISOString(),
-        oxigenio_dissolvido_mg_l: parseFloat(form.oxigenio_dissolvido_mg_l),
-        temperatura_agua_c: parseFloat(form.temperatura_agua_c),
-        comportamento: form.comportamento,
-        observacoes: form.observacoes || null,
-        aeradores_instalados: parseInt(form.aeradores_instalados),
-        aeradores_ligados: parseInt(form.aeradores_ligados),
-        fonte_energia: form.fonte_energia,
-        falha_mecanica_detectada: form.falha_mecanica_detectada,
-        detalhes_falha: form.falha_mecanica_detectada ? form.detalhes_falha || null : null,
+        data_hora_ronda: new Date(dataHora).toISOString(),
+        oxigenio_dissolvido_mg_l: o2MgL,
+        temperatura_agua_c: tempC,
+        comportamento,
+        observacoes: observacoes || null,
+        aeradores_instalados: aeradoresInstalados,
+        aeradores_ligados: aeradoresLigados,
+        fonte_energia: fonteEnergia,
+        falha_mecanica_detectada: falhaMecanica,
+        detalhes_falha: falhaMecanica ? detalhesFalha || null : null,
       });
-      setSuccess(true);
+
+      toast.success("Ronda registrada com sucesso!", `O₂: ${o2MgL.toFixed(1)} mg/L • Aeradores: ${aeradoresLigados}/${aeradoresInstalados}`);
+
       const data = await rondasApi.listarPorCiclo(selectedCiclo);
       setRondas(data);
-      // Reset form with updated time
-      setForm({
-        data_hora_ronda: new Date().toISOString().slice(0, 16),
-        oxigenio_dissolvido_mg_l: "",
-        temperatura_agua_c: "",
-        comportamento: "NORMAL_FUNDO",
-        aeradores_instalados: form.aeradores_instalados,
-        aeradores_ligados: form.aeradores_ligados,
-        fonte_energia: form.fonte_energia,
-        falha_mecanica_detectada: false,
-        detalhes_falha: "",
-        observacoes: "",
-      });
-      setTimeout(() => setSuccess(false), 3000);
+      setObservacoes("");
+      setDetalhesFalha("");
+      setFalhaMecanica(false);
+      setDataHora(new Date().toISOString().slice(0, 16));
     } catch (err: any) {
-      setError(err.message || "Erro ao registrar");
+      toast.error("Erro ao registrar ronda", err.message || "Tente novamente");
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (loading)
+  if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
-      </div>
-    );
-
-  if (ciclos.length === 0) {
-    return (
-      <div className="glass-card p-10 text-center mt-8">
-        <Activity className="w-12 h-12 text-[var(--text-muted)] mx-auto mb-4" />
-        <h2 className="text-lg font-bold text-[var(--text-primary)] mb-2">
-          Nenhum ciclo ativo
-        </h2>
-        <p className="text-sm text-[var(--text-muted)]">
-          Aguarde o gestor iniciar um ciclo produtivo
-        </p>
+      <div className="flex h-64 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
       </div>
     );
   }
 
   return (
-    <div>
-      <h2 className="text-xl font-bold text-[var(--text-primary)] mb-4 flex items-center gap-2">
-        <Moon className="w-5 h-5 text-amber-400" />
-        Registrar Ronda Noturna
-      </h2>
+    <div className="max-w-xl mx-auto space-y-5 pb-12">
+      {/* ── Top Header Card (Inspirado nas Imagens de Ronda/Vigia) ── */}
+      <div className="rounded-3xl bg-gradient-to-br from-[#0c1527] to-[#1a253a] p-6 text-white shadow-xl border border-white/10">
+        <div className="flex items-center justify-between mb-3">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/20 px-3 py-1 text-xs font-bold text-amber-300 border border-amber-500/30">
+            <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+            Vigia Noturno
+          </div>
+          <span className="text-xs text-slate-400 font-medium">
+            Turno Noturno
+          </span>
+        </div>
 
-      {/* Ciclo selector */}
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
-          Viveiro / Ciclo
-        </label>
+        <h1 className="text-2xl font-black tracking-tight flex items-center gap-2.5">
+          <Moon className="h-6 w-6 text-amber-400" />
+          Ronda & Parâmetros de Água
+        </h1>
+        <p className="text-xs text-slate-300 mt-1">
+          Monitoramento crítico de oxigênio dissolvido ($O_2$), aeradores e sanidade.
+        </p>
+      </div>
+
+      {/* ── Seletor de Viveiro ── */}
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#151d2e]">
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Viveiro Inspecionado
+          </label>
+          {cicloAtual && (
+            <Badge variant="success">Lote #{cicloAtual.id.substring(0, 6)}</Badge>
+          )}
+        </div>
+
         <select
           value={selectedCiclo}
-          onChange={(e) => {
-            setSelectedCiclo(e.target.value);
-            setSuccess(false);
-          }}
-          className="w-full px-4 py-3 rounded-xl bg-white/5 border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-amber-500 transition-all appearance-none text-base"
+          onChange={(e) => setSelectedCiclo(e.target.value)}
+          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 focus:border-amber-500 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white"
         >
-          {ciclos.map((c) => (
-            <option key={c.id} value={c.id} className="bg-[var(--bg-secondary)]">
-              {getViveiroName(c.viveiro_id)} — {c.quantidade_pos_larvas.toLocaleString("pt-BR")} PLs
-            </option>
-          ))}
+          {ciclos.map((c) => {
+            const v = viveiros.find((viv) => viv.id === c.viveiro_id);
+            return (
+              <option key={c.id} value={c.id} className="text-slate-900 bg-white dark:bg-slate-900 dark:text-white">
+                {v?.identificacao || "Viveiro"} — {(c.quantidade_pos_larvas / 1000).toFixed(0)}k PLs
+              </option>
+            );
+          })}
         </select>
       </div>
 
-      {success && (
-        <div className="flex items-center gap-2 p-3 rounded-xl bg-green-500/10 border border-green-500/30 text-green-400 text-sm mb-4 animate-in">
-          <CheckCircle2 className="w-5 h-5 shrink-0" />
-          <span className="font-medium">Ronda registrada com sucesso!</span>
-        </div>
-      )}
-      {error && (
-        <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm mb-4">
-          <AlertTriangle className="w-4 h-4 shrink-0" />
-          {error}
-        </div>
-      )}
-
-      {/* Form */}
-      <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Data/hora */}
-        <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
-            <CalendarDays className="w-4 h-4 inline mr-1" />
-            Data e Hora
-          </label>
-          <input
-            required
-            type="datetime-local"
-            value={form.data_hora_ronda}
-            onChange={(e) => setForm({ ...form, data_hora_ronda: e.target.value })}
-            className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 transition-all text-base"
-          />
-        </div>
-
-        {/* O2 + Temperatura */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
-              <Droplets className="w-4 h-4 inline mr-1 text-blue-400" />
-              O₂ (mg/L) *
-            </label>
-            <input
-              required
-              type="number"
-              step="0.1"
-              min="0"
-              max="20"
-              inputMode="decimal"
-              value={form.oxigenio_dissolvido_mg_l}
-              onChange={(e) => setForm({ ...form, oxigenio_dissolvido_mg_l: e.target.value })}
-              placeholder="5.0"
-              className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all text-lg font-semibold"
-            />
+      {/* ── Formulário da Ronda ── */}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Alerta de O2 Crítico em Destaque */}
+        {isO2Emergencia && (
+          <div className="rounded-2xl border-2 border-red-500 bg-red-50 p-4 text-red-900 animate-pulse flex items-start gap-3 shadow-lg shadow-red-500/20">
+            <AlertTriangle className="h-6 w-6 text-red-600 shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-black text-sm uppercase tracking-wide text-red-700">
+                Emergência: Hipóxia Crítica (&lt; 2.5 mg/L)
+              </h4>
+              <p className="text-xs text-red-600 font-medium mt-0.5">
+                Risco de asfixia imediata e perda massiva. Ligue todos os aeradores disponíveis agora!
+              </p>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
-              <Thermometer className="w-4 h-4 inline mr-1 text-orange-400" />
-              Temp (°C) *
-            </label>
-            <input
-              required
-              type="number"
-              step="0.1"
-              min="15"
-              max="40"
-              inputMode="decimal"
-              value={form.temperatura_agua_c}
-              onChange={(e) => setForm({ ...form, temperatura_agua_c: e.target.value })}
-              placeholder="28.0"
-              className="w-full px-4 py-3.5 rounded-xl bg-white/5 border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500/50 transition-all text-lg font-semibold"
-            />
-          </div>
-        </div>
+        )}
 
-        {/* Comportamento */}
-        <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-            <Eye className="w-4 h-4 inline mr-1" />
-            Comportamento dos Camarões *
-          </label>
-          <div className="space-y-2">
-            {COMP_OPTIONS.map((opt) => (
+        {/* Stepper para Oxigênio Dissolvido */}
+        <StepperCounter
+          label="Oxigênio Dissolvido (O₂)"
+          unit="mg/L"
+          value={o2MgL}
+          step={0.1}
+          min={0.0}
+          max={15.0}
+          onChange={(val) => setO2MgL(val)}
+          icon={Droplets}
+          badge={isO2Emergencia ? "EMERGÊNCIA" : isO2Alerta ? "ALERTA" : "NORMAL"}
+          helperText="Medição no ponto central ou oposto ao aerador"
+          quickAddOptions={[1.8, 2.5, 3.5, 4.5, 5.5]}
+        />
+
+        {/* Stepper para Temperatura */}
+        <StepperCounter
+          label="Temperatura da Água"
+          unit="°C"
+          value={tempC}
+          step={0.5}
+          min={15.0}
+          max={40.0}
+          onChange={(val) => setTempC(val)}
+          icon={Thermometer}
+          badge="Termômetro"
+          quickAddOptions={[26.0, 27.5, 28.5, 30.0]}
+        />
+
+        {/* Aeradores Ligados vs Instalados */}
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#151d2e]">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Wind className="h-4 w-4 text-sky-500" />
+              <span className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                Aeradores em Funcionamento
+              </span>
+            </div>
+            <Badge variant="info">{aeradoresLigados} de {aeradoresInstalados} Ligados</Badge>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                Instalados no Viveiro
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={aeradoresInstalados}
+                onChange={(e) => setAeradoresInstalados(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center text-lg font-bold text-slate-800 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                Ligados Nesta Ronda
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={aeradoresInstalados}
+                value={aeradoresLigados}
+                onChange={(e) => setAeradoresLigados(Math.min(aeradoresInstalados, Math.max(0, parseInt(e.target.value) || 0)))}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center text-lg font-bold text-slate-800 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white"
+              />
+            </div>
+          </div>
+
+          {/* Quick Tap Buttons para aeradores */}
+          <div className="flex gap-2">
+            {[0, 1, 2, 3, 4, 6].filter((n) => n <= aeradoresInstalados).map((num) => (
               <button
-                key={opt.value}
+                key={num}
                 type="button"
-                onClick={() => setForm({ ...form, comportamento: opt.value })}
-                className={`w-full px-4 py-3 rounded-xl text-left transition-all border ${
-                  form.comportamento === opt.value
-                    ? "bg-amber-500/15 border-amber-500/30 text-amber-400"
-                    : "bg-white/5 border-[var(--border-subtle)] text-[var(--text-secondary)] hover:bg-white/8"
+                onClick={() => setAeradoresLigados(num)}
+                className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition-all ${
+                  aeradoresLigados === num
+                    ? "bg-sky-500 text-white shadow-sm"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-300"
                 }`}
               >
-                <span className="text-base font-medium block">{opt.label}</span>
-                <span className="text-xs text-[var(--text-muted)]">{opt.desc}</span>
+                {num}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Aeradores */}
-        <div className="glass-card p-4">
-          <h3 className="text-sm font-bold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-            <Wind className="w-4 h-4 text-[var(--text-muted)]" />
-            Aeradores
-          </h3>
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <div>
-              <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">
-                Instalados *
-              </label>
-              <input
-                required
-                type="number"
-                min="1"
-                max="30"
-                inputMode="numeric"
-                value={form.aeradores_instalados}
-                onChange={(e) => setForm({ ...form, aeradores_instalados: e.target.value })}
-                placeholder="4"
-                className="w-full px-3 py-2.5 rounded-lg bg-white/5 border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-amber-500 transition-all text-base"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">
-                Ligados *
-              </label>
-              <input
-                required
-                type="number"
-                min="0"
-                max="30"
-                inputMode="numeric"
-                value={form.aeradores_ligados}
-                onChange={(e) => setForm({ ...form, aeradores_ligados: e.target.value })}
-                placeholder="4"
-                className="w-full px-3 py-2.5 rounded-lg bg-white/5 border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-amber-500 transition-all text-base"
-              />
-            </div>
+        {/* Comportamento do Camarão */}
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#151d2e]">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm font-bold text-slate-800 dark:text-slate-100">
+              Comportamento do Camarão
+            </span>
+            <span className="text-xs text-slate-400">Inspeção Visual</span>
           </div>
 
-          {/* Energia */}
-          <div className="mb-3">
-            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1.5">
-              Fonte de Energia
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              {ENERGIA_OPTIONS.map((opt) => (
+          <div className="space-y-2">
+            {COMP_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setComportamento(opt.value)}
+                className={`w-full flex items-center justify-between rounded-xl border p-3 text-left transition-all ${
+                  comportamento === opt.value
+                    ? "border-sky-500 bg-sky-50/70 text-sky-950 font-bold dark:bg-sky-950/40 dark:text-sky-200"
+                    : "border-slate-200 bg-slate-50/40 text-slate-600 hover:bg-slate-100/50 dark:border-white/10 dark:bg-white/5 dark:text-slate-400"
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="text-base">{opt.icon}</span>
+                  <div>
+                    <div className="text-xs font-bold leading-tight">{opt.label}</div>
+                    <div className="text-[11px] text-slate-500 font-normal mt-0.5">{opt.desc}</div>
+                  </div>
+                </div>
+                {comportamento === opt.value && (
+                  <CheckCircle2 className="h-4 w-4 text-sky-600 shrink-0" />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Fonte de Energia */}
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#151d2e]">
+          <span className="text-sm font-bold text-slate-800 dark:text-slate-100 block mb-3">
+            Fonte de Energia do Viveiro
+          </span>
+          <div className="grid grid-cols-3 gap-2">
+            {ENERGIA_OPTIONS.map((opt) => {
+              const Icon = opt.icon;
+              const isSelected = fonteEnergia === opt.value;
+              return (
                 <button
                   key={opt.value}
                   type="button"
-                  onClick={() => setForm({ ...form, fonte_energia: opt.value })}
-                  className={`px-2 py-2 rounded-lg text-xs font-medium text-center transition-all border ${
-                    form.fonte_energia === opt.value
-                      ? opt.value === "SEM_ENERGIA_QUEDA"
-                        ? "bg-red-500/15 border-red-500/30 text-red-400"
-                        : "bg-amber-500/15 border-amber-500/30 text-amber-400"
-                      : "bg-white/5 border-[var(--border-subtle)] text-[var(--text-secondary)] hover:bg-white/8"
+                  onClick={() => setFonteEnergia(opt.value)}
+                  className={`flex flex-col items-center justify-center rounded-xl border p-2.5 text-center text-xs font-semibold transition-all ${
+                    isSelected
+                      ? "border-amber-500 bg-amber-50 text-amber-900 font-bold dark:bg-amber-950/40 dark:text-amber-300"
+                      : "border-slate-200 bg-slate-50/50 text-slate-600 hover:border-slate-300 dark:border-white/10 dark:bg-white/5 dark:text-slate-400"
                   }`}
                 >
+                  <Icon className="h-4 w-4 mb-1 text-slate-500" />
                   {opt.label}
                 </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Falha mecânica */}
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={form.falha_mecanica_detectada}
-              onChange={(e) => setForm({ ...form, falha_mecanica_detectada: e.target.checked })}
-              className="w-5 h-5 rounded border-[var(--border-subtle)] text-red-500 focus:ring-red-500/50"
-            />
-            <span className="text-sm text-[var(--text-secondary)]">
-              <AlertTriangle className="w-4 h-4 inline mr-1 text-red-400" />
-              Falha mecânica detectada
-            </span>
-          </label>
-
-          {form.falha_mecanica_detectada && (
-            <input
-              type="text"
-              value={form.detalhes_falha}
-              onChange={(e) => setForm({ ...form, detalhes_falha: e.target.value })}
-              placeholder="Descreva a falha..."
-              className="w-full mt-2 px-3 py-2.5 rounded-lg bg-white/5 border border-red-500/30 text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-red-500 transition-all text-sm"
-            />
-          )}
-        </div>
-
-        {/* Observações */}
-        <div>
-          <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">
-            Observações
-          </label>
-          <textarea
-            value={form.observacoes}
-            onChange={(e) => setForm({ ...form, observacoes: e.target.value })}
-            placeholder="Observações da ronda..."
-            rows={2}
-            className="w-full px-4 py-3 rounded-xl bg-white/5 border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 transition-all resize-none text-base"
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full py-4 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold text-lg flex items-center justify-center gap-2 hover:from-amber-500 hover:to-amber-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-amber-500/20 active:scale-[0.98]"
-        >
-          {submitting ? (
-            <Loader2 className="w-6 h-6 animate-spin" />
-          ) : (
-            <>
-              <Moon className="w-6 h-6" /> Registrar Ronda
-            </>
-          )}
-        </button>
-      </form>
-
-      {/* Últimas rondas */}
-      {rondas.length > 0 && (
-        <div className="mt-8">
-          <h3 className="text-sm font-bold text-[var(--text-muted)] uppercase tracking-wider mb-3">
-            Últimas Rondas
-          </h3>
-          <div className="space-y-2">
-            {rondas.slice(0, 5).map((r) => {
-              const o2Color =
-                r.classificacao_oxigenio === "EMERGENCIA"
-                  ? "text-red-400"
-                  : r.classificacao_oxigenio === "ALERTA"
-                  ? "text-amber-400"
-                  : "text-green-400";
-              return (
-                <div key={r.id} className="glass-card p-3 flex flex-wrap items-center gap-x-4 gap-y-1">
-                  <span className="text-sm text-[var(--text-primary)] tabular-nums">
-                    {fmtDateTime(r.data_hora_ronda)}
-                  </span>
-                  <span className={`text-sm font-bold tabular-nums ${o2Color}`}>
-                    O₂ {r.oxigenio_dissolvido_mg_l.toFixed(1)}
-                  </span>
-                  <span className="text-sm text-[var(--text-secondary)] tabular-nums">
-                    {r.temperatura_agua_c.toFixed(1)}°C
-                  </span>
-                  {r.aeradores_ligados != null && (
-                    <span className="text-xs text-[var(--text-muted)]">
-                      {r.aeradores_ligados}/{r.aeradores_instalados} aer.
-                    </span>
-                  )}
-                </div>
               );
             })}
           </div>
         </div>
-      )}
+
+        {/* Botão de Envio de Alta Visibilidade */}
+        <Button
+          type="submit"
+          disabled={submitting}
+          size="lg"
+          className="w-full text-base font-bold shadow-lg shadow-amber-500/20 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 h-13"
+        >
+          {submitting ? (
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Gravando Ronda...
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5" />
+              Confirmar Ronda Noturna
+            </div>
+          )}
+        </Button>
+      </form>
+
+      {/* ── Histórico Recente de Rondas ── */}
+      <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#151d2e]">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
+          Últimas Inspeções Registradas
+        </h3>
+
+        {rondas.length === 0 ? (
+          <p className="text-xs text-slate-400 italic">Nenhuma ronda gravada neste ciclo.</p>
+        ) : (
+          <div className="space-y-2.5">
+            {rondas.slice(0, 5).map((r) => {
+              const o2Critico = r.oxigenio_dissolvido_mg_l < 2.5;
+              const o2Alerta = r.oxigenio_dissolvido_mg_l >= 2.5 && r.oxigenio_dissolvido_mg_l < 4.0;
+
+              return (
+                <div
+                  key={r.id}
+                  className="flex items-center justify-between rounded-xl bg-slate-50 p-3 text-xs dark:bg-white/5"
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-slate-900 dark:text-white text-sm">
+                        {r.oxigenio_dissolvido_mg_l.toFixed(1)} mg/L
+                      </span>
+                      <span className="text-slate-400">• {r.temperatura_agua_c.toFixed(1)}°C</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-0.5">{fmtDateTime(r.data_hora_ronda)}</p>
+                  </div>
+
+                  <div className="text-right">
+                    <Badge variant={o2Critico ? "destructive" : o2Alerta ? "warning" : "success"}>
+                      {o2Critico ? "Emergência" : o2Alerta ? "Alerta" : "Normal"}
+                    </Badge>
+                    <span className="text-[11px] text-slate-400 block mt-0.5">
+                      {r.aeradores_ligados}/{r.aeradores_instalados} aeradores
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

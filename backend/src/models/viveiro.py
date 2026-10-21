@@ -1,6 +1,7 @@
-"""SAD Carcinicultura — Modelo de Viveiro."""
+import uuid
 
-from sqlalchemy import Boolean, Float, String
+from sqlalchemy import Boolean, Float, ForeignKey, String
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.database import Base
@@ -12,6 +13,12 @@ class Viveiro(AuditMixin, Base):
 
     __tablename__ = "viveiros"
 
+    propriedade_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("propriedades.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     identificacao: Mapped[str] = mapped_column(
         String(50), unique=True, nullable=False, index=True
     )
@@ -21,4 +28,5 @@ class Viveiro(AuditMixin, Base):
     status_ativo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # Relacionamentos
-    ciclos = relationship("CicloProdutivo", back_populates="viveiro", lazy="selectin")
+    propriedade = relationship("Propriedade", back_populates="viveiros", lazy="selectin")
+    ciclos = relationship("CicloProdutivo", back_populates="viveiro", lazy="selectin", cascade="all, delete-orphan")
