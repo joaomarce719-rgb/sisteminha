@@ -1,1 +1,0 @@
-"""SAD Carcinicultura — Pacote principal."""

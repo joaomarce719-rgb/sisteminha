@@ -29,6 +29,11 @@ def get_engine():
             pass
         return eng
     except Exception as e:
+        if not settings.db_fallback_sqlite:
+            raise RuntimeError(
+                "Falha ao conectar ao banco configurado em DATABASE_URL. "
+                "Defina DB_FALLBACK_SQLITE=true para usar local_dev.db em desenvolvimento."
+            ) from e
         logger.warning(
             f"Aviso: Conexão remota falhou ({e}). Utilizando SQLite local (local_dev.db) para testes/desenvolvimento."
         )

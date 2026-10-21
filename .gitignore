@@ -1,0 +1,22 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+backend/build/
+.pytest_cache/
+
+# Ambiente e segredos
+.env
+.env.*
+!.env.example
+
+# Bancos locais
+*.db
+*.db-shm
+*.db-wal
+
+# Artefatos de ferramentas
+testsprite_tests/tmp/
+**/testsprite_tests/tmp/
+scratch/

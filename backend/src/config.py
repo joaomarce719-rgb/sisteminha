@@ -15,9 +15,12 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    # ── PostgreSQL (Supabase) ──────────────────────────
-    database_url: str = "postgresql+pg8000://postgres.qqctuxmuixvjkniyaclt:dkYSi4oUP3jFUoXM@aws-0-us-west-2.pooler.supabase.com:6543/postgres"
-    database_url_sync: str = "postgresql://sad_user:sad_pass@localhost:5432/sad_carcinicultura"
+    # ── Banco de dados ───────────────────────────────
+    # Credenciais reais ficam somente no .env (nunca no código).
+    database_url: str = "sqlite:///./local_dev.db"
+    database_url_sync: str = "sqlite:///./local_dev.db"
+    # Usa local_dev.db se o banco remoto estiver inacessível (somente desenvolvimento).
+    db_fallback_sqlite: bool = False
 
     # ── JWT ──────────────────────────────────────────
     jwt_secret_key: str = "TROQUE-POR-UMA-CHAVE-SEGURA-DE-64-CARACTERES"
