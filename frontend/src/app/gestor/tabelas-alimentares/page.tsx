@@ -5,15 +5,14 @@ import {
   Utensils,
   Plus,
   CheckCircle2,
-  AlertCircle,
   Loader2,
   Star,
   Sliders,
-  History,
   Info,
   Trash2,
 } from "lucide-react";
 import { tabelasAlimentaresApi } from "@/lib/api";
+import { mensagemErro } from "@/lib/utils";
 import type { TabelaAlimentar, FaixaAlimentarItem } from "@/lib/types";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -42,19 +41,21 @@ export default function TabelasAlimentaresPage() {
   ]);
 
   const carregarTabelas = async () => {
-    setLoading(true);
     try {
       const data = await tabelasAlimentaresApi.listar(false);
       setTabelas(data);
-    } catch (err: any) {
-      toast.error("Erro ao carregar tabelas", err.message || "Tente novamente");
+    } catch (err) {
+      toast.error("Erro ao carregar tabelas", mensagemErro(err, "Tente novamente"));
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    carregarTabelas();
+    // Os setState do carregamento só ocorrem após o await (não são síncronos no efeito)
+    (async () => {
+      await carregarTabelas();
+    })();
   }, []);
 
   const handleAddFaixa = () => {
@@ -97,8 +98,8 @@ export default function TabelasAlimentaresPage() {
       setFormDescricao("");
       setFormIsPadrao(false);
       carregarTabelas();
-    } catch (err: any) {
-      toast.error("Falha ao salvar", err.message || "Verifique os dados.");
+    } catch (err) {
+      toast.error("Falha ao salvar", mensagemErro(err, "Verifique os dados."));
     } finally {
       setSubmitting(false);
     }
@@ -109,8 +110,8 @@ export default function TabelasAlimentaresPage() {
       await tabelasAlimentaresApi.atualizar(t.id, { is_padrao: true });
       toast.success("Tabela padrão alterada", `${t.nome} (v${t.versao}) agora é o padrão de cálculo.`);
       carregarTabelas();
-    } catch (err: any) {
-      toast.error("Erro ao definir padrão", err.message || "Tente novamente");
+    } catch (err) {
+      toast.error("Erro ao definir padrão", mensagemErro(err, "Tente novamente"));
     }
   };
 
@@ -122,8 +123,8 @@ export default function TabelasAlimentaresPage() {
         `${t.nome} (v${t.versao}) status atualizado.`
       );
       carregarTabelas();
-    } catch (err: any) {
-      toast.error("Erro ao alterar status", err.message || "Tente novamente");
+    } catch (err) {
+      toast.error("Erro ao alterar status", mensagemErro(err, "Tente novamente"));
     }
   };
 

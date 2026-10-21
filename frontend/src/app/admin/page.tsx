@@ -17,10 +17,10 @@ import {
   XCircle,
   TrendingUp,
   Search,
-  ExternalLink,
   Users,
 } from "lucide-react";
 import { adminApi } from "@/lib/api";
+import { mensagemErro } from "@/lib/utils";
 import type { FazendaAdmin, MetricasGlobaisAdmin } from "@/lib/types";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -92,8 +92,8 @@ function CriarFazendaDialog({
         area_total_ha: "",
         organizacao_nome: "",
       });
-    } catch (err: any) {
-      const msg = err.message || "Erro ao adicionar fazenda";
+    } catch (err) {
+      const msg = mensagemErro(err, "Erro ao adicionar fazenda");
       setError(msg);
       toast.error("Falha no cadastro da fazenda", msg);
     } finally {
@@ -247,8 +247,8 @@ function CriarGestorDialog({
         telefone_emergencia: "",
         nome_fazenda: fazendas[0]?.nome || "",
       });
-    } catch (err: any) {
-      const msg = err.message || "Erro ao cadastrar gestor administrativo";
+    } catch (err) {
+      const msg = mensagemErro(err, "Erro ao cadastrar gestor administrativo");
       setError(msg);
       toast.error("Falha no cadastro do gestor", msg);
     } finally {
@@ -398,7 +398,6 @@ export default function AdminPage() {
   const [busca, setBusca] = useState<string>("");
 
   const carregarDados = async () => {
-    setLoading(true);
     try {
       const [fazendasData, gestoresData, metricasData] = await Promise.all([
         adminApi.listarFazendas(),
@@ -408,15 +407,18 @@ export default function AdminPage() {
       setFazendas(fazendasData || []);
       setGestores(gestoresData || []);
       setMetricas(metricasData || null);
-    } catch (err: any) {
-      toast.error("Erro ao carregar dados do admin", err.message || "Tente novamente");
+    } catch (err) {
+      toast.error("Erro ao carregar dados do admin", mensagemErro(err, "Tente novamente"));
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    carregarDados();
+    // Os setState do carregamento só ocorrem após o await (não são síncronos no efeito)
+    (async () => {
+      await carregarDados();
+    })();
   }, []);
 
   const handleToggleStatusFazenda = async (fazenda: FazendaAdmin) => {
@@ -428,8 +430,8 @@ export default function AdminPage() {
         `${fazenda.nome} agora está ${fazenda.status_ativo ? "suspensa" : "ativa e homologada"}.`
       );
       carregarDados();
-    } catch (err: any) {
-      toast.error("Erro ao alterar status da fazenda", err.message || "Tente novamente");
+    } catch (err) {
+      toast.error("Erro ao alterar status da fazenda", mensagemErro(err, "Tente novamente"));
     } finally {
       setTogglingFazenda(null);
     }
@@ -444,8 +446,8 @@ export default function AdminPage() {
         `${gestor.nome_completo} agora está ${gestor.ativo ? "bloqueado" : "ativo no sistema"}.`
       );
       carregarDados();
-    } catch (err: any) {
-      toast.error("Erro ao alterar status", err.message || "Tente novamente");
+    } catch (err) {
+      toast.error("Erro ao alterar status", mensagemErro(err, "Tente novamente"));
     } finally {
       setTogglingGestor(null);
     }
@@ -460,8 +462,8 @@ export default function AdminPage() {
         `Senha temporária de ${nome}: ${res.senha_temporaria}`,
         60000
       );
-    } catch (err: any) {
-      toast.error("Falha ao resetar senha", err.message || "Tente novamente");
+    } catch (err) {
+      toast.error("Falha ao resetar senha", mensagemErro(err, "Tente novamente"));
     } finally {
       setResetting(null);
     }

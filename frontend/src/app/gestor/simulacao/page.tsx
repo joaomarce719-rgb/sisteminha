@@ -5,17 +5,11 @@ import {
   TrendingUp,
   TrendingDown,
   Loader2,
-  AlertTriangle,
   Shell,
-  DollarSign,
-  Scale,
-  CalendarDays,
   Target,
   Sparkles,
   BarChart3,
-  CheckCircle2,
   Clock,
-  ArrowRight,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -28,11 +22,11 @@ import {
   Legend,
 } from "recharts";
 import { ciclosApi, simulacaoApi, viveirosApi } from "@/lib/api";
+import { mensagemErro } from "@/lib/utils";
 import type { CicloProdutivo, Viveiro, SimulacaoResponse, SimulacaoComparativa } from "@/lib/types";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MetricCard } from "@/components/ui/metric-card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/toast";
@@ -89,8 +83,8 @@ export default function SimulacaoPage() {
       );
       setResult(data);
       toast.success("Simulação comparativa executada!", "Cenários de 7, 10 e 15 dias calculados pelo algoritmo ΔV.");
-    } catch (err: any) {
-      toast.error("Falha ao executar simulação", err.message || "Tente novamente");
+    } catch (err) {
+      toast.error("Falha ao executar simulação", mensagemErro(err, "Tente novamente"));
     } finally {
       setSimulating(false);
     }
@@ -108,8 +102,8 @@ export default function SimulacaoPage() {
       );
       setCustomResult(data);
       toast.success("Cenário customizado calculado!");
-    } catch (err: any) {
-      toast.error("Erro na simulação customizada", err.message || "Tente novamente");
+    } catch (err) {
+      toast.error("Erro na simulação customizada", mensagemErro(err, "Tente novamente"));
     } finally {
       setCustomLoading(false);
     }
@@ -394,7 +388,7 @@ export default function SimulacaoPage() {
                           <XAxis dataKey="cenario" stroke="#64748b" fontSize={12} />
                           <YAxis stroke="#64748b" fontSize={12} tickFormatter={(val) => `R$ ${(val / 1000).toFixed(0)}k`} />
                           <Tooltip
-                            formatter={(value: any) => [fmtMoney(Number(value)), ""]}
+                            formatter={(value) => [fmtMoney(Number(value)), ""]}
                             contentStyle={{ backgroundColor: "#ffffff", borderRadius: "12px", border: "1px solid #e2e8f0" }}
                           />
                           <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "10px" }} />

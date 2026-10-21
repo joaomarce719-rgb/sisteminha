@@ -1,13 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import {
   Users,
   Plus,
   Loader2,
   AlertTriangle,
-  Shield,
   Mail,
   Phone,
   RefreshCw,
@@ -15,11 +13,10 @@ import {
   UserX,
   Lock,
   Search,
-  ExternalLink,
-  Building2,
 } from "lucide-react";
 import { adminApi } from "@/lib/api";
-import type { Usuario, RoleUsuario } from "@/lib/types";
+import { mensagemErro } from "@/lib/utils";
+import type { Usuario } from "@/lib/types";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -89,8 +86,8 @@ function CriarColaboradorDialog({
         papel: "CAMPO",
         telefone_emergencia: "",
       });
-    } catch (err: any) {
-      const msg = err.message || "Erro ao cadastrar operador";
+    } catch (err) {
+      const msg = mensagemErro(err, "Erro ao cadastrar operador");
       setError(msg);
       toast.error("Falha no cadastro", msg);
     } finally {
@@ -228,19 +225,21 @@ export default function OperadoresPage() {
   const [busca, setBusca] = useState<string>("");
 
   const loadUsers = async () => {
-    setLoading(true);
     try {
       const data = await adminApi.listarOperadores();
       setUsuarios(data || []);
-    } catch (err: any) {
-      toast.error("Erro ao listar operadores", err.message || "Tente novamente");
+    } catch (err) {
+      toast.error("Erro ao listar operadores", mensagemErro(err, "Tente novamente"));
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadUsers();
+    // Os setState do carregamento só ocorrem após o await (não são síncronos no efeito)
+    (async () => {
+      await loadUsers();
+    })();
   }, []);
 
   const handleResetSenha = async (id: string, nome: string) => {
@@ -252,8 +251,8 @@ export default function OperadoresPage() {
         `Senha temporária de ${nome}: ${res.senha_temporaria}`,
         60000
       );
-    } catch (err: any) {
-      toast.error("Falha ao resetar senha", err.message || "Tente novamente");
+    } catch (err) {
+      toast.error("Falha ao resetar senha", mensagemErro(err, "Tente novamente"));
     } finally {
       setResetting(null);
     }
@@ -268,8 +267,8 @@ export default function OperadoresPage() {
         `${user.nome_completo} agora está ${user.ativo ? "inativo no sistema" : "ativo no sistema"}.`
       );
       loadUsers();
-    } catch (err: any) {
-      toast.error("Erro ao alterar status", err.message || "Tente novamente");
+    } catch (err) {
+      toast.error("Erro ao alterar status", mensagemErro(err, "Tente novamente"));
     } finally {
       setToggling(null);
     }

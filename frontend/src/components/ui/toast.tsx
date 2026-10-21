@@ -19,6 +19,13 @@ interface ToastContextType {
   removeToast: (id: string) => void;
 }
 
+declare global {
+  interface Window {
+    /** Ponte para o helper `toast` fora da árvore React (registrada pelo <Toaster />). */
+    __sad_add_toast?: ToastContextType["addToast"];
+  }
+}
+
 const ToastContext = React.createContext<ToastContextType | undefined>(undefined);
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
@@ -114,18 +121,18 @@ function ToasterOverlay({
 // Global hook / helper
 export const toast = {
   success: (message: string, description?: string, durationMs?: number) => {
-    if (typeof window !== "undefined" && (window as any).__sad_add_toast) {
-      (window as any).__sad_add_toast("success", message, description, durationMs);
+    if (typeof window !== "undefined" && window.__sad_add_toast) {
+      window.__sad_add_toast("success", message, description, durationMs);
     }
   },
   error: (message: string, description?: string, durationMs?: number) => {
-    if (typeof window !== "undefined" && (window as any).__sad_add_toast) {
-      (window as any).__sad_add_toast("error", message, description, durationMs);
+    if (typeof window !== "undefined" && window.__sad_add_toast) {
+      window.__sad_add_toast("error", message, description, durationMs);
     }
   },
   info: (message: string, description?: string) => {
-    if (typeof window !== "undefined" && (window as any).__sad_add_toast) {
-      (window as any).__sad_add_toast("info", message, description);
+    if (typeof window !== "undefined" && window.__sad_add_toast) {
+      window.__sad_add_toast("info", message, description);
     }
   },
 };
@@ -134,10 +141,10 @@ export function Toaster() {
   const context = React.useContext(ToastContext);
   React.useEffect(() => {
     if (context) {
-      (window as any).__sad_add_toast = context.addToast;
+      window.__sad_add_toast = context.addToast;
     }
     return () => {
-      delete (window as any).__sad_add_toast;
+      delete window.__sad_add_toast;
     };
   }, [context]);
 

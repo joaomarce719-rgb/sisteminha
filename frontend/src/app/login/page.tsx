@@ -12,10 +12,9 @@ import {
   ShieldCheck,
   UserCheck,
   UserPlus,
-  Sparkles,
-  CheckCircle2,
 } from "lucide-react";
 import { login, registrarUsuario } from "@/lib/api";
+import { mensagemErro } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -44,7 +43,7 @@ export default function LoginPage() {
   const [regLoading, setRegLoading] = useState(false);
   const [regError, setRegError] = useState("");
 
-  const handleRedirect = (role: string, targetEmail?: string) => {
+  const handleRedirect = (role: string) => {
     let dest = "/gestor/dashboard";
     if (role === "CAMPO") {
       dest = "/campo/manejo";
@@ -54,11 +53,7 @@ export default function LoginPage() {
       dest = "/gestor/dashboard";
     }
 
-    if (typeof window !== "undefined") {
-      window.location.href = dest;
-    } else {
-      router.push(dest);
-    }
+    router.push(dest);
   };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -78,9 +73,9 @@ export default function LoginPage() {
     try {
       const data = await login(cleanEmail, cleanSenha);
       toast.success("Login realizado com sucesso!", `Bem-vindo, ${data.nome || "Operador"}`);
-      handleRedirect(data.role, cleanEmail);
-    } catch (err: any) {
-      const msg = err.message || "Falha na autenticação. Verifique seu e-mail e senha.";
+      handleRedirect(data.role);
+    } catch (err) {
+      const msg = mensagemErro(err, "Falha na autenticação. Verifique seu e-mail e senha.");
       setError(msg);
       toast.error("Erro no login", msg);
     } finally {
@@ -131,8 +126,8 @@ export default function LoginPage() {
       const loginData = await login(regEmail.trim(), regSenha);
       toast.info(`Bem-vindo, ${loginData.nome || regNome}!`, `Perfil ativo: ${loginData.role}`);
       handleRedirect(loginData.role);
-    } catch (err: any) {
-      const msg = err.message || "Erro ao criar usuário. Verifique os dados e tente novamente.";
+    } catch (err) {
+      const msg = mensagemErro(err, "Erro ao criar usuário. Verifique os dados e tente novamente.");
       setRegError(msg);
       toast.error("Erro no cadastro", msg);
     } finally {
@@ -154,9 +149,9 @@ export default function LoginPage() {
     try {
       const data = await login(cred.email, cred.pass);
       toast.success("Autenticado com sucesso!", `Bem-vindo, ${data.nome || nome}! Perfil: ${data.role}`);
-      handleRedirect(data.role, cred.email);
-    } catch (err: any) {
-      const msg = err.message || "Erro na autenticação automática. Verifique se o backend está ativo.";
+      handleRedirect(data.role);
+    } catch (err) {
+      const msg = mensagemErro(err, "Erro na autenticação automática. Verifique se o backend está ativo.");
       setError(msg);
       toast.error("Erro na autenticação", msg);
     } finally {

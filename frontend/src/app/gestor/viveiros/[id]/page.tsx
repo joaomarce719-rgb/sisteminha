@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -13,19 +13,15 @@ import {
   Loader2,
   AlertTriangle,
   TrendingUp,
-  TrendingDown,
-  Minus,
   Droplets,
   MapPin,
   Ruler,
   CalendarDays,
   Bug,
   Zap,
-  Target,
   DollarSign,
   BarChart3,
   Info,
-  CheckCircle2,
   XCircle,
   Download,
   Pause,
@@ -38,6 +34,7 @@ import {
   manejosApi,
   tabelasAlimentaresApi,
 } from "@/lib/api";
+import { mensagemErro } from "@/lib/utils";
 import type {
   Viveiro,
   CicloProdutivo,
@@ -45,13 +42,13 @@ import type {
   Biometria,
   ManejoAlimentar,
   RecomendacaoAlimentar,
+  TabelaAlimentar,
 } from "@/lib/types";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "@/components/ui/toast";
@@ -83,7 +80,7 @@ function IniciarCicloDialog({
     laboratorio_origem: "",
     tabela_alimentar_id: "",
   });
-  const [tabelas, setTabelas] = useState<any[]>([]);
+  const [tabelas, setTabelas] = useState<TabelaAlimentar[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -93,7 +90,7 @@ function IniciarCicloDialog({
         .listar(true)
         .then((data) => {
           setTabelas(data);
-          const padrao = data.find((t: any) => t.is_padrao);
+          const padrao = data.find((t) => t.is_padrao);
           if (padrao) {
             setForm((prev) => ({ ...prev, tabela_alimentar_id: padrao.id }));
           }
@@ -121,9 +118,9 @@ function IniciarCicloDialog({
       );
       onCreated();
       onClose();
-    } catch (err: any) {
-      setError(err.message || "Erro ao iniciar ciclo");
-      toast.error("Falha ao iniciar ciclo", err.message || "Verifique os dados");
+    } catch (err) {
+      setError(mensagemErro(err, "Erro ao iniciar ciclo"));
+      toast.error("Falha ao iniciar ciclo", mensagemErro(err, "Verifique os dados"));
     } finally {
       setLoading(false);
     }
@@ -272,9 +269,9 @@ function BiometriaDialog({
       onCreated();
       onClose();
       setForm({ data_medicao: new Date().toISOString().split("T")[0], quantidade_amostrada: "50", peso_medio_g: "", uniformidade_percentual: "", observacoes: "" });
-    } catch (err: any) {
-      setError(err.message || "Erro ao registrar biometria");
-      toast.error("Erro na biometria", err.message || "Verifique os valores");
+    } catch (err) {
+      setError(mensagemErro(err, "Erro ao registrar biometria"));
+      toast.error("Erro na biometria", mensagemErro(err, "Verifique os valores"));
     } finally {
       setLoading(false);
     }
@@ -397,20 +394,23 @@ function ManejoDialog({
 }) {
   const [form, setForm] = useState({
     data_registro: new Date().toISOString().split("T")[0],
-    quantidade_racao_kg: "",
+    quantidade_racao_kg: recomendacao ? recomendacao.racao_diaria_sugerida_kg.toString() : "",
     sobra_bandeja_nivel: "SEM_SOBRA",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
+  // A recomendação pode chegar depois da abertura: preenche se o campo ainda estiver vazio
+  const [recomendacaoVista, setRecomendacaoVista] = useState(recomendacao);
+  if (recomendacao !== recomendacaoVista) {
+    setRecomendacaoVista(recomendacao);
     if (recomendacao && !form.quantidade_racao_kg) {
       setForm((prev) => ({
         ...prev,
         quantidade_racao_kg: recomendacao.racao_diaria_sugerida_kg.toString(),
       }));
     }
-  }, [recomendacao]);
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -433,9 +433,9 @@ function ManejoDialog({
         quantidade_racao_kg: "",
         sobra_bandeja_nivel: "SEM_SOBRA",
       });
-    } catch (err: any) {
-      setError(err.message || "Erro ao registrar manejo");
-      toast.error("Erro no manejo", err.message || "Tente novamente");
+    } catch (err) {
+      setError(mensagemErro(err, "Erro ao registrar manejo"));
+      toast.error("Erro no manejo", mensagemErro(err, "Tente novamente"));
     } finally {
       setLoading(false);
     }
@@ -566,9 +566,9 @@ function EncerrarCicloDialog({
       );
       onDone();
       onClose();
-    } catch (err: any) {
-      setError(err.message || "Erro ao encerrar ciclo");
-      toast.error("Erro ao encerrar", err.message || "Verifique os dados");
+    } catch (err) {
+      setError(mensagemErro(err, "Erro ao encerrar ciclo"));
+      toast.error("Erro ao encerrar", mensagemErro(err, "Verifique os dados"));
     } finally {
       setLoading(false);
     }
@@ -669,8 +669,8 @@ export default function ViveiroDetalhePage() {
     try {
       await ciclosApi.exportarCsv(cicloAtivo.id);
       toast.success("Download iniciado", "Relatório CSV do ciclo gerado com sucesso.");
-    } catch (err: any) {
-      toast.error("Erro ao exportar CSV", err.message || "Tente novamente");
+    } catch (err) {
+      toast.error("Erro ao exportar CSV", mensagemErro(err, "Tente novamente"));
     } finally {
       setExportingCsv(false);
     }
@@ -682,8 +682,8 @@ export default function ViveiroDetalhePage() {
       await ciclosApi.pausar(cicloAtivo.id);
       toast.success("Ciclo pausado", "O ciclo produtivo foi colocado em pausa.");
       loadData();
-    } catch (err: any) {
-      toast.error("Erro ao pausar ciclo", err.message || "Tente novamente");
+    } catch (err) {
+      toast.error("Erro ao pausar ciclo", mensagemErro(err, "Tente novamente"));
     }
   };
 
@@ -693,8 +693,8 @@ export default function ViveiroDetalhePage() {
       await ciclosApi.retomar(cicloAtivo.id);
       toast.success("Ciclo retomado", "O ciclo produtivo está ativo novamente.");
       loadData();
-    } catch (err: any) {
-      toast.error("Erro ao retomar ciclo", err.message || "Tente novamente");
+    } catch (err) {
+      toast.error("Erro ao retomar ciclo", mensagemErro(err, "Tente novamente"));
     }
   };
 
@@ -728,8 +728,8 @@ export default function ViveiroDetalhePage() {
         setManejos([]);
         setRecomendacao(null);
       }
-    } catch (err: any) {
-      toast.error("Erro ao carregar viveiro", err.message || "Tente novamente");
+    } catch (err) {
+      toast.error("Erro ao carregar viveiro", mensagemErro(err, "Tente novamente"));
     } finally {
       setLoading(false);
     }

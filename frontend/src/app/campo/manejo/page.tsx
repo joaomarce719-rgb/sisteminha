@@ -5,18 +5,11 @@ import {
   Utensils,
   Loader2,
   AlertTriangle,
-  Shell,
-  CalendarDays,
-  Zap,
-  Info,
   CheckCircle2,
-  Plus,
-  Scale,
-  Waves,
-  ArrowRight,
   Sparkles,
 } from "lucide-react";
 import { ciclosApi, viveirosApi, manejosApi } from "@/lib/api";
+import { mensagemErro } from "@/lib/utils";
 import type { CicloProdutivo, Viveiro, RecomendacaoAlimentar, ManejoAlimentar } from "@/lib/types";
 import { StepperCounter } from "@/components/ui/stepper-counter";
 import { TrayRemnantSelector, type NivelSobra } from "@/components/ui/tray-remnant-selector";
@@ -102,8 +95,8 @@ export default function ManejoPage() {
       ]);
       setRecomendacao(rec);
       setManejos(mans);
-    } catch (err: any) {
-      setError(err.message || "Falha ao registrar manejo.");
+    } catch (err) {
+      setError(mensagemErro(err, "Falha ao registrar manejo."));
     } finally {
       setSubmitting(false);
     }

@@ -3,22 +3,16 @@
 import { useEffect, useState } from "react";
 import {
   ShieldCheck,
-  Search,
-  Filter,
   Loader2,
-  Calendar,
-  User,
-  ArrowRight,
   Eye,
   FileText,
-  AlertCircle,
 } from "lucide-react";
 import { auditoriaApi } from "@/lib/api";
+import { mensagemErro } from "@/lib/utils";
 import type { LogAuditoria } from "@/lib/types";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/toast";
 
 export default function AuditoriaPage() {
@@ -30,7 +24,6 @@ export default function AuditoriaPage() {
   const [selectedLog, setSelectedLog] = useState<LogAuditoria | null>(null);
 
   const carregarLogs = async () => {
-    setLoading(true);
     try {
       const data = await auditoriaApi.listar({
         entidade: entidadeFiltro || undefined,
@@ -39,15 +32,18 @@ export default function AuditoriaPage() {
       });
       setLogs(data.items);
       setTotal(data.total);
-    } catch (err: any) {
-      toast.error("Erro ao carregar auditoria", err.message || "Tente novamente");
+    } catch (err) {
+      toast.error("Erro ao carregar auditoria", mensagemErro(err, "Tente novamente"));
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    carregarLogs();
+    // Os setState do carregamento só ocorrem após o await (não são síncronos no efeito)
+    (async () => {
+      await carregarLogs();
+    })();
   }, [entidadeFiltro, acaoFiltro]);
 
   const getActionBadge = (acao: string) => {

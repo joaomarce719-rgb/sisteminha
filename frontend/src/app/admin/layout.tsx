@@ -1,43 +1,37 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Shield,
-  Building2,
-  Users,
-  LayoutDashboard,
   LogOut,
-  ChevronRight,
   ExternalLink,
   Shell,
 } from "lucide-react";
-import { clearToken, getStoredUser, isSuperadmin, type StoredUser } from "@/lib/api";
+import { clearToken, isSuperadmin } from "@/lib/api";
+import { useSessao } from "@/lib/sessao";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/components/ui/toast";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [user, setUser] = useState<StoredUser | null>(null);
+  const { montado, user: sessao } = useSessao();
+  const user = sessao?.role === "GESTOR" && isSuperadmin(sessao) ? sessao : null;
 
   useEffect(() => {
-    const stored = getStoredUser();
-    if (!stored || stored.role !== "GESTOR") {
+    if (!montado || user) return;
+    if (sessao?.role !== "GESTOR") {
       router.push("/login");
       return;
     }
-    if (!isSuperadmin(stored)) {
-      toast.error(
-        "Acesso Restrito",
-        "Este painel é de uso exclusivo da Administração Central do Sistema."
-      );
-      router.push("/gestor/dashboard");
-      return;
-    }
-    setUser(stored);
-  }, [router]);
+    toast.error(
+      "Acesso Restrito",
+      "Este painel é de uso exclusivo da Administração Central do Sistema."
+    );
+    router.push("/gestor/dashboard");
+  }, [montado, user, sessao, router]);
 
   const handleLogout = () => {
     clearToken();

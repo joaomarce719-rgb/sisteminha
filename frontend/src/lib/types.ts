@@ -243,8 +243,8 @@ export interface LogAuditoria {
   acao: string;
   entidade: string;
   registro_id: string;
-  dados_anteriores: Record<string, any> | null;
-  dados_novos: Record<string, any> | null;
+  dados_anteriores: Record<string, unknown> | null;
+  dados_novos: Record<string, unknown> | null;
   ip_origem: string | null;
   created_at: string;
 }
@@ -272,4 +272,44 @@ export interface MetricasGlobaisAdmin {
   fazendas_ativas: number;
   area_total_ha: number;
   total_viveiros: number;
+}
+
+export interface GestorAdmin {
+  id: string;
+  nome_completo: string;
+  email: string;
+  papel: RoleUsuario;
+  telefone_emergencia: string | null;
+  ativo: boolean;
+  organizacao_id: string | null;
+  organizacao_nome: string | null;
+  created_at: string;
+}
+
+export interface Organizacao {
+  id: string;
+  nome: string;
+  identificador: string | null;
+  moeda: string;
+  status_ativo: boolean;
+  created_at: string;
+}
+
+export interface Propriedade {
+  id: string;
+  organizacao_id: string;
+  nome: string;
+  localizacao: string | null;
+  area_total_ha: number | null;
+  status_ativo: boolean;
+  created_at: string;
+}
+
+export interface PainelNoturno {
+  viveiro_id: string;
+  viveiro_identificacao: string;
+  rondas: RondaNoturna[];
+  o2_minimo: number | null;
+  o2_maximo: number | null;
+  alertas_criticos: number;
 }

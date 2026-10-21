@@ -20,3 +20,8 @@ export function localInputParaIso(valor: string): string {
   const mm = String(abs % 60).padStart(2, "0");
   return `${valor}:00${sinal}${hh}:${mm}`;
 }
+
+/** Mensagem de um erro capturado (a API lança Error com o `detail` do backend). */
+export function mensagemErro(err: unknown, padrao: string): string {
+  return err instanceof Error && err.message ? err.message : padrao;
+}

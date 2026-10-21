@@ -5,7 +5,6 @@ import {
   DollarSign,
   Plus,
   Loader2,
-  AlertTriangle,
   Shell,
   CalendarDays,
   BarChart3,
@@ -17,6 +16,7 @@ import {
   Percent,
 } from "lucide-react";
 import { ciclosApi, custosApi, precosApi, viveirosApi } from "@/lib/api";
+import { mensagemErro } from "@/lib/utils";
 import type { CicloProdutivo, Viveiro, CustoOperacional, CustoResumo, PrecoMercado } from "@/lib/types";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -148,8 +148,8 @@ export default function FinanceiroPage() {
         descricao: "",
         valor_rs: "",
       });
-    } catch (err: any) {
-      toast.error("Erro ao lançar custo", err.message || "Tente novamente");
+    } catch (err) {
+      toast.error("Erro ao lançar custo", mensagemErro(err, "Tente novamente"));
     } finally {
       setCustoSubmitting(false);
     }
@@ -177,8 +177,8 @@ export default function FinanceiroPage() {
         vigencia_inicio: new Date().toISOString().split("T")[0],
         vigencia_fim: "",
       });
-    } catch (err: any) {
-      toast.error("Erro ao cadastrar preço", err.message || "Tente novamente");
+    } catch (err) {
+      toast.error("Erro ao cadastrar preço", mensagemErro(err, "Tente novamente"));
     } finally {
       setPrecoSubmitting(false);
     }
@@ -227,8 +227,8 @@ export default function FinanceiroPage() {
                 try {
                   await custosApi.exportarCsv(selectedCiclo);
                   toast.success("Download concluído!", "Arquivo CSV de custos baixado com sucesso.");
-                } catch (err: any) {
-                  toast.error("Erro na exportação", err.message || "Tente novamente");
+                } catch (err) {
+                  toast.error("Erro na exportação", mensagemErro(err, "Tente novamente"));
                 }
               }}
             >

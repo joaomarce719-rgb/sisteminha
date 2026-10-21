@@ -6,12 +6,9 @@ import Link from "next/link";
 import {
   Shell,
   LayoutDashboard,
-  FlaskConical,
   DollarSign,
-  BarChart3,
   Users,
   Moon,
-  Settings,
   LogOut,
   Menu,
   X,
@@ -21,7 +18,8 @@ import {
   ShieldCheck,
   Utensils,
 } from "lucide-react";
-import { clearToken, getStoredUser, isSuperadmin, type StoredUser } from "@/lib/api";
+import { clearToken, isSuperadmin } from "@/lib/api";
+import { useSessao } from "@/lib/sessao";
 
 const NAV_ITEMS = [
   { href: "/gestor/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -30,6 +28,8 @@ const NAV_ITEMS = [
   { href: "/gestor/financeiro", label: "Financeiro", icon: DollarSign },
   { href: "/gestor/tabelas-alimentares", label: "Tabelas Alimentares", icon: Utensils },
   { href: "/gestor/painel-noturno", label: "Painel Noturno", icon: Moon },
+  { href: "/campo/manejo", label: "Registro de Campo", icon: Utensils },
+  { href: "/vigia/ronda", label: "Ronda Noturna", icon: Moon },
   { href: "/gestor/auditoria", label: "Auditoria", icon: ShieldCheck },
   { href: "/gestor/usuarios", label: "Operadores da Fazenda", icon: Users },
   { href: "/admin", label: "Painel Superadmin", icon: Shield },
@@ -38,17 +38,13 @@ const NAV_ITEMS = [
 export default function GestorLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [user, setUser] = useState<StoredUser | null>(null);
+  const { montado, user: sessao } = useSessao();
+  const user = sessao?.role === "GESTOR" ? sessao : null;
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    const stored = getStoredUser();
-    if (!stored || stored.role !== "GESTOR") {
-      router.push("/login");
-      return;
-    }
-    setUser(stored);
-  }, [router]);
+    if (montado && !user) router.push("/login");
+  }, [montado, user, router]);
 
   const handleLogout = () => {
     clearToken();

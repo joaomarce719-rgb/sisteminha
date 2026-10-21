@@ -5,25 +5,22 @@ import Link from "next/link";
 import {
   Shell,
   Plus,
-  MapPin,
   Ruler,
   Droplets,
   Activity,
   AlertTriangle,
   Loader2,
   Search,
-  CheckCircle2,
   CalendarDays,
-  ExternalLink,
 } from "lucide-react";
 import { viveirosApi, ciclosApi } from "@/lib/api";
+import { mensagemErro } from "@/lib/utils";
 import type { Viveiro, CicloProdutivo } from "@/lib/types";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
 import { toast } from "@/components/ui/toast";
 
@@ -63,9 +60,9 @@ function CriarViveiroDialog({
       onCreated();
       onClose();
       setForm({ identificacao: "", area_util_m2: "", profundidade_media_m: "", localizacao: "" });
-    } catch (err: any) {
-      setError(err.message || "Erro ao cadastrar viveiro");
-      toast.error("Falha ao criar viveiro", err.message || "Verifique os dados informados");
+    } catch (err) {
+      setError(mensagemErro(err, "Erro ao cadastrar viveiro"));
+      toast.error("Falha ao criar viveiro", mensagemErro(err, "Verifique os dados informados"));
     } finally {
       setLoading(false);
     }
@@ -253,7 +250,6 @@ export default function ViveirosPage() {
   const [filterAtivo, setFilterAtivo] = useState<boolean | null>(null);
 
   const loadData = async () => {
-    setLoading(true);
     try {
       const [vivs, cycs] = await Promise.all([
         viveirosApi.listar(),
@@ -261,15 +257,18 @@ export default function ViveirosPage() {
       ]);
       setViveiros(vivs);
       setCiclos(cycs);
-    } catch (err: any) {
-      toast.error("Erro ao carregar viveiros", err.message || "Tente recarregar a página");
+    } catch (err) {
+      toast.error("Erro ao carregar viveiros", mensagemErro(err, "Tente recarregar a página"));
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    // Os setState do carregamento só ocorrem após o await (não são síncronos no efeito)
+    (async () => {
+      await loadData();
+    })();
   }, []);
 
   const getCicloAtivo = (viveiroId: string) =>
@@ -302,7 +301,7 @@ export default function ViveirosPage() {
             Viveiros & Lotes Produtivos
           </h1>
           <p className="text-slate-500 text-sm mt-0.5">
-            Gerenciamento de lâminas d'água, ciclo ativo de cultivo e status operacional
+            Gerenciamento de lâminas d&apos;água, ciclo ativo de cultivo e status operacional
           </p>
         </div>
 

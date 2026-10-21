@@ -29,7 +29,7 @@ Frontend (dentro de `frontend/`):
 ```bash
 npm run dev        # http://localhost:3000 — exige o backend em 127.0.0.1:8000
 npm run build
-npm run lint       # eslint (há muitos erros pré-existentes de no-explicit-any/no-unused-vars)
+npm run lint       # eslint (0 erros; mantenha assim)
 npx tsc --noEmit
 ```
 
@@ -64,8 +64,8 @@ Camadas em `backend/src/`: `models/` (SQLAlchemy 2, `Mapped`) → `schemas/` (Py
 
 ## Arquitetura do frontend
 
-- App Router com uma área por papel: `/gestor/*` (sidebar), `/campo/*` e `/vigia/*` (mobile-first), `/admin` (superadmin). Cada `layout.tsx` é client component e redireciona para `/login` se o papel em `localStorage` não bater; não há proteção de rota no servidor.
-- `src/lib/api.ts` é o único cliente HTTP: `apiFetch` usa o caminho relativo `/api/v1`, injeta o Bearer token de `localStorage` (`sad_token`, `sad_user`) e, em 401, limpa a sessão e vai para `/login`. `next.config.ts` faz o rewrite de `/api/*` para `http://127.0.0.1:8000` e redireciona atalhos (`/viveiros` → `/gestor/viveiros`, etc.).
+- App Router com uma área por papel: `/gestor/*` (sidebar), `/campo/*` e `/vigia/*` (mobile-first, também acessíveis ao GESTOR), `/admin` (superadmin). `src/proxy.ts` (o "middleware" do Next 16) redireciona antes de renderizar com base no cookie `sad_papel`, gravado por `setStoredUser`; os layouts leem a sessão com `useSessao()` (`lib/sessao.ts`, via `useSyncExternalStore`). Ambos são apenas navegação: a autorização real é da API.
+- `src/lib/api.ts` é o único cliente HTTP, tipado com as interfaces de `lib/types.ts` (sem `any`; erros capturados via `mensagemErro(err, padrao)` de `lib/utils.ts`): `apiFetch` usa o caminho relativo `/api/v1`, injeta o Bearer token de `localStorage` (`sad_token`, `sad_user`) e, em 401, limpa a sessão e vai para `/login`. `next.config.ts` faz o rewrite de `/api/*` para `BACKEND_URL` (padrão `http://127.0.0.1:8000`; ver `frontend/.env.example`) e redireciona atalhos (`/viveiros` → `/gestor/viveiros`, etc.).
 - Componentes de UI próprios em `src/components/ui/` (estilo shadcn com `cva` + `tailwind-merge`, via `cn()` em `src/lib/utils.ts`), toasts globais via `toast` de `components/ui/toast.tsx`. Tailwind v4 com tokens em `src/app/globals.css`. Gráficos com Recharts.
 
 ## Testes E2E (TestSprite)

@@ -9,13 +9,13 @@ import {
   Wind,
   AlertTriangle,
   Shell,
-  Zap,
   Eye,
   CalendarDays,
   Activity,
   CheckCircle2,
 } from "lucide-react";
 import { alertasApi, rondasApi } from "@/lib/api";
+import { mensagemErro } from "@/lib/utils";
 import type { Alerta, RondaNoturna } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
@@ -92,8 +92,8 @@ export default function PainelNoturnoPage() {
       await alertasApi.resolver(alerta.id);
       setAlertas((prev) => prev.filter((a) => a.id !== alerta.id));
       toast.success("Alerta resolvido", alerta.titulo);
-    } catch (err: any) {
-      toast.error("Erro ao resolver alerta", err.message || "Tente novamente");
+    } catch (err) {
+      toast.error("Erro ao resolver alerta", mensagemErro(err, "Tente novamente"));
     } finally {
       setResolvendo(null);
     }

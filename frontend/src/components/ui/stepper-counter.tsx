@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Minus, Plus, LucideIcon } from "lucide-react";
+import { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface StepperCounterProps {
@@ -33,10 +33,11 @@ export function StepperCounter({
 }: StepperCounterProps) {
   const [isEditing, setIsEditing] = React.useState(false);
   const [inputValue, setInputValue] = React.useState(String(value));
-
-  React.useEffect(() => {
+  const [valorAnterior, setValorAnterior] = React.useState(value);
+  if (value !== valorAnterior) {
+    setValorAnterior(value);
     setInputValue(String(value));
-  }, [value]);
+  }
 
   const handleDecrement = (amount = step) => {
     const next = Math.max(min, Number((value - amount).toFixed(2)));

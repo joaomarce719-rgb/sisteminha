@@ -10,22 +10,15 @@ import {
   Thermometer,
   Wind,
   Zap,
-  Activity,
-  CalendarDays,
-  Eye,
-  Shell,
   Wrench,
-  Power,
-  Sparkles,
 } from "lucide-react";
 import { ciclosApi, viveirosApi, rondasApi } from "@/lib/api";
 import type { CicloProdutivo, Viveiro, RondaNoturna } from "@/lib/types";
 import { StepperCounter } from "@/components/ui/stepper-counter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { toast } from "@/components/ui/toast";
-import { agoraLocalInput, localInputParaIso } from "@/lib/utils";
+import { agoraLocalInput, localInputParaIso, mensagemErro } from "@/lib/utils";
 
 const COMP_OPTIONS = [
   { value: "NORMAL_FUNDO", label: "Normal (Fundo)", desc: "Comportamento calmo no fundo", icon: "🟢", color: "emerald" },
@@ -131,8 +124,8 @@ export default function RondaPage() {
       setDetalhesFalha("");
       setFalhaMecanica(false);
       setDataHora(agoraLocalInput());
-    } catch (err: any) {
-      toast.error("Erro ao registrar ronda", err.message || "Tente novamente");
+    } catch (err) {
+      toast.error("Erro ao registrar ronda", mensagemErro(err, "Tente novamente"));
     } finally {
       setSubmitting(false);
     }

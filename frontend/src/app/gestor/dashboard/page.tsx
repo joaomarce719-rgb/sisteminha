@@ -13,14 +13,11 @@ import {
   Loader2,
   ChevronRight,
   Plus,
-  ArrowUpRight,
-  CalendarDays,
-  Waves,
 } from "lucide-react";
 import { viveirosApi, ciclosApi } from "@/lib/api";
 import type { Viveiro, CicloProdutivo, MetricasAtuais } from "@/lib/types";
 import { MetricCard } from "@/components/ui/metric-card";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 

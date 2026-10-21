@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Shell, LogOut, Utensils, Scale } from "lucide-react";
 import Link from "next/link";
-import { clearToken, getStoredUser } from "@/lib/api";
+import { clearToken } from "@/lib/api";
+import { useSessao } from "@/lib/sessao";
 import { toast } from "@/components/ui/toast";
 
 const NAV_ITEMS = [
@@ -15,16 +16,12 @@ const NAV_ITEMS = [
 export default function CampoLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [user, setUser] = useState<{ nome: string; role: string } | null>(null);
+  const { montado, user: sessao } = useSessao();
+  const user = sessao?.role === "CAMPO" || sessao?.role === "GESTOR" ? sessao : null;
 
   useEffect(() => {
-    const stored = getStoredUser();
-    if (!stored || stored.role !== "CAMPO") {
-      router.push("/login");
-      return;
-    }
-    setUser(stored);
-  }, [router]);
+    if (montado && !user) router.push("/login");
+  }, [montado, user, router]);
 
   const handleLogout = () => {
     clearToken();
@@ -50,6 +47,11 @@ export default function CampoLayout({ children }: { children: React.ReactNode })
           </div>
 
           <div className="flex items-center gap-3">
+            {user.role === "GESTOR" && (
+              <Link href="/gestor/dashboard" className="text-xs font-semibold text-emerald-300 hover:text-white">
+                Painel do gestor
+              </Link>
+            )}
             <div className="text-right hidden sm:block">
               <p className="text-xs font-bold text-white">{user.nome}</p>
               <p className="text-[10px] text-slate-400">Manejo Ativo</p>

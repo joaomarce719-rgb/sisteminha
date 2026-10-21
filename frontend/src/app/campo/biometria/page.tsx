@@ -6,21 +6,13 @@ import {
   Loader2,
   AlertTriangle,
   CheckCircle2,
-  CalendarDays,
-  Activity,
-  TrendingUp,
-  Minus,
-  Plus,
-  Sparkles,
-  ArrowRight,
-  FileText,
 } from "lucide-react";
 import { ciclosApi, viveirosApi, biometriasApi } from "@/lib/api";
+import { mensagemErro } from "@/lib/utils";
 import type { CicloProdutivo, Viveiro, Biometria } from "@/lib/types";
 import { StepperCounter } from "@/components/ui/stepper-counter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
@@ -99,8 +91,8 @@ export default function BiometriaPage() {
       setBiometrias(bios);
       setObservacoes("");
       setTimeout(() => setSuccess(false), 4000);
-    } catch (err: any) {
-      setError(err.message || "Erro ao registrar biometria.");
+    } catch (err) {
+      setError(mensagemErro(err, "Erro ao registrar biometria."));
     } finally {
       setSubmitting(false);
     }
