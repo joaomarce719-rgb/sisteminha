@@ -69,7 +69,7 @@ def _obter_pontos_alimentares(ciclo: CicloProdutivo, db: Session) -> list[tuple[
 
 @router.post("", response_model=ManejoAlimentarResponse, status_code=201)
 @router.post("/", response_model=ManejoAlimentarResponse, status_code=201)
-async def registrar_manejo(
+def registrar_manejo(
     ciclo_id: UUID,
     payload: ManejoAlimentarCreate,
     db: Session = Depends(get_db),
@@ -162,7 +162,7 @@ async def registrar_manejo(
 
 @router.get("", response_model=list[ManejoAlimentarResponse])
 @router.get("/", response_model=list[ManejoAlimentarResponse])
-async def listar_manejos(
+def listar_manejos(
     ciclo_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.CAMPO, RoleUsuario.GESTOR])),
@@ -177,7 +177,7 @@ async def listar_manejos(
 
 
 @router.get("/recomendacao", response_model=RecomendacaoAlimentarResponse)
-async def recomendacao_alimentar(
+def recomendacao_alimentar(
     ciclo_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.CAMPO, RoleUsuario.GESTOR])),
@@ -228,7 +228,7 @@ global_router = APIRouter(prefix="/api/v1/manejos", tags=["Manejo Alimentar"])
 
 
 @global_router.post("/", response_model=ManejoAlimentarResponse, status_code=201)
-async def registrar_manejo_global(
+def registrar_manejo_global(
     payload: ManejoAlimentarCreate,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.CAMPO, RoleUsuario.GESTOR])),
@@ -236,11 +236,11 @@ async def registrar_manejo_global(
     if not payload.ciclo_id:
         raise HTTPException(status_code=422, detail="ciclo_id é obrigatório.")
     ciclo_da_organizacao(db, payload.ciclo_id, _user)
-    return await registrar_manejo(payload.ciclo_id, payload, db, _user)
+    return registrar_manejo(payload.ciclo_id, payload, db, _user)
 
 
 @global_router.get("/", response_model=list[ManejoAlimentarResponse])
-async def listar_manejos_global(
+def listar_manejos_global(
     ciclo_id: UUID | None = None,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.CAMPO, RoleUsuario.VIGIA, RoleUsuario.GESTOR])),
@@ -254,7 +254,7 @@ async def listar_manejos_global(
 
 
 @global_router.delete("/{manejo_id}", status_code=200)
-async def deletar_manejo(
+def deletar_manejo(
     manejo_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),

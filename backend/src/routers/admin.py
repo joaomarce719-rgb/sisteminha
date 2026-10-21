@@ -94,7 +94,7 @@ class OperadorCreate(BaseModel):
 
 # ── 1. Métricas Globais do Sistema ────────────────────────────
 @router.get("/metricas-globais", response_model=MetricasGlobaisAdmin)
-async def obter_metricas_globais(
+def obter_metricas_globais(
     db: Session = Depends(get_db),
     _user=Depends(require_superadmin),
 ):
@@ -130,7 +130,7 @@ async def obter_metricas_globais(
 
 # ── 2. Gestão de Fazendas (Propriedades / Tenants) ────────────
 @router.get("/fazendas", response_model=list[FazendaAdminResponse])
-async def listar_fazendas_admin(
+def listar_fazendas_admin(
     db: Session = Depends(get_db),
     _user=Depends(require_superadmin),
 ):
@@ -156,7 +156,7 @@ async def listar_fazendas_admin(
 
 
 @router.post("/fazendas", response_model=FazendaAdminResponse, status_code=status.HTTP_201_CREATED)
-async def criar_fazenda_admin(
+def criar_fazenda_admin(
     payload: FazendaAdminCreate,
     db: Session = Depends(get_db),
     _user=Depends(require_superadmin),
@@ -199,7 +199,7 @@ async def criar_fazenda_admin(
 
 
 @router.put("/fazendas/{fazenda_id}/status", response_model=FazendaAdminResponse)
-async def alternar_status_fazenda(
+def alternar_status_fazenda(
     fazenda_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(require_superadmin),
@@ -234,7 +234,7 @@ async def alternar_status_fazenda(
 
 # ── 3. Gestão e Aprovação de Usuários (Método 1 Mantido) ───────
 @router.post("/usuarios", response_model=UsuarioResponse, status_code=201)
-async def criar_usuario(
+def criar_usuario(
     payload: UsuarioCreate,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
@@ -270,7 +270,7 @@ async def criar_usuario(
 
 
 @router.get("/usuarios", response_model=list[UsuarioResponse])
-async def listar_usuarios(
+def listar_usuarios(
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
 ):
@@ -282,7 +282,7 @@ async def listar_usuarios(
 
 
 @router.put("/usuarios/{user_id}", response_model=UsuarioResponse)
-async def atualizar_usuario(
+def atualizar_usuario(
     user_id: UUID,
     payload: UsuarioUpdate,
     db: Session = Depends(get_db),
@@ -307,7 +307,7 @@ async def atualizar_usuario(
 
 
 @router.put("/usuarios/{user_id}/aprovar", response_model=UsuarioResponse)
-async def aprovar_usuario(
+def aprovar_usuario(
     user_id: UUID,
     payload: AprovarUsuarioRequest,
     db: Session = Depends(get_db),
@@ -334,7 +334,7 @@ async def aprovar_usuario(
 
 
 @router.post("/usuarios/{user_id}/resetar-senha")
-async def resetar_senha(
+def resetar_senha(
     user_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
@@ -357,7 +357,7 @@ async def resetar_senha(
 
 
 @router.delete("/usuarios/{user_id}", status_code=204)
-async def excluir_usuario(
+def excluir_usuario(
     user_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
@@ -369,7 +369,7 @@ async def excluir_usuario(
 
 # ── 4. Gestão de Usuários Administrativos (Exclusivo Superadmin) ───
 @router.get("/gestores", response_model=list[GestorAdminResponse])
-async def listar_gestores_admin(
+def listar_gestores_admin(
     db: Session = Depends(get_db),
     _user=Depends(require_superadmin),
 ):
@@ -397,7 +397,7 @@ async def listar_gestores_admin(
 
 
 @router.post("/gestores", response_model=GestorAdminResponse, status_code=status.HTTP_201_CREATED)
-async def criar_gestor_admin(
+def criar_gestor_admin(
     payload: GestorAdminCreate,
     db: Session = Depends(get_db),
     _user=Depends(require_superadmin),
@@ -457,7 +457,7 @@ async def criar_gestor_admin(
 
 # ── 5. Gestão de Operadores Normais de Campo (Método 1 Mantido) ───
 @router.get("/operadores", response_model=list[UsuarioResponse])
-async def listar_operadores_campo(
+def listar_operadores_campo(
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
 ):
@@ -474,7 +474,7 @@ async def listar_operadores_campo(
 
 
 @router.post("/operadores", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
-async def criar_operador_normal(
+def criar_operador_normal(
     payload: OperadorCreate,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),

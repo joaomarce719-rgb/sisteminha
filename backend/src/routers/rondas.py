@@ -67,7 +67,7 @@ def _build_ronda_response(ronda: RondaNoturna) -> RondaNoturnaResponse:
 
 @router.post("", response_model=RondaNoturnaResponse, status_code=201)
 @router.post("/", response_model=RondaNoturnaResponse, status_code=201)
-async def registrar_ronda(
+def registrar_ronda(
     payload: RondaNoturnaCreate,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(has_role([RoleUsuario.VIGIA, RoleUsuario.GESTOR])),
@@ -168,7 +168,7 @@ def _biomassa_estimada_kg_ha(ciclo: CicloProdutivo) -> float:
 
 
 @router.get("/ciclo/{ciclo_id}", response_model=list[RondaNoturnaResponse], dependencies=[Depends(verificar_ciclo_da_organizacao)])
-async def listar_rondas_ciclo(
+def listar_rondas_ciclo(
     ciclo_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.VIGIA, RoleUsuario.GESTOR])),
@@ -184,7 +184,7 @@ async def listar_rondas_ciclo(
 
 
 @router.get("/painel-noturno", response_model=list[PainelNoturnoResponse])
-async def painel_noturno(
+def painel_noturno(
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
 ):

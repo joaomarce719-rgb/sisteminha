@@ -29,7 +29,7 @@ router = APIRouter(
 
 @router.post("", response_model=CustoResponse, status_code=201)
 @router.post("/", response_model=CustoResponse, status_code=201)
-async def lancar_custo(
+def lancar_custo(
     ciclo_id: UUID,
     payload: CustoCreate,
     db: Session = Depends(get_db),
@@ -65,7 +65,7 @@ async def lancar_custo(
 
 @router.get("", response_model=list[CustoResponse])
 @router.get("/", response_model=list[CustoResponse])
-async def listar_custos(
+def listar_custos(
     ciclo_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
@@ -80,7 +80,7 @@ async def listar_custos(
 
 
 @router.get("/resumo", response_model=list[CustoResumoResponse])
-async def resumo_custos(
+def resumo_custos(
     ciclo_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
@@ -107,7 +107,7 @@ async def resumo_custos(
 
 
 @router.get("/exportar-csv")
-async def exportar_custos_csv(
+def exportar_custos_csv(
     ciclo_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
@@ -153,7 +153,7 @@ global_router = APIRouter(prefix="/api/v1/custos", tags=["Custos Operacionais"])
 
 
 @global_router.post("/", response_model=CustoResponse, status_code=201)
-async def lancar_custo_global(
+def lancar_custo_global(
     payload: CustoCreate,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
@@ -161,11 +161,11 @@ async def lancar_custo_global(
     if not payload.ciclo_id:
         raise HTTPException(status_code=422, detail="ciclo_id é obrigatório.")
     ciclo_da_organizacao(db, payload.ciclo_id, _user)
-    return await lancar_custo(payload.ciclo_id, payload, db, _user)
+    return lancar_custo(payload.ciclo_id, payload, db, _user)
 
 
 @global_router.get("/", response_model=CustoListResponse)
-async def listar_custos_global(
+def listar_custos_global(
     ciclo_id: UUID | None = None,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
@@ -190,7 +190,7 @@ async def listar_custos_global(
 
 
 @global_router.delete("/{custo_id}", status_code=200)
-async def deletar_custo(
+def deletar_custo(
     custo_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),

@@ -73,14 +73,19 @@ def _registrar_falha_login(
     db.commit()
 
 
+async def dados_da_requisicao(request: Request) -> dict:
+    """Lê o corpo (JSON ou formulário) de forma assíncrona para handlers síncronos."""
+    return await parse_request_data(request)
+
+
 @router.post("/login", response_model=TokenResponse)
 @router.post("/login/", response_model=TokenResponse)
-async def login(
+def login(
     request: Request,
+    data: dict = Depends(dados_da_requisicao),
     db: Session = Depends(get_db),
 ):
     """Autenticação flexível (JSON ou Form) via email/senha com retorno de JWT."""
-    data = await parse_request_data(request)
     raw_email = data.get("email") or data.get("username") or ""
     email = raw_email.strip().lower()
     senha = (data.get("senha") or data.get("password") or "").strip()
@@ -124,8 +129,9 @@ async def login(
 @router.post("/register/", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/registrar", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/registrar/", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
-async def registrar_usuario(
+def registrar_usuario(
     request: Request,
+    data: dict = Depends(dados_da_requisicao),
     db: Session = Depends(get_db),
 ):
     """Auto-cadastro público (JSON ou Form-data).
@@ -134,7 +140,6 @@ async def registrar_usuario(
     aguardando aprovação de um GESTOR. Apenas o primeiro usuário do sistema
     (banco vazio) é criado como GESTOR ativo.
     """
-    data = await parse_request_data(request)
     email = (data.get("email") or "").strip().lower()
     senha = data.get("senha") or data.get("password")
     nome = data.get("nome_completo") or data.get("name") or data.get("username") or "Usuário"
@@ -198,7 +203,7 @@ async def registrar_usuario(
 
 
 @router.get("/me", response_model=UsuarioResponse)
-async def perfil_atual(current_user: Usuario = Depends(get_current_user)):
+def perfil_atual(current_user: Usuario = Depends(get_current_user)):
     """Retorna os dados do usuário autenticado."""
     resposta = UsuarioResponse.model_validate(current_user)
     resposta.is_superadmin = is_superadmin(current_user)
@@ -206,7 +211,7 @@ async def perfil_atual(current_user: Usuario = Depends(get_current_user)):
 
 
 @router.put("/me/senha")
-async def alterar_senha(
+def alterar_senha(
     payload: AlterarSenhaRequest,
     current_user: Usuario = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -267,7 +272,7 @@ def excluir_usuario_por_id(db: Session, user_id: UUID, atual: Usuario) -> None:
 
 @router.delete("/users/{user_id}", status_code=204)
 @router.delete("/usuarios/{user_id}", status_code=204)
-async def deletar_usuario(
+def deletar_usuario(
     user_id: UUID,
     db: Session = Depends(get_db),
     _user: Usuario = Depends(has_role([RoleUsuario.GESTOR])),
@@ -281,7 +286,7 @@ users_router = APIRouter(prefix="/api/v1/users", tags=["Usuários"])
 
 
 @users_router.delete("/{user_id}", status_code=204)
-async def deletar_usuario_global(
+def deletar_usuario_global(
     user_id: UUID,
     db: Session = Depends(get_db),
     _user: Usuario = Depends(has_role([RoleUsuario.GESTOR])),

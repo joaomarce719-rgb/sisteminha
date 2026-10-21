@@ -29,7 +29,7 @@ router = APIRouter(
 )
 
 
-async def _get_ciclo_ativo(ciclo_id: UUID, db: Session) -> CicloProdutivo:
+def _get_ciclo_ativo(ciclo_id: UUID, db: Session) -> CicloProdutivo:
     result = db.execute(select(CicloProdutivo).where(CicloProdutivo.id == ciclo_id))
     ciclo = result.scalar_one_or_none()
     if not ciclo:
@@ -57,14 +57,14 @@ def _build_biometria_response(bio: Biometria) -> BiometriaResponse:
 
 
 @router.post("/", response_model=BiometriaResponse, status_code=201)
-async def registrar_biometria(
+def registrar_biometria(
     ciclo_id: UUID,
     payload: BiometriaCreate,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.CAMPO, RoleUsuario.GESTOR])),
 ):
     """Registra uma amostragem biométrica com tamanho da amostra (RF-007, RN-004)."""
-    ciclo = await _get_ciclo_ativo(ciclo_id, db)
+    ciclo = _get_ciclo_ativo(ciclo_id, db)
     validar_data_no_ciclo(ciclo, payload.data_medicao, "A data da biometria")
 
     # Calcular peso médio se fornecido peso total da amostra
@@ -103,7 +103,7 @@ async def registrar_biometria(
 
 
 @router.get("/", response_model=list[BiometriaResponse])
-async def listar_biometrias(
+def listar_biometrias(
     ciclo_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.CAMPO, RoleUsuario.VIGIA, RoleUsuario.GESTOR])),
@@ -121,7 +121,7 @@ global_router = APIRouter(prefix="/api/v1/biometrias", tags=["Biometrias"])
 
 
 @global_router.post("/", response_model=BiometriaResponse, status_code=201)
-async def registrar_biometria_global(
+def registrar_biometria_global(
     payload: BiometriaCreate,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.CAMPO, RoleUsuario.GESTOR])),
@@ -129,11 +129,11 @@ async def registrar_biometria_global(
     if not payload.ciclo_id:
         raise HTTPException(status_code=422, detail="ciclo_id é obrigatório.")
     ciclo_da_organizacao(db, payload.ciclo_id, _user)
-    return await registrar_biometria(payload.ciclo_id, payload, db, _user)
+    return registrar_biometria(payload.ciclo_id, payload, db, _user)
 
 
 @global_router.get("/", response_model=list[BiometriaResponse])
-async def listar_biometrias_global(
+def listar_biometrias_global(
     ciclo_id: UUID | None = None,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.CAMPO, RoleUsuario.VIGIA, RoleUsuario.GESTOR])),
@@ -147,7 +147,7 @@ async def listar_biometrias_global(
 
 
 @global_router.delete("/{biometria_id}", status_code=200)
-async def deletar_biometria(
+def deletar_biometria(
     biometria_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),

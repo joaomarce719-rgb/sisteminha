@@ -33,4 +33,4 @@ class Usuario(AuditMixin, Base):
     ativo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # Relacionamentos
-    organizacao = relationship("Organizacao", back_populates="usuarios", lazy="selectin")
+    organizacao = relationship("Organizacao", back_populates="usuarios")

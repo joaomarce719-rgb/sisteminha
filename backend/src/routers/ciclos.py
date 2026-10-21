@@ -31,7 +31,7 @@ router = APIRouter(prefix="/api/v1/ciclos", tags=["Ciclos Produtivos"])
 
 @router.post("", response_model=CicloResponse, status_code=201)
 @router.post("/", response_model=CicloResponse, status_code=201)
-async def criar_ciclo(
+def criar_ciclo(
     payload: CicloCreate,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
@@ -109,7 +109,7 @@ async def criar_ciclo(
 
 @router.get("", response_model=list[CicloResponse])
 @router.get("/", response_model=list[CicloResponse])
-async def listar_ciclos(
+def listar_ciclos(
     viveiro_id: UUID | None = None,
     status_filtro: StatusCiclo | None = None,
     db: Session = Depends(get_db),
@@ -131,7 +131,7 @@ async def listar_ciclos(
 
 
 @router.get("/{ciclo_id}", dependencies=[Depends(verificar_ciclo_da_organizacao)], response_model=CicloResponse)
-async def obter_ciclo(
+def obter_ciclo(
     ciclo_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(get_current_user),
@@ -145,7 +145,7 @@ async def obter_ciclo(
 
 
 @router.post("/{ciclo_id}/encerrar", dependencies=[Depends(verificar_ciclo_da_organizacao)], response_model=CicloResponse)
-async def encerrar_ciclo(
+def encerrar_ciclo(
     ciclo_id: UUID,
     payload: CicloEncerrar,
     db: Session = Depends(get_db),
@@ -195,7 +195,7 @@ async def encerrar_ciclo(
 
 
 @router.post("/{ciclo_id}/pausar", dependencies=[Depends(verificar_ciclo_da_organizacao)], response_model=CicloResponse)
-async def pausar_ciclo(
+def pausar_ciclo(
     ciclo_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
@@ -226,7 +226,7 @@ async def pausar_ciclo(
 
 
 @router.post("/{ciclo_id}/retomar", dependencies=[Depends(verificar_ciclo_da_organizacao)], response_model=CicloResponse)
-async def retomar_ciclo(
+def retomar_ciclo(
     ciclo_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
@@ -259,7 +259,7 @@ async def retomar_ciclo(
 
 
 @router.get("/{ciclo_id}/metricas-atuais", dependencies=[Depends(verificar_ciclo_da_organizacao)], response_model=MetricasAtuaisResponse)
-async def metricas_atuais(
+def metricas_atuais(
     ciclo_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(get_current_user),
@@ -381,7 +381,7 @@ async def metricas_atuais(
 
 
 @router.get("/{ciclo_id}/exportar-csv", dependencies=[Depends(verificar_ciclo_da_organizacao)])
-async def exportar_ciclo_csv(
+def exportar_ciclo_csv(
     ciclo_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(get_current_user),
@@ -444,7 +444,7 @@ async def exportar_ciclo_csv(
 
 
 @router.delete("/{ciclo_id}", dependencies=[Depends(verificar_ciclo_da_organizacao)], status_code=status.HTTP_200_OK)
-async def deletar_ciclo(
+def deletar_ciclo(
     ciclo_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),

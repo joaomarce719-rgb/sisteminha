@@ -50,7 +50,7 @@ def ids_ciclos_da_organizacao(user: Usuario) -> Select:
     )
 
 
-async def verificar_ciclo_da_organizacao(
+def verificar_ciclo_da_organizacao(
     ciclo_id: UUID,
     db: Session = Depends(get_db),
     user: Usuario = Depends(get_current_user),

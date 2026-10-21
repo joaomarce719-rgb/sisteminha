@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/v1/viveiros", tags=["Viveiros"])
 
 @router.post("", response_model=ViveiroResponse, status_code=201)
 @router.post("/", response_model=ViveiroResponse, status_code=201)
-async def criar_viveiro(
+def criar_viveiro(
     payload: ViveiroCreate,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
@@ -49,7 +49,7 @@ async def criar_viveiro(
 
 @router.get("", response_model=ViveiroListResponse)
 @router.get("/", response_model=ViveiroListResponse)
-async def listar_viveiros(
+def listar_viveiros(
     db: Session = Depends(get_db),
     _user=Depends(get_current_user),
 ):
@@ -76,7 +76,7 @@ async def listar_viveiros(
 
 
 @router.get("/{viveiro_id}", response_model=ViveiroResponse)
-async def obter_viveiro(
+def obter_viveiro(
     viveiro_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(get_current_user),
@@ -87,7 +87,7 @@ async def obter_viveiro(
 
 
 @router.put("/{viveiro_id}", response_model=ViveiroResponse)
-async def atualizar_viveiro(
+def atualizar_viveiro(
     viveiro_id: UUID,
     payload: ViveiroUpdate,
     db: Session = Depends(get_db),
@@ -109,7 +109,7 @@ async def atualizar_viveiro(
 
 
 @router.delete("/{viveiro_id}", status_code=status.HTTP_200_OK)
-async def deletar_viveiro(
+def deletar_viveiro(
     viveiro_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),

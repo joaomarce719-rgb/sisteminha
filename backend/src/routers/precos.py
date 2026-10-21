@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api/v1/precos-mercado", tags=["Preços de Mercado"])
 
 @router.post("", response_model=PrecoResponse, status_code=201)
 @router.post("/", response_model=PrecoResponse, status_code=201)
-async def criar_faixa_preco(
+def criar_faixa_preco(
     payload: PrecoCreate,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
@@ -42,7 +42,7 @@ async def criar_faixa_preco(
 
 @router.get("", response_model=list[PrecoResponse])
 @router.get("/", response_model=list[PrecoResponse])
-async def listar_precos(
+def listar_precos(
     vigentes: bool = True,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
@@ -65,7 +65,7 @@ async def listar_precos(
 
 
 @router.put("/{preco_id}", response_model=PrecoResponse)
-async def atualizar_preco(
+def atualizar_preco(
     preco_id: UUID,
     payload: PrecoUpdate,
     db: Session = Depends(get_db),

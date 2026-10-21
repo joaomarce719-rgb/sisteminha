@@ -18,5 +18,5 @@ class Organizacao(AuditMixin, Base):
     status_ativo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # Relacionamentos
-    propriedades = relationship("Propriedade", back_populates="organizacao", lazy="selectin")
-    usuarios = relationship("Usuario", back_populates="organizacao", lazy="selectin")
+    propriedades = relationship("Propriedade", back_populates="organizacao")
+    usuarios = relationship("Usuario", back_populates="organizacao")

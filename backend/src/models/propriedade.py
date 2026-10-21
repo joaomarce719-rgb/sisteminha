@@ -28,4 +28,4 @@ class Propriedade(AuditMixin, Base):
 
     # Relacionamentos
     organizacao = relationship("Organizacao", back_populates="propriedades", lazy="selectin")
-    viveiros = relationship("Viveiro", back_populates="propriedade", lazy="selectin")
+    viveiros = relationship("Viveiro", back_populates="propriedade")

@@ -26,7 +26,7 @@ def alerta_response(alerta: Alerta) -> AlertaResponse:
 
 @router.get("", response_model=list[AlertaResponse])
 @router.get("/", response_model=list[AlertaResponse])
-async def listar_alertas(
+def listar_alertas(
     status_alerta: StatusAlerta | None = None,
     ciclo_id: UUID | None = None,
     db: Session = Depends(get_db),
@@ -46,7 +46,7 @@ async def listar_alertas(
 
 
 @router.put("/{alerta_id}/resolver", response_model=AlertaResponse)
-async def resolver_alerta(
+def resolver_alerta(
     alerta_id: UUID,
     payload: AlertaResolver,
     db: Session = Depends(get_db),

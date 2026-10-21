@@ -35,5 +35,5 @@ class Viveiro(AuditMixin, Base):
     status_ativo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # Relacionamentos
-    propriedade = relationship("Propriedade", back_populates="viveiros", lazy="selectin")
-    ciclos = relationship("CicloProdutivo", back_populates="viveiro", lazy="selectin", cascade="all, delete-orphan")
+    propriedade = relationship("Propriedade", back_populates="viveiros")
+    ciclos = relationship("CicloProdutivo", back_populates="viveiro", cascade="all, delete-orphan")

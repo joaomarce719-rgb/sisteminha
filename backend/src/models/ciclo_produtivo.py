@@ -44,28 +44,28 @@ class CicloProdutivo(AuditMixin, Base):
     )
 
     # Relacionamentos
-    tabela_alimentar = relationship("TabelaAlimentar", lazy="selectin")
+    tabela_alimentar = relationship("TabelaAlimentar")
     viveiro = relationship("Viveiro", back_populates="ciclos", lazy="selectin")
     biometrias = relationship(
-        "Biometria", back_populates="ciclo", lazy="selectin",
+        "Biometria", back_populates="ciclo",
         order_by="Biometria.data_medicao",
         cascade="all, delete-orphan",
     )
     manejos_alimentares = relationship(
-        "ManejoAlimentar", back_populates="ciclo", lazy="selectin",
+        "ManejoAlimentar", back_populates="ciclo",
         order_by="ManejoAlimentar.data_registro",
         cascade="all, delete-orphan",
     )
     custos_operacionais = relationship(
-        "CustoOperacional", back_populates="ciclo", lazy="selectin",
+        "CustoOperacional", back_populates="ciclo",
         cascade="all, delete-orphan",
     )
     simulacoes = relationship(
-        "SimulacaoDespesca", back_populates="ciclo", lazy="selectin",
+        "SimulacaoDespesca", back_populates="ciclo",
         cascade="all, delete-orphan",
     )
     rondas_noturnas = relationship(
-        "RondaNoturna", back_populates="ciclo", lazy="selectin",
+        "RondaNoturna", back_populates="ciclo",
         cascade="all, delete-orphan",
     )
     alertas = relationship(

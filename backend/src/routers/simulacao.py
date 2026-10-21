@@ -48,7 +48,7 @@ AVISO_APOIO_DECISAO = (
 )
 
 
-async def _executar_simulacao(
+def _executar_simulacao(
     ciclo_id: UUID,
     dias_horizonte: int,
     preco_customizado: float | None,
@@ -232,14 +232,14 @@ def _persistir(db: Session, ciclo_id: UUID, dias_horizonte: int, resultado) -> U
 
 @router.post("", response_model=SimulacaoResponse)
 @router.post("/", response_model=SimulacaoResponse)
-async def simular_despesca(
+def simular_despesca(
     ciclo_id: UUID,
     payload: SimulacaoRequest,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
 ):
     """Executa simulação ΔV para um horizonte específico (RF-06, somente GESTOR)."""
-    return await _executar_simulacao(
+    return _executar_simulacao(
         ciclo_id,
         payload.dias_horizonte,
         payload.preco_kg_customizado,
@@ -249,7 +249,7 @@ async def simular_despesca(
 
 
 @router.get("/comparativo", response_model=SimulacaoComparativaResponse)
-async def comparativo_despesca(
+def comparativo_despesca(
     ciclo_id: UUID,
     custo_diario_rs: float | None = Query(None, gt=0),
     db: Session = Depends(get_db),
@@ -258,7 +258,7 @@ async def comparativo_despesca(
     """Compara os horizontes de 7, 10 e 15 dias (consulta: não grava no histórico)."""
     simulacoes = []
     for h in (7, 10, 15):
-        sim = await _executar_simulacao(
+        sim = _executar_simulacao(
             ciclo_id, h, None, db, custo_diario_customizado=custo_diario_rs, persistir=False
         )
         simulacoes.append(sim)
@@ -278,14 +278,14 @@ global_router = APIRouter(prefix="/api/v1/simulacao", tags=["Simulação de Desp
 
 @global_router.post("", response_model=SimulacaoGenericResponse, status_code=200)
 @global_router.post("/", response_model=SimulacaoGenericResponse, status_code=200)
-async def executar_simulacao_global(
+def executar_simulacao_global(
     payload: SimulacaoGenericRequest,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
 ):
     """Executa a simulação ΔV de um ciclo (mesmo cálculo da rota aninhada, somente GESTOR)."""
     ciclo_da_organizacao(db, payload.ciclo_id, _user)
-    sim = await _executar_simulacao(
+    sim = _executar_simulacao(
         payload.ciclo_id,
         payload.dias_horizonte,
         payload.preco_kg_customizado,
@@ -322,7 +322,7 @@ async def executar_simulacao_global(
 
 @global_router.get("", response_model=list[SimulacaoGenericResponse])
 @global_router.get("/", response_model=list[SimulacaoGenericResponse])
-async def listar_simulacoes_global(
+def listar_simulacoes_global(
     ciclo_id: UUID | None = None,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
@@ -358,7 +358,7 @@ async def listar_simulacoes_global(
 
 
 @global_router.delete("/{sim_id}", status_code=200)
-async def deletar_simulacao(
+def deletar_simulacao(
     sim_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
