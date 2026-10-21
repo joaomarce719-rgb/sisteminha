@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { toast } from "@/components/ui/toast";
+import { agoraLocalInput, localInputParaIso } from "@/lib/utils";
 
 const COMP_OPTIONS = [
   { value: "NORMAL_FUNDO", label: "Normal (Fundo)", desc: "Comportamento calmo no fundo", icon: "🟢", color: "emerald" },
@@ -52,7 +53,7 @@ export default function RondaPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  const [dataHora, setDataHora] = useState(new Date().toISOString().slice(0, 16));
+  const [dataHora, setDataHora] = useState(agoraLocalInput());
   const [o2MgL, setO2MgL] = useState<number>(4.8);
   const [tempC, setTempC] = useState<number>(28.5);
   const [comportamento, setComportamento] = useState("NORMAL_FUNDO");
@@ -103,9 +104,10 @@ export default function RondaPage() {
     }
     setSubmitting(true);
     try {
-      await rondasApi.criar({
+      const ronda = await rondasApi.criar({
         ciclo_id: selectedCiclo,
-        data_hora_ronda: new Date(dataHora).toISOString(),
+        // Hora local com offset: as regras noturnas (00h–05h30) usam o horário da fazenda
+        data_hora_ronda: localInputParaIso(dataHora),
         oxigenio_dissolvido_mg_l: o2MgL,
         temperatura_agua_c: tempC,
         comportamento,
@@ -118,13 +120,17 @@ export default function RondaPage() {
       });
 
       toast.success("Ronda registrada com sucesso!", `O₂: ${o2MgL.toFixed(1)} mg/L • Aeradores: ${aeradoresLigados}/${aeradoresInstalados}`);
+      for (const alerta of ronda.alertas ?? []) {
+        // Alertas ficam visíveis por mais tempo: exigem ação imediata do vigia
+        toast.error(alerta.titulo, alerta.mensagem, 20000);
+      }
 
       const data = await rondasApi.listarPorCiclo(selectedCiclo);
       setRondas(data);
       setObservacoes("");
       setDetalhesFalha("");
       setFalhaMecanica(false);
-      setDataHora(new Date().toISOString().slice(0, 16));
+      setDataHora(agoraLocalInput());
     } catch (err: any) {
       toast.error("Erro ao registrar ronda", err.message || "Tente novamente");
     } finally {

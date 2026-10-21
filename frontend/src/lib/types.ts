@@ -166,6 +166,27 @@ export interface RondaNoturna {
   taxa_aeracao_pct: number | null;
   fonte_energia: StatusEnergia | null;
   falha_mecanica_detectada: boolean | null;
+  alertas?: Alerta[];
+}
+
+// ── Alertas ───────────────────────────────────────────
+export type NivelAlerta = "INFO" | "AVISO" | "CRITICO";
+export type StatusAlerta = "ABERTO" | "RESOLVIDO";
+
+export interface Alerta {
+  id: string;
+  ciclo_id: string;
+  viveiro_id: string;
+  viveiro_identificacao: string | null;
+  ronda_id: string | null;
+  nivel: NivelAlerta;
+  codigo: string;
+  titulo: string;
+  mensagem: string;
+  status: StatusAlerta;
+  resolvido_em: string | null;
+  observacao_resolucao: string | null;
+  created_at: string;
 }
 
 // ── Custos ────────────────────────────────────────────

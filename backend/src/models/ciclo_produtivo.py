@@ -68,3 +68,7 @@ class CicloProdutivo(AuditMixin, Base):
         "RondaNoturna", back_populates="ciclo", lazy="selectin",
         cascade="all, delete-orphan",
     )
+    alertas = relationship(
+        "Alerta", back_populates="ciclo", lazy="select",
+        cascade="all, delete-orphan",
+    )

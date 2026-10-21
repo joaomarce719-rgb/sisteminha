@@ -118,9 +118,9 @@ export const toast = {
       (window as any).__sad_add_toast("success", message, description, durationMs);
     }
   },
-  error: (message: string, description?: string) => {
+  error: (message: string, description?: string, durationMs?: number) => {
     if (typeof window !== "undefined" && (window as any).__sad_add_toast) {
-      (window as any).__sad_add_toast("error", message, description);
+      (window as any).__sad_add_toast("error", message, description, durationMs);
     }
   },
   info: (message: string, description?: string) => {

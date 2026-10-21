@@ -77,6 +77,20 @@ class StatusEnergia(str, enum.Enum):
     SEM_ENERGIA_QUEDA = "SEM_ENERGIA_QUEDA"
 
 
+# ── Alertas ─────────────────────────────────────────
+class NivelAlerta(str, enum.Enum):
+    """Severidade do alerta."""
+    INFO = "INFO"
+    AVISO = "AVISO"
+    CRITICO = "CRITICO"
+
+
+class StatusAlerta(str, enum.Enum):
+    """Situação de tratamento do alerta (RF-021)."""
+    ABERTO = "ABERTO"
+    RESOLVIDO = "RESOLVIDO"
+
+
 # ── Classificação de Oxigênio (RN-09) ──────────────
 class ClassificacaoOxigenio(str, enum.Enum):
     """Faixas de classificação de O₂ dissolvido conforme RN-09."""

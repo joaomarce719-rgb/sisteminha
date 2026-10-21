@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from src.schemas.alerta import AlertaResponse
 from src.models.enums import (
     ClassificacaoOxigenio,
     ComportamentoCamarao,
@@ -47,6 +48,9 @@ class RondaNoturnaResponse(BaseModel):
     taxa_aeracao_pct: float | None = None
     fonte_energia: StatusEnergia | None = None
     falha_mecanica_detectada: bool | None = None
+
+    # Alertas gerados por esta ronda (preenchido no registro)
+    alertas: list[AlertaResponse] = []
 
     model_config = {"from_attributes": True}
 

@@ -1,6 +1,14 @@
 /** SAD Carcinicultura — Cliente HTTP para a API FastAPI. */
 
-import type { SimulacaoComparativa, SimulacaoResponse, TokenResponse, Usuario } from "./types";
+import type {
+  Alerta,
+  RondaNoturna,
+  SimulacaoComparativa,
+  SimulacaoResponse,
+  StatusAlerta,
+  TokenResponse,
+  Usuario,
+} from "./types";
 
 const API_BASE = "/api/v1";
 
@@ -221,10 +229,25 @@ export const simulacaoApi = {
 // ── Rondas ──────────────────────────────────────────────
 export const rondasApi = {
   criar: (data: any) =>
-    apiFetch<any>("/rondas-noturnas/", { method: "POST", body: JSON.stringify(data) }),
+    apiFetch<RondaNoturna>("/rondas-noturnas/", { method: "POST", body: JSON.stringify(data) }),
   listarPorCiclo: (cicloId: string) =>
     apiFetch<any[]>(`/rondas-noturnas/ciclo/${cicloId}`),
   painelNoturno: () => apiFetch<any[]>("/rondas-noturnas/painel-noturno"),
+};
+
+// ── Alertas (RF-021) ───────────────────────────────────
+export const alertasApi = {
+  listar: (params?: { status_alerta?: StatusAlerta; ciclo_id?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.status_alerta) q.set("status_alerta", params.status_alerta);
+    if (params?.ciclo_id) q.set("ciclo_id", params.ciclo_id);
+    return apiFetch<Alerta[]>(`/alertas/?${q.toString()}`);
+  },
+  resolver: (id: string, observacao?: string) =>
+    apiFetch<Alerta>(`/alertas/${id}/resolver`, {
+      method: "PUT",
+      body: JSON.stringify({ observacao: observacao || null }),
+    }),
 };
 
 // ── Admin & Governança (RF-002, RF-003, RF-014) ────────

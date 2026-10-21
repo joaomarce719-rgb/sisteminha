@@ -4,6 +4,7 @@ Importa todos os modelos para que o metadata do Base os registre
 e o Alembic / init_db() possam criar as tabelas.
 """
 
+from src.models.alerta import Alerta
 from src.models.auditoria import LogAuditoria
 from src.models.biometria import Biometria
 from src.models.ciclo_produtivo import CicloProdutivo
@@ -20,6 +21,7 @@ from src.models.usuario import Usuario
 from src.models.viveiro import Viveiro
 
 __all__ = [
+    "Alerta",
     "Biometria",
     "CicloProdutivo",
     "CustoOperacional",

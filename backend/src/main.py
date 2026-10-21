@@ -17,6 +17,7 @@ import src.models  # noqa: F401
 
 from src.routers import (
     admin,
+    alertas,
     auditoria,
     auth,
     biometrias,
@@ -82,6 +83,7 @@ app.include_router(precos.router)
 app.include_router(simulacao.router)
 app.include_router(simulacao.global_router)
 app.include_router(rondas.router)
+app.include_router(alertas.router)
 app.include_router(tabelas_alimentares.router)
 app.include_router(auditoria.router)
 app.include_router(admin.router)

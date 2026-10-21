@@ -15,8 +15,10 @@ import {
   Activity,
   CheckCircle2,
 } from "lucide-react";
-import { rondasApi } from "@/lib/api";
-import type { RondaNoturna } from "@/lib/types";
+import { alertasApi, rondasApi } from "@/lib/api";
+import type { Alerta, RondaNoturna } from "@/lib/types";
+import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/toast";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
 import { Badge } from "@/components/ui/badge";
@@ -80,13 +82,32 @@ function O2Badge({ valor, classificacao }: { valor: number; classificacao: strin
 
 export default function PainelNoturnoPage() {
   const [painel, setPainel] = useState<PainelData[]>([]);
+  const [alertas, setAlertas] = useState<Alerta[]>([]);
+  const [resolvendo, setResolvendo] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const resolverAlerta = async (alerta: Alerta) => {
+    setResolvendo(alerta.id);
+    try {
+      await alertasApi.resolver(alerta.id);
+      setAlertas((prev) => prev.filter((a) => a.id !== alerta.id));
+      toast.success("Alerta resolvido", alerta.titulo);
+    } catch (err: any) {
+      toast.error("Erro ao resolver alerta", err.message || "Tente novamente");
+    } finally {
+      setResolvendo(null);
+    }
+  };
 
   useEffect(() => {
     async function load() {
       try {
-        const data = await rondasApi.painelNoturno();
+        const [data, abertos] = await Promise.all([
+          rondasApi.painelNoturno(),
+          alertasApi.listar({ status_alerta: "ABERTO" }),
+        ]);
         setPainel(data);
+        setAlertas(abertos);
       } catch {
       } finally {
         setLoading(false);
@@ -167,6 +188,48 @@ export default function PainelNoturnoPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Alertas em aberto (RF-021) */}
+      {alertas.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-red-600" />
+              Alertas em aberto ({alertas.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {alertas.map((a) => (
+              <div
+                key={a.id}
+                className={`flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-xl border ${
+                  a.nivel === "CRITICO" ? "bg-red-50 border-red-200" : "bg-amber-50 border-amber-200"
+                }`}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold text-slate-900">
+                    {a.titulo}
+                    {a.viveiro_identificacao && (
+                      <span className="ml-2 text-xs font-semibold text-slate-500">{a.viveiro_identificacao}</span>
+                    )}
+                  </div>
+                  <div className="text-xs text-slate-600 mt-0.5">{a.mensagem}</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">{fmtDateTime(a.created_at)}</div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={resolvendo === a.id}
+                  onClick={() => resolverAlerta(a)}
+                >
+                  {resolvendo === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                  Marcar como resolvido
+                </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       )}
 
       {/* Lista de Viveiros e Rondas */}

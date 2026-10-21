@@ -14,12 +14,16 @@ from src.models.monitoramento_aerador import MonitoramentoAerador
 from src.models.ronda_noturna import RondaNoturna
 from src.models.usuario import Usuario
 from src.schemas.ronda import PainelNoturnoResponse, RondaNoturnaCreate, RondaNoturnaResponse
+from src.models.alerta import Alerta
+from src.routers.alertas import alerta_response
 from src.services.alert_engine import (
     calcular_taxa_aeracao,
     classificar_oxigenio,
     gerar_alerta_oxigenio,
     verificar_aeracao_noturna,
+    verificar_energia_e_aeradores,
 )
+from src.services.decision_engine import calcular_biomassa_kg, calcular_populacao_atual
 from src.services.auth_service import get_current_user, has_role
 
 router = APIRouter(prefix="/api/v1/rondas-noturnas", tags=["Rondas Noturnas"])
@@ -105,14 +109,55 @@ async def registrar_ronda(
     db.flush()
     db.refresh(ronda)
 
-    # Gerar alertas
-    alerta = gerar_alerta_oxigenio(
-        float(ronda.oxigenio_dissolvido_mg_l),
-        ronda.comportamento,
-        str(ciclo.viveiro_id),
-    )
+    # Gerar e persistir alertas (RF-021)
+    candidatos = [
+        gerar_alerta_oxigenio(
+            float(ronda.oxigenio_dissolvido_mg_l), ronda.comportamento, str(ciclo.viveiro_id)
+        ),
+        verificar_aeracao_noturna(
+            calcular_taxa_aeracao(payload.aeradores_ligados, payload.aeradores_instalados),
+            _biomassa_estimada_kg_ha(ciclo),
+            payload.data_hora_ronda.hour,
+            payload.data_hora_ronda.minute,
+        ),
+        verificar_energia_e_aeradores(
+            payload.fonte_energia, payload.falha_mecanica_detectada, payload.detalhes_falha
+        ),
+    ]
+    alertas = []
+    for a in candidatos:
+        if a is None:
+            continue
+        alerta = Alerta(
+            ciclo_id=ciclo.id,
+            viveiro_id=ciclo.viveiro_id,
+            ronda_id=ronda.id,
+            nivel=a.nivel,
+            codigo=a.codigo,
+            titulo=a.titulo,
+            mensagem=a.mensagem,
+        )
+        db.add(alerta)
+        alertas.append(alerta)
+    db.flush()
 
-    return _build_ronda_response(ronda)
+    resposta = _build_ronda_response(ronda)
+    resposta.alertas = [alerta_response(a) for a in alertas]
+    return resposta
+
+
+def _biomassa_estimada_kg_ha(ciclo: CicloProdutivo) -> float:
+    """Biomassa viva estimada por hectare (0 se ainda não há biometria)."""
+    biometrias = sorted(ciclo.biometrias, key=lambda b: b.data_medicao)
+    if not biometrias or not ciclo.viveiro.area_util_m2:
+        return 0.0
+    sobrevivencia = 100.0
+    for m in sorted(ciclo.manejos_alimentares, key=lambda m: m.data_registro):
+        if m.taxa_sobrevivencia_estimada_fuzzy is not None:
+            sobrevivencia = m.taxa_sobrevivencia_estimada_fuzzy
+    populacao = calcular_populacao_atual(ciclo.quantidade_pos_larvas, sobrevivencia)
+    biomassa = calcular_biomassa_kg(populacao, biometrias[-1].peso_medio_g)
+    return biomassa / (ciclo.viveiro.area_util_m2 / 10_000)
 
 
 @router.get("/ciclo/{ciclo_id}", response_model=list[RondaNoturnaResponse])
