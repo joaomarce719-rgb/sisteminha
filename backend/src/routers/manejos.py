@@ -227,6 +227,7 @@ def recomendacao_alimentar(
 global_router = APIRouter(prefix="/api/v1/manejos", tags=["Manejo Alimentar"])
 
 
+@global_router.post("", response_model=ManejoAlimentarResponse, status_code=201)
 @global_router.post("/", response_model=ManejoAlimentarResponse, status_code=201)
 def registrar_manejo_global(
     payload: ManejoAlimentarCreate,
@@ -239,6 +240,7 @@ def registrar_manejo_global(
     return registrar_manejo(payload.ciclo_id, payload, db, _user)
 
 
+@global_router.get("", response_model=list[ManejoAlimentarResponse])
 @global_router.get("/", response_model=list[ManejoAlimentarResponse])
 def listar_manejos_global(
     ciclo_id: UUID | None = None,

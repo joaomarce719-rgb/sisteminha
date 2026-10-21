@@ -16,6 +16,7 @@ from src.schemas.auditoria import LogAuditoriaResponse
 router = APIRouter(prefix="/api/v1/auditoria", tags=["Auditoria"])
 
 
+@router.get("")
 @router.get("/")
 def listar_logs_auditoria(
     db: Annotated[Session, Depends(get_db)],

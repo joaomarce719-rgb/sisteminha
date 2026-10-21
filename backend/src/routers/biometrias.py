@@ -56,6 +56,7 @@ def _build_biometria_response(bio: Biometria) -> BiometriaResponse:
     )
 
 
+@router.post("", response_model=BiometriaResponse, status_code=201)
 @router.post("/", response_model=BiometriaResponse, status_code=201)
 def registrar_biometria(
     ciclo_id: UUID,
@@ -102,6 +103,7 @@ def registrar_biometria(
     return _build_biometria_response(bio)
 
 
+@router.get("", response_model=list[BiometriaResponse])
 @router.get("/", response_model=list[BiometriaResponse])
 def listar_biometrias(
     ciclo_id: UUID,
@@ -120,6 +122,7 @@ def listar_biometrias(
 global_router = APIRouter(prefix="/api/v1/biometrias", tags=["Biometrias"])
 
 
+@global_router.post("", response_model=BiometriaResponse, status_code=201)
 @global_router.post("/", response_model=BiometriaResponse, status_code=201)
 def registrar_biometria_global(
     payload: BiometriaCreate,
@@ -132,6 +135,7 @@ def registrar_biometria_global(
     return registrar_biometria(payload.ciclo_id, payload, db, _user)
 
 
+@global_router.get("", response_model=list[BiometriaResponse])
 @global_router.get("/", response_model=list[BiometriaResponse])
 def listar_biometrias_global(
     ciclo_id: UUID | None = None,

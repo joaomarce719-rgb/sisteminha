@@ -152,6 +152,7 @@ def exportar_custos_csv(
 global_router = APIRouter(prefix="/api/v1/custos", tags=["Custos Operacionais"])
 
 
+@global_router.post("", response_model=CustoResponse, status_code=201)
 @global_router.post("/", response_model=CustoResponse, status_code=201)
 def lancar_custo_global(
     payload: CustoCreate,
@@ -164,6 +165,7 @@ def lancar_custo_global(
     return lancar_custo(payload.ciclo_id, payload, db, _user)
 
 
+@global_router.get("", response_model=CustoListResponse)
 @global_router.get("/", response_model=CustoListResponse)
 def listar_custos_global(
     ciclo_id: UUID | None = None,
