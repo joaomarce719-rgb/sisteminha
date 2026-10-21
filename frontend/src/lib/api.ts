@@ -1,6 +1,6 @@
 /** SAD Carcinicultura — Cliente HTTP para a API FastAPI. */
 
-import type { TokenResponse, Usuario } from "./types";
+import type { SimulacaoComparativa, SimulacaoResponse, TokenResponse, Usuario } from "./types";
 
 const API_BASE = "/api/v1";
 
@@ -203,16 +203,19 @@ export const precosApi = {
 
 // ── Simulação ──────────────────────────────────────────
 export const simulacaoApi = {
-  simular: (cicloId: string, dias: number, precoCustom?: number) =>
-    apiFetch<any>(`/ciclos/${cicloId}/simular-despesca/`, {
+  simular: (cicloId: string, dias: number, precoCustom?: number, custoDiario?: number) =>
+    apiFetch<SimulacaoResponse>(`/ciclos/${cicloId}/simular-despesca/`, {
       method: "POST",
       body: JSON.stringify({
         dias_horizonte: dias,
         preco_kg_customizado: precoCustom || null,
+        custo_diario_rs: custoDiario || null,
       }),
     }),
-  comparativo: (cicloId: string) =>
-    apiFetch<any>(`/ciclos/${cicloId}/simular-despesca/comparativo`),
+  comparativo: (cicloId: string, custoDiario?: number) =>
+    apiFetch<SimulacaoComparativa>(
+      `/ciclos/${cicloId}/simular-despesca/comparativo${custoDiario ? `?custo_diario_rs=${custoDiario}` : ""}`
+    ),
 };
 
 // ── Rondas ──────────────────────────────────────────────

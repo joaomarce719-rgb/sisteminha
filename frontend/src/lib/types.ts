@@ -136,6 +136,11 @@ export interface SimulacaoResponse {
   delta_v_rs: number;
   recomendacao: RecomendacaoDespesca;
   justificativa: string;
+  simulacao_id?: string | null;
+  preco_atual_rs_kg: number;
+  preco_futuro_rs_kg: number;
+  custo_diario_rs: number;
+  premissas: string[];
 }
 
 export interface SimulacaoComparativa {

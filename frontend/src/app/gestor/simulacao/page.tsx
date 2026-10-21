@@ -52,6 +52,7 @@ export default function SimulacaoPage() {
   // Custom simulation
   const [customDias, setCustomDias] = useState("7");
   const [customPreco, setCustomPreco] = useState("");
+  const [custoDiario, setCustoDiario] = useState("");
   const [customResult, setCustomResult] = useState<SimulacaoResponse | null>(null);
   const [customLoading, setCustomLoading] = useState(false);
 
@@ -82,7 +83,10 @@ export default function SimulacaoPage() {
     setResult(null);
     setCustomResult(null);
     try {
-      const data = await simulacaoApi.comparativo(selectedCiclo);
+      const data = await simulacaoApi.comparativo(
+        selectedCiclo,
+        custoDiario ? parseFloat(custoDiario) : undefined
+      );
       setResult(data);
       toast.success("Simulação comparativa executada!", "Cenários de 7, 10 e 15 dias calculados pelo algoritmo ΔV.");
     } catch (err: any) {
@@ -99,7 +103,8 @@ export default function SimulacaoPage() {
       const data = await simulacaoApi.simular(
         selectedCiclo,
         parseInt(customDias),
-        customPreco ? parseFloat(customPreco) : undefined
+        customPreco ? parseFloat(customPreco) : undefined,
+        custoDiario ? parseFloat(custoDiario) : undefined
       );
       setCustomResult(data);
       toast.success("Cenário customizado calculado!");
@@ -421,11 +426,9 @@ export default function SimulacaoPage() {
                     onChange={(e) => setCustomDias(e.target.value)}
                     className="w-full mt-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none"
                   >
-                    <option value="5">5 dias</option>
                     <option value="7">7 dias</option>
                     <option value="10">10 dias</option>
                     <option value="15">15 dias</option>
-                    <option value="20">20 dias</option>
                   </select>
                 </div>
 
@@ -438,6 +441,19 @@ export default function SimulacaoPage() {
                     value={customPreco}
                     onChange={(e) => setCustomPreco(e.target.value)}
                     placeholder="Usar tabela padrão"
+                    className="mt-1.5"
+                  />
+                </div>
+
+                <div className="w-full sm:w-56">
+                  <Label>Custo Diário (R$)</Label>
+                  <Input
+                    type="number"
+                    step="10"
+                    min="0"
+                    value={custoDiario}
+                    onChange={(e) => setCustoDiario(e.target.value)}
+                    placeholder="Média dos custos lançados"
                     className="mt-1.5"
                   />
                 </div>
@@ -481,6 +497,14 @@ export default function SimulacaoPage() {
                       </Badge>
                     </div>
                   </div>
+                  <p className="mt-3 text-slate-600 leading-relaxed">{customResult.justificativa}</p>
+                  {customResult.premissas.length > 0 && (
+                    <ul className="mt-2 list-disc pl-4 text-slate-500 space-y-0.5">
+                      {customResult.premissas.map((p) => (
+                        <li key={p}>{p}</li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
             </CardContent>

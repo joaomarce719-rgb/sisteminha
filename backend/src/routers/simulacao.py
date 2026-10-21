@@ -3,13 +3,13 @@
 from datetime import date, datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.database import get_db
 from src.models.ciclo_produtivo import CicloProdutivo
-from src.models.enums import RecomendacaoDespesca, RoleUsuario, StatusCiclo
+from src.models.enums import CategoriaCusto, RoleUsuario, StatusCiclo
 from src.models.simulacao_despesca import SimulacaoDespesca
 from src.models.tabela_preco import TabelaPrecoMercado
 from src.schemas.simulacao import (
@@ -25,15 +25,17 @@ from src.services.decision_engine import (
     buscar_preco_por_gramatura,
     calcular_biomassa_kg,
     calcular_ganho_diario,
-    calcular_metricas_economicas,
     calcular_populacao_atual,
-    calcular_racao_diaria,
     estimar_mortalidade_diaria,
     simular_delta_v,
-    taxa_alimentar_clifford,
 )
 
 router = APIRouter(prefix="/api/v1/ciclos/{ciclo_id}/simular-despesca", tags=["Simulação de Despesca"])
+
+
+AVISO_APOIO_DECISAO = (
+    "Resultado de apoio à decisão: não substitui a avaliação técnica do gestor (RN-012)."
+)
 
 
 async def _executar_simulacao(
@@ -41,8 +43,14 @@ async def _executar_simulacao(
     dias_horizonte: int,
     preco_customizado: float | None,
     db: Session,
+    custo_diario_customizado: float | None = None,
+    persistir: bool = True,
 ) -> SimulacaoResponse:
-    """Lógica central de simulação reutilizada para múltiplos horizontes."""
+    """Lógica central de simulação reutilizada para múltiplos horizontes.
+
+    Sem dados suficientes (preço vigente para a gramatura atual ou base para o
+    custo diário) a simulação é recusada com a entrada faltante (RN-015).
+    """
     result = db.execute(select(CicloProdutivo).where(CicloProdutivo.id == ciclo_id))
     ciclo = result.scalar_one_or_none()
     if not ciclo:
@@ -82,6 +90,7 @@ async def _executar_simulacao(
     # Custos
     custos_vals = [float(c.valor_rs) for c in ciclo.custos_operacionais]
     co_total = sum(custos_vals)
+    premissas: list[str] = []
 
     # Preço de mercado
     precos_result = db.execute(
@@ -100,20 +109,55 @@ async def _executar_simulacao(
         for p in precos_result.scalars().all()
     ]
 
-    preco_atual = buscar_preco_por_gramatura(peso_atual, tabela) or 0.0
+    preco_atual = buscar_preco_por_gramatura(peso_atual, tabela)
+    if preco_atual is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Sem preço de mercado vigente para a gramatura atual ({peso_atual:.1f} g). "
+                "Cadastre a faixa na tabela de preços para simular."
+            ),
+        )
 
     # Preço futuro
     peso_projetado = peso_atual + (ganho_diario * dias_horizonte)
     preco_futuro = preco_customizado
-    if preco_futuro is None:
-        preco_futuro = buscar_preco_por_gramatura(peso_projetado, tabela) or preco_atual
+    if preco_futuro is not None:
+        premissas.append(f"Preço futuro informado pelo usuário: R$ {preco_futuro:,.2f}/kg.")
+    else:
+        preco_futuro = buscar_preco_por_gramatura(peso_projetado, tabela)
+        if preco_futuro is None:
+            preco_futuro = preco_atual
+            premissas.append(
+                f"Sem faixa de preço para {peso_projetado:.1f} g; usado o preço atual "
+                f"(R$ {preco_atual:,.2f}/kg)."
+            )
 
-    # Custo diário estimado (ração + energia + mão de obra)
-    racao_diaria_kg = calcular_racao_diaria(biomassa_atual, peso_atual)
-    # Estimativa: preço médio do kg de ração ~R$3.50 + custos fixos diários ~R$50
-    custo_racao_diaria = racao_diaria_kg * 3.50
-    custo_fixo_diario = 50.0  # energia + mão de obra
-    custo_diario_total = custo_racao_diaria + custo_fixo_diario
+    # Custo diário: informado pelo usuário ou média dos custos lançados (exceto PLs)
+    if custo_diario_customizado is not None:
+        custo_diario_total = custo_diario_customizado
+        premissas.append(f"Custo diário informado pelo usuário: R$ {custo_diario_total:,.2f}.")
+    else:
+        custos_recorrentes = sum(
+            float(c.valor_rs)
+            for c in ciclo.custos_operacionais
+            if c.categoria != CategoriaCusto.POS_LARVAS
+        )
+        if custos_recorrentes <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Sem custos operacionais lançados (além das pós-larvas) para estimar o custo "
+                    "diário. Lance os custos do ciclo ou informe custo_diario_rs."
+                ),
+            )
+        custo_diario_total = custos_recorrentes / max(dias_cultivo, 1)
+        premissas.append(
+            f"Custo diário estimado pela média dos custos lançados: R$ {custo_diario_total:,.2f} "
+            f"em {max(dias_cultivo, 1)} dias de cultivo."
+        )
+    if len(biometrias) < 2:
+        premissas.append("Apenas uma biometria: ganho de peso projetado é zero.")
 
     # Executar simulação
     resultado = simular_delta_v(
@@ -129,8 +173,35 @@ async def _executar_simulacao(
         biomassa_atual_kg=biomassa_atual,
     )
 
-    # Persistir simulação
     lo_atual = (biomassa_atual * preco_atual) - co_total
+    simulacao_id = None
+    if persistir:
+        simulacao_id = _persistir(db, ciclo_id, dias_horizonte, resultado)
+
+    return SimulacaoResponse(
+        simulacao_id=simulacao_id,
+        ciclo_id=ciclo_id,
+        data_referencia=hoje,
+        peso_medio_atual_g=peso_atual,
+        biomassa_atual_kg=round(biomassa_atual, 2),
+        lucro_operacional_atual_rs=round(lo_atual, 2),
+        dias_horizonte=dias_horizonte,
+        peso_medio_projetado_g=resultado.peso_medio_projetado_g,
+        biomassa_projetada_kg=resultado.biomassa_projetada_kg,
+        receita_projetada_rs=resultado.receita_projetada,
+        custo_adicional_projetado_rs=resultado.custo_adicional,
+        lucro_projetado_rs=resultado.lucro_projetado,
+        delta_v_rs=resultado.delta_v,
+        recomendacao=resultado.recomendacao,
+        justificativa=f"{resultado.justificativa} {AVISO_APOIO_DECISAO}",
+        preco_atual_rs_kg=preco_atual,
+        preco_futuro_rs_kg=preco_futuro,
+        custo_diario_rs=round(custo_diario_total, 2),
+        premissas=premissas,
+    )
+
+
+def _persistir(db: Session, ciclo_id: UUID, dias_horizonte: int, resultado) -> UUID:
     sim = SimulacaoDespesca(
         ciclo_id=ciclo_id,
         data_simulacao=datetime.now(timezone.utc),
@@ -145,24 +216,7 @@ async def _executar_simulacao(
     )
     db.add(sim)
     db.flush()
-
-    return SimulacaoResponse(
-        simulacao_id=sim.id,
-        ciclo_id=ciclo_id,
-        data_referencia=hoje,
-        peso_medio_atual_g=peso_atual,
-        biomassa_atual_kg=round(biomassa_atual, 2),
-        lucro_operacional_atual_rs=round(lo_atual, 2),
-        dias_horizonte=dias_horizonte,
-        peso_medio_projetado_g=resultado.peso_medio_projetado_g,
-        biomassa_projetada_kg=resultado.biomassa_projetada_kg,
-        receita_projetada_rs=resultado.receita_projetada,
-        custo_adicional_projetado_rs=resultado.custo_adicional,
-        lucro_projetado_rs=resultado.lucro_projetado,
-        delta_v_rs=resultado.delta_v,
-        recomendacao=resultado.recomendacao,
-        justificativa=resultado.justificativa,
-    )
+    return sim.id
 
 
 @router.post("", response_model=SimulacaoResponse)
@@ -175,20 +229,27 @@ async def simular_despesca(
 ):
     """Executa simulação ΔV para um horizonte específico (RF-06, somente GESTOR)."""
     return await _executar_simulacao(
-        ciclo_id, payload.dias_horizonte, payload.preco_kg_customizado, db
+        ciclo_id,
+        payload.dias_horizonte,
+        payload.preco_kg_customizado,
+        db,
+        custo_diario_customizado=payload.custo_diario_rs,
     )
 
 
 @router.get("/comparativo", response_model=SimulacaoComparativaResponse)
 async def comparativo_despesca(
     ciclo_id: UUID,
+    custo_diario_rs: float | None = Query(None, gt=0),
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
 ):
-    """Executa simulação ΔV para os 3 horizontes (7, 10, 15 dias)."""
+    """Compara os horizontes de 7, 10 e 15 dias (consulta: não grava no histórico)."""
     simulacoes = []
     for h in (7, 10, 15):
-        sim = await _executar_simulacao(ciclo_id, h, None, db)
+        sim = await _executar_simulacao(
+            ciclo_id, h, None, db, custo_diario_customizado=custo_diario_rs, persistir=False
+        )
         simulacoes.append(sim)
 
     # Melhor cenário = maior ΔV positivo
@@ -213,7 +274,11 @@ async def executar_simulacao_global(
 ):
     """Executa a simulação ΔV de um ciclo (mesmo cálculo da rota aninhada, somente GESTOR)."""
     sim = await _executar_simulacao(
-        payload.ciclo_id, payload.dias_horizonte, payload.preco_kg_customizado, db
+        payload.ciclo_id,
+        payload.dias_horizonte,
+        payload.preco_kg_customizado,
+        db,
+        custo_diario_customizado=payload.custo_diario_rs,
     )
     resultado = {
         "delta_v": sim.delta_v_rs,

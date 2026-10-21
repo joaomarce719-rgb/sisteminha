@@ -15,6 +15,10 @@ class SimulacaoRequest(BaseModel):
         None, gt=0,
         description="Se null, busca da tabela de preços vigente"
     )
+    custo_diario_rs: float | None = Field(
+        None, gt=0,
+        description="Se null, usa a média diária dos custos lançados no ciclo (exceto PLs)"
+    )
 
     def model_post_init(self, __context) -> None:
         if self.dias_horizonte not in (7, 10, 15):
@@ -45,12 +49,19 @@ class SimulacaoResponse(BaseModel):
     recomendacao: RecomendacaoDespesca
     justificativa: str
 
+    # Entradas usadas (explicabilidade — RF-022)
+    preco_atual_rs_kg: float
+    preco_futuro_rs_kg: float
+    custo_diario_rs: float
+    premissas: list[str] = Field(default_factory=list)
+
 
 class SimulacaoGenericRequest(BaseModel):
     """Simulação pela rota global: usa os dados reais do ciclo informado."""
     ciclo_id: UUID
     dias_horizonte: int = Field(15, description="Horizonte de projeção: 7, 10 ou 15 dias")
     preco_kg_customizado: float | None = Field(None, gt=0)
+    custo_diario_rs: float | None = Field(None, gt=0)
     descricao: str | None = None
 
     def model_post_init(self, __context) -> None:
