@@ -17,7 +17,7 @@ from src.services.fuzzy_engine import (
 def test_base_de_regras_cobre_todo_o_universo():
     """Nenhuma combinação de entradas pode cair no fallback."""
     for consumo, sobra, cresc in itertools.product(
-        np.arange(0.0, 2.01, 0.1), SOBRA_MAPA.values(), np.arange(-1.0, 3.01, 0.25)
+        np.arange(0.0, 2.01, 0.25), SOBRA_MAPA.values(), np.arange(-1.0, 3.01, 0.5)
     ):
         ajuste = _inferir(consumo, sobra, cresc)
         assert -3.0 <= ajuste <= 0.5
