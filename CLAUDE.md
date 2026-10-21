@@ -19,6 +19,9 @@ Backend (rodar de dentro de `backend/`, pois `.env` é lido relativo ao diretór
 .venv/Scripts/python.exe -m pytest tests -q                              # todos os testes
 .venv/Scripts/python.exe -m pytest tests/test_decision_engine.py::test_densidade_estocagem   # um teste
 .venv/Scripts/python.exe -m src.seed                                     # carga de exemplo (viveiros/preços)
+.venv/Scripts/python.exe -m alembic upgrade head                         # aplica migrações (produção)
+.venv/Scripts/python.exe -m alembic revision --autogenerate -m "descricao" # nova migração após mudar modelos
+.venv/Scripts/python.exe -m alembic check                                # banco difere dos modelos?
 ```
 
 Frontend (dentro de `frontend/`):
@@ -36,7 +39,8 @@ npx tsc --noEmit
 
 - `src/config.py` (pydantic-settings) lê `backend/.env`; modelo em `backend/.env.example`. Sem `DATABASE_URL`, usa `sqlite:///./local_dev.db`. Produção usa Postgres/Supabase via **pg8000** (driver síncrono).
 - Se o banco remoto falhar na inicialização, a app aborta, a menos que `DB_FALLBACK_SQLITE=true`.
-- Não há migrações: `init_db()` (`src/database.py`) roda `Base.metadata.create_all` e cria organização, propriedade, usuários de demonstração (senha `senha123`, só se ainda não existirem) e tabela de preços — **somente quando `APP_DEBUG=true`**. Com `APP_DEBUG=false` é obrigatório definir `JWT_SECRET_KEY`. `create_all` não altera tabelas existentes; mudanças de coluna exigem ajuste manual do banco.
+- Esquema versionado com **Alembic** (`backend/alembic.ini`, `backend/migrations/`; o `env.py` usa o engine de `src.database`, com `render_as_batch` no SQLite). Toda mudança de modelo precisa de uma migração. Com `APP_DEBUG=true`, `init_db()` aplica as migrações (`executar_migracoes`) e cria organização, propriedade, usuários de demonstração (senha `senha123`, só se não existirem), tabela de preços e tabela alimentar padrão. Bancos antigos sem `alembic_version` recebem as tabelas ausentes e são marcados na revisão `0001`. Em produção rode `alembic upgrade head`. Com `APP_DEBUG=false` é obrigatório definir `JWT_SECRET_KEY`.
+- No SQLite, UUIDs são gravados como 32 dígitos hexadecimais sem hífen e as chaves estrangeiras são aplicadas (`PRAGMA foreign_keys=ON`); scripts que escrevem direto no banco devem seguir esse formato.
 - Testes em `backend/tests/`: `test_decision_engine.py`/`test_regressoes_sad.py` são unitários; `test_api_*.py` sobem a API via `TestClient`. O `conftest.py` define as variáveis de ambiente (SQLite temporário, `SUPERADMIN_EMAILS=admin@sad.com`) **antes** de importar `src` e expõe as fixtures `client`, `gestor`, `admin`, `campo`, `vigia` (headers já autenticados com as contas seed), `login`, `novo_viveiro` e `novo_ciclo`. O banco é compartilhado na sessão: use `unico()` para identificadores.
 
 ## Arquitetura do backend

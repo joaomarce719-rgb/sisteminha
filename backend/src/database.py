@@ -77,9 +77,42 @@ def get_db():
     finally:
         db.close()
 
+# Revisão Alembic que corresponde ao esquema criado pelo antigo create_all
+REVISAO_BASE = "0001"
+
+
+def executar_migracoes() -> None:
+    """Aplica as migrações Alembic pendentes (equivale a `alembic upgrade head`).
+
+    Bancos criados antes do Alembic (tabelas sem `alembic_version`) recebem as
+    tabelas ausentes e são marcados na revisão base antes do upgrade.
+    """
+    from pathlib import Path
+
+    from alembic import command
+    from alembic.config import Config
+    from sqlalchemy import inspect
+
+    import src.models  # noqa: F401
+
+    cfg = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    cfg.attributes["configurar_logging"] = False
+    with engine.begin() as conn:
+        cfg.attributes["connection"] = conn
+        tabelas = set(inspect(conn).get_table_names())
+        if tabelas and "alembic_version" not in tabelas:
+            logger.warning(
+                "Banco sem controle de versão: criando tabelas ausentes e marcando a revisão %s.",
+                REVISAO_BASE,
+            )
+            Base.metadata.create_all(bind=conn)
+            command.stamp(cfg, REVISAO_BASE)
+        command.upgrade(cfg, "head")
+
+
 def init_db() -> None:
-    """Cria tabelas e garante a existência dos usuários e dados essenciais."""
-    Base.metadata.create_all(bind=engine)
+    """Aplica as migrações e garante a existência dos usuários e dados essenciais."""
+    executar_migracoes()
     
     # Importações postergadas para evitar importação circular
     from datetime import date
