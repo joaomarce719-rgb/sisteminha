@@ -14,6 +14,7 @@ from src.models.enums import RoleUsuario, StatusCiclo
 from src.schemas.biometria import BiometriaCreate, BiometriaResponse
 from src.services.auth_service import has_role
 from src.services.decision_engine import calcular_ganho_diario, calcular_ganho_semanal
+from src.services.regras_ciclo import validar_data_no_ciclo
 
 router = APIRouter(prefix="/api/v1/ciclos/{ciclo_id}/biometrias", tags=["Biometrias"])
 
@@ -54,6 +55,7 @@ async def registrar_biometria(
 ):
     """Registra uma amostragem biométrica com tamanho da amostra (RF-007, RN-004)."""
     ciclo = await _get_ciclo_ativo(ciclo_id, db)
+    validar_data_no_ciclo(ciclo, payload.data_medicao, "A data da biometria")
 
     # Calcular peso médio se fornecido peso total da amostra
     peso_medio = payload.peso_medio_g

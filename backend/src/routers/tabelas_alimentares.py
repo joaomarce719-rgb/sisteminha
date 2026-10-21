@@ -31,10 +31,10 @@ _CLIFFORD_DEFAULT_FAIXAS = [
 ]
 
 
-def _garantir_tabela_padrao(db: Session) -> None:
-    """Cria a tabela padrão de Clifford (1992) se o banco estiver vazio."""
-    count = db.scalar(select(TabelaAlimentar.id).limit(1))
-    if not count:
+def garantir_tabela_padrao(db: Session) -> None:
+    """Cria a tabela padrão de Clifford (1992) se o banco estiver vazio (chamada pelo init_db)."""
+    existente = db.scalar(select(TabelaAlimentar.id).limit(1))
+    if not existente:
         padrao = TabelaAlimentar(
             nome="Clifford (1992) - Padrão",
             versao=1,
@@ -44,7 +44,6 @@ def _garantir_tabela_padrao(db: Session) -> None:
             faixas=_CLIFFORD_DEFAULT_FAIXAS,
         )
         db.add(padrao)
-        db.commit()
 
 
 @router.get("", response_model=list[TabelaAlimentarResponse])
@@ -55,7 +54,6 @@ def listar_tabelas_alimentares(
     apenas_ativas: bool = Query(True, description="Filtrar apenas tabelas ativas"),
 ):
     """Lista as tabelas alimentares cadastradas."""
-    _garantir_tabela_padrao(db)
     query = select(TabelaAlimentar).order_by(desc(TabelaAlimentar.is_padrao), TabelaAlimentar.nome)
     if apenas_ativas:
         query = query.where(TabelaAlimentar.ativo.is_(True))
@@ -69,7 +67,6 @@ def obter_tabela_alimentar(
     _user: Annotated[Usuario, Depends(get_current_usuario)],
 ):
     """Obtém os detalhes de uma tabela alimentar específica."""
-    _garantir_tabela_padrao(db)
     tabela = db.get(TabelaAlimentar, tabela_id)
     if not tabela:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tabela alimentar não encontrada")
@@ -138,7 +135,11 @@ def atualizar_tabela_alimentar(
     db: Annotated[Session, Depends(get_db)],
     usuario: Annotated[Usuario, Depends(require_gestor)],
 ):
-    """Atualiza metadados ou status da tabela alimentar (apenas GESTOR)."""
+    """Atualiza metadados/status; alterar faixas gera uma NOVA versão (RF-010, RN-017).
+
+    A versão anterior é preservada (inativa) para que ciclos e resultados que a
+    referenciam continuem reproduzíveis.
+    """
     tabela = db.get(TabelaAlimentar, tabela_id)
     if not tabela:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tabela alimentar não encontrada")
@@ -163,8 +164,43 @@ def atualizar_tabela_alimentar(
         tabela.descricao = payload.descricao
     if payload.ativo is not None:
         tabela.ativo = payload.ativo
-    if payload.faixas is not None:
-        tabela.faixas = sorted([f.model_dump() for f in payload.faixas], key=lambda x: x["peso_g"])
+    faixas_novas = (
+        sorted([f.model_dump() for f in payload.faixas], key=lambda x: x["peso_g"])
+        if payload.faixas is not None
+        else None
+    )
+    if faixas_novas is not None and faixas_novas != tabela.faixas:
+        ultima_versao = db.scalar(
+            select(TabelaAlimentar.versao)
+            .where(TabelaAlimentar.nome == tabela.nome)
+            .order_by(desc(TabelaAlimentar.versao))
+            .limit(1)
+        )
+        nova = TabelaAlimentar(
+            nome=tabela.nome,
+            versao=(ultima_versao or tabela.versao) + 1,
+            descricao=tabela.descricao,
+            is_padrao=tabela.is_padrao,
+            ativo=True,
+            faixas=faixas_novas,
+            created_by_id=usuario.id,
+        )
+        tabela.is_padrao = False
+        tabela.ativo = False
+        db.add(nova)
+        db.flush()
+        registrar_auditoria(
+            db=db,
+            acao="NOVA_VERSAO",
+            entidade="TabelaAlimentar",
+            registro_id=nova.id,
+            usuario=usuario,
+            dados_anteriores={**dados_ant, "id": str(tabela.id)},
+            dados_novos={"nome": nova.nome, "versao": nova.versao, "faixas": nova.faixas},
+        )
+        db.commit()
+        db.refresh(nova)
+        return nova
 
     registrar_auditoria(
         db=db,

@@ -194,12 +194,27 @@ def verificar_alvo_gerenciavel(alvo: Usuario, atual: Usuario) -> None:
         )
 
 
+def _possui_registros_operacionais(db: Session, u: Usuario) -> bool:
+    from src.models.biometria import Biometria
+    from src.models.ronda_noturna import RondaNoturna
+
+    for modelo, coluna in ((RondaNoturna, RondaNoturna.vigia_id), (Biometria, Biometria.responsavel_id)):
+        if db.scalar(select(func.count()).select_from(modelo).where(coluna == u.id)):
+            return True
+    return False
+
+
 def excluir_usuario_por_id(db: Session, user_id: UUID, atual: Usuario) -> None:
     if user_id == atual.id:
         raise HTTPException(status_code=400, detail="Não é possível excluir a própria conta.")
     u = db.get(Usuario, user_id)
     if u:
         verificar_alvo_gerenciavel(u, atual)
+        if _possui_registros_operacionais(db, u):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Usuário possui registros operacionais; desative a conta em vez de excluí-la.",
+            )
         db.delete(u)
         db.flush()
 

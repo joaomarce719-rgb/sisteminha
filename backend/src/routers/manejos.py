@@ -26,6 +26,7 @@ from src.services.decision_engine import (
     calcular_ganho_diario,
     calcular_ganho_semanal,
 )
+from src.services.regras_ciclo import validar_data_no_ciclo
 from src.services.fuzzy_engine import (
     atualizar_taxa_sobrevivencia,
     inferir_ajuste_sobrevivencia,
@@ -60,6 +61,7 @@ async def registrar_manejo(
         raise HTTPException(status_code=404, detail="Ciclo não encontrado.")
     if ciclo.status != StatusCiclo.ATIVO:
         raise HTTPException(status_code=400, detail="Ciclo não está ativo.")
+    validar_data_no_ciclo(ciclo, payload.data_registro, "A data do manejo")
 
     # Dados de biometria mais recente
     biometrias = sorted(ciclo.biometrias, key=lambda b: b.data_medicao)

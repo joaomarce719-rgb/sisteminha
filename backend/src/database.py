@@ -52,6 +52,7 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA synchronous=NORMAL")
         cursor.execute("PRAGMA busy_timeout=60000")
+        cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
 
 SessionLocal = sessionmaker(
@@ -152,6 +153,10 @@ def init_db() -> None:
                     TabelaPrecoMercado(faixa_gramatura_min=14.0, faixa_gramatura_max=16.0, preco_por_kg=28.00, vigencia_inicio=date.today()),
                     TabelaPrecoMercado(faixa_gramatura_min=16.0, faixa_gramatura_max=20.0, preco_por_kg=32.00, vigencia_inicio=date.today()),
                 ])
+
+            # 5. Tabela alimentar padrão (Clifford 1992)
+            from src.routers.tabelas_alimentares import garantir_tabela_padrao
+            garantir_tabela_padrao(db)
 
             db.commit()
         except Exception as e:

@@ -65,5 +65,6 @@ class CicloProdutivo(AuditMixin, Base):
         cascade="all, delete-orphan",
     )
     rondas_noturnas = relationship(
-        "RondaNoturna", back_populates="ciclo", lazy="selectin"
+        "RondaNoturna", back_populates="ciclo", lazy="selectin",
+        cascade="all, delete-orphan",
     )

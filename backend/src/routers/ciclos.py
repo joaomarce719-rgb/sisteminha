@@ -19,6 +19,7 @@ from src.schemas.ciclo import CicloCreate, CicloEncerrar, CicloResponse, Metrica
 from src.services.auth_service import get_current_user, has_role
 from src.services import decision_engine as de
 from src.services.audit import registrar_auditoria
+from src.services.regras_ciclo import ciclo_aberto_do_viveiro
 
 router = APIRouter(prefix="/api/v1/ciclos", tags=["Ciclos Produtivos"])
 
@@ -39,18 +40,18 @@ async def criar_ciclo(
     if not viveiro.status_ativo:
         raise HTTPException(status_code=400, detail="Viveiro inativo.")
 
-    # Verificar ciclo ativo existente
-    ciclo_ativo = db.execute(
-        select(CicloProdutivo).where(
-            CicloProdutivo.viveiro_id == payload.viveiro_id,
-            CicloProdutivo.status == StatusCiclo.ATIVO,
-        )
-    )
-    if ciclo_ativo.scalar_one_or_none():
+    # Um ciclo aberto (ATIVO ou PAUSADO) por viveiro
+    if ciclo_aberto_do_viveiro(db, payload.viveiro_id):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Este viveiro já possui um ciclo ATIVO.",
+            detail="Este viveiro já possui um ciclo ATIVO ou PAUSADO.",
         )
+
+    if payload.tabela_alimentar_id is not None:
+        from src.models.tabela_alimentar import TabelaAlimentar
+        tabela = db.get(TabelaAlimentar, payload.tabela_alimentar_id)
+        if not tabela or not tabela.ativo:
+            raise HTTPException(status_code=404, detail="Tabela alimentar não encontrada ou inativa.")
 
     # Verificar densidade (RN-01)
     densidade = de.calcular_densidade(payload.quantidade_pos_larvas, viveiro.area_util_m2)
@@ -144,8 +145,10 @@ async def encerrar_ciclo(
     ciclo = result.scalar_one_or_none()
     if not ciclo:
         raise HTTPException(status_code=404, detail="Ciclo não encontrado.")
-    if ciclo.status != StatusCiclo.ATIVO:
-        raise HTTPException(status_code=400, detail="Somente ciclos ATIVOS podem ser encerrados.")
+    if ciclo.status not in (StatusCiclo.ATIVO, StatusCiclo.PAUSADO):
+        raise HTTPException(status_code=400, detail="Somente ciclos ATIVOS ou PAUSADOS podem ser encerrados.")
+    if payload.data_despesca_real < ciclo.data_povoamento:
+        raise HTTPException(status_code=422, detail="A despesca não pode ser anterior ao povoamento.")
 
     dados_ant = {
         "status": ciclo.status.value,
@@ -223,6 +226,8 @@ async def retomar_ciclo(
         raise HTTPException(status_code=404, detail="Ciclo não encontrado.")
     if ciclo.status != StatusCiclo.PAUSADO:
         raise HTTPException(status_code=400, detail="Somente ciclos PAUSADOS podem ser retomados.")
+    if ciclo_aberto_do_viveiro(db, ciclo.viveiro_id, exceto_id=ciclo.id):
+        raise HTTPException(status_code=409, detail="O viveiro já possui outro ciclo aberto.")
 
     dados_ant = {"status": ciclo.status.value}
     ciclo.status = StatusCiclo.ATIVO
@@ -422,42 +427,6 @@ async def exportar_ciclo_csv(
             "Content-Disposition": f'attachment; filename="relatorio_ciclo_{str(ciclo_id)[:8]}.csv"'
         },
     )
-
-
-@router.post("/{ciclo_id}/pausar", response_model=CicloResponse)
-async def pausar_ciclo(
-    ciclo_id: UUID,
-    db: Session = Depends(get_db),
-    _user=Depends(has_role([RoleUsuario.GESTOR])),
-):
-    """Pausa um ciclo produtivo ativo."""
-    result = db.execute(select(CicloProdutivo).where(CicloProdutivo.id == ciclo_id))
-    ciclo = result.scalar_one_or_none()
-    if not ciclo:
-        raise HTTPException(status_code=404, detail="Ciclo não encontrado.")
-    ciclo.status = StatusCiclo.PAUSADO
-    db.add(ciclo)
-    db.flush()
-    db.refresh(ciclo)
-    return ciclo
-
-
-@router.post("/{ciclo_id}/retomar", response_model=CicloResponse)
-async def retomar_ciclo(
-    ciclo_id: UUID,
-    db: Session = Depends(get_db),
-    _user=Depends(has_role([RoleUsuario.GESTOR])),
-):
-    """Retoma um ciclo produtivo pausado."""
-    result = db.execute(select(CicloProdutivo).where(CicloProdutivo.id == ciclo_id))
-    ciclo = result.scalar_one_or_none()
-    if not ciclo:
-        raise HTTPException(status_code=404, detail="Ciclo não encontrado.")
-    ciclo.status = StatusCiclo.ATIVO
-    db.add(ciclo)
-    db.flush()
-    db.refresh(ciclo)
-    return ciclo
 
 
 @router.delete("/{ciclo_id}", status_code=status.HTTP_200_OK)

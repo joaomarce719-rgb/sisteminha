@@ -114,6 +114,11 @@ async def deletar_viveiro(
     viveiro = result.scalar_one_or_none()
     if not viveiro:
         raise HTTPException(status_code=404, detail="Viveiro não encontrado.")
+    if viveiro.ciclos:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Viveiro possui ciclos registrados; inative-o para preservar o histórico.",
+        )
     db.delete(viveiro)
     db.flush()
     return {"detail": "Viveiro excluído com sucesso.", "id": str(viveiro_id)}

@@ -12,6 +12,7 @@ from src.models.enums import RoleUsuario
 from src.schemas.custo import CustoCreate, CustoListResponse, CustoResumoResponse, CustoResponse
 from src.services.auth_service import has_role
 from src.services.audit import registrar_auditoria
+from src.services.regras_ciclo import obter_ciclo
 
 router = APIRouter(prefix="/api/v1/ciclos/{ciclo_id}/custos", tags=["Custos Operacionais"])
 
@@ -26,6 +27,7 @@ async def lancar_custo(
     _user=Depends(has_role([RoleUsuario.GESTOR])),
 ):
     """Registra uma despesa operacional vinculada ao ciclo (RF-08)."""
+    obter_ciclo(db, ciclo_id)
     custo = CustoOperacional(
         ciclo_id=ciclo_id,
         **payload.model_dump(exclude={"ciclo_id"}),
