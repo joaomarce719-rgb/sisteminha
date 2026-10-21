@@ -1,6 +1,6 @@
 /** SAD Carcinicultura — Cliente HTTP para a API FastAPI. */
 
-import type { TokenResponse } from "./types";
+import type { TokenResponse, Usuario } from "./types";
 
 const API_BASE = "/api/v1";
 
@@ -19,24 +19,26 @@ export function clearToken(): void {
   localStorage.removeItem("sad_user");
 }
 
-export function getStoredUser(): { nome: string; role: string; email?: string } | null {
+export interface StoredUser {
+  nome: string;
+  role: string;
+  email?: string;
+  is_superadmin?: boolean;
+}
+
+export function getStoredUser(): StoredUser | null {
   if (typeof window === "undefined") return null;
   const raw = localStorage.getItem("sad_user");
   return raw ? JSON.parse(raw) : null;
 }
 
-export function setStoredUser(nome: string, role: string, email?: string): void {
-  localStorage.setItem("sad_user", JSON.stringify({ nome, role, email }));
+export function setStoredUser(user: StoredUser): void {
+  localStorage.setItem("sad_user", JSON.stringify(user));
 }
 
-export function isSuperadmin(email?: string): boolean {
-  if (!email) return false;
-  const list = [
-    "admin@sad.com",
-    "gestor@sad.com",
-    "testedoapp1@gmail.com",
-  ];
-  return list.includes(email.toLowerCase().trim());
+/** Indicador apenas de navegação; a autorização real é feita pelo backend (403). */
+export function isSuperadmin(user: StoredUser | null = getStoredUser()): boolean {
+  return Boolean(user?.is_superadmin);
 }
 
 // ── Fetch Wrapper ─────────────────────────────────────
@@ -83,7 +85,12 @@ export async function login(email: string, senha: string): Promise<TokenResponse
     body: JSON.stringify({ email, senha }),
   });
   setToken(data.access_token);
-  setStoredUser(data.nome, data.role, email);
+  setStoredUser({
+    nome: data.nome,
+    role: data.role,
+    email: data.email ?? email,
+    is_superadmin: data.is_superadmin,
+  });
   return data;
 }
 
@@ -91,10 +98,9 @@ export async function registrarUsuario(payload: {
   nome_completo: string;
   email: string;
   senha: string;
-  papel?: "GESTOR" | "CAMPO" | "VIGIA";
   telefone_emergencia?: string;
 }) {
-  return apiFetch("/auth/register", {
+  return apiFetch<Usuario>("/auth/register", {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -229,7 +235,9 @@ export const adminApi = {
   aprovarUsuario: (id: string, data: { papel: string; ativo: boolean }) =>
     apiFetch<any>(`/admin/usuarios/${id}/aprovar`, { method: "PUT", body: JSON.stringify(data) }),
   resetarSenha: (id: string) =>
-    apiFetch<any>(`/admin/usuarios/${id}/resetar-senha`, { method: "POST" }),
+    apiFetch<{ detail: string; senha_temporaria: string }>(`/admin/usuarios/${id}/resetar-senha`, {
+      method: "POST",
+    }),
   excluirUsuario: (id: string) =>
     apiFetch<any>(`/admin/usuarios/${id}`, { method: "DELETE" }),
   listarFazendas: () => apiFetch<any[]>("/admin/fazendas"),

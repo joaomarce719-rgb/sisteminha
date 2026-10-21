@@ -13,13 +13,13 @@ def get_engine():
     if db_url.startswith("sqlite"):
         return create_engine(
             db_url,
-            echo=settings.app_debug,
+            echo=settings.db_echo,
             connect_args={"check_same_thread": False, "timeout": 60},
         )
     try:
         eng = create_engine(
             db_url,
-            echo=settings.app_debug,
+            echo=settings.db_echo,
             pool_size=5,
             max_overflow=10,
             pool_pre_ping=True,
@@ -39,7 +39,7 @@ def get_engine():
         )
         return create_engine(
             "sqlite:///./local_dev.db",
-            echo=settings.app_debug,
+            echo=settings.db_echo,
             connect_args={"check_same_thread": False, "timeout": 60},
         )
 
@@ -116,7 +116,8 @@ def init_db() -> None:
                 db.add(prop)
                 db.flush()
 
-            # 2. Usuários Essenciais do Sistema
+            # 2. Usuários de demonstração (criados apenas se ainda não existirem;
+            #    contas existentes nunca têm senha, papel ou status alterados aqui)
             usuarios_base = [
                 ("admin@sad.com", "Administrador Central", RoleUsuario.GESTOR),
                 ("gestor@sad.com", "Gestor da Fazenda", RoleUsuario.GESTOR),
@@ -137,11 +138,6 @@ def init_db() -> None:
                         papel=papel,
                         ativo=True,
                     )
-                    db.add(user)
-                else:
-                    user.senha_hash = senha_padrao_hash
-                    user.ativo = True
-                    user.papel = papel
                     db.add(user)
 
             # 3. Viveiros (Apenas os criados pelo usuário)

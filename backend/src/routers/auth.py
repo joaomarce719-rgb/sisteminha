@@ -19,6 +19,7 @@ from src.services.auth_service import (
     get_current_user,
     has_role,
     hash_password,
+    is_superadmin,
     verify_password,
 )
 
@@ -92,6 +93,8 @@ async def login(
         access_token=token,
         role=user.papel,
         nome=user.nome_completo,
+        email=user.email,
+        is_superadmin=is_superadmin(user),
     )
 
 
@@ -101,12 +104,16 @@ async def login(
 @router.post("/registrar/", response_model=UsuarioResponse, status_code=status.HTTP_201_CREATED)
 async def registrar_usuario(
     request: Request,
-    response: Response,
     db: Session = Depends(get_db),
 ):
-    """Registro de usuário com suporte a JSON e Form-data."""
+    """Auto-cadastro público (JSON ou Form-data).
+
+    O papel enviado pelo cliente é ignorado: a conta nasce como CAMPO e inativa,
+    aguardando aprovação de um GESTOR. Apenas o primeiro usuário do sistema
+    (banco vazio) é criado como GESTOR ativo.
+    """
     data = await parse_request_data(request)
-    email = data.get("email")
+    email = (data.get("email") or "").strip().lower()
     senha = data.get("senha") or data.get("password")
     nome = data.get("nome_completo") or data.get("name") or data.get("username") or "Usuário"
     telefone = data.get("telefone_emergencia") or data.get("phone")
@@ -117,29 +124,30 @@ async def registrar_usuario(
             detail="Email e senha são obrigatórios.",
         )
 
-    result = db.execute(select(Usuario).where(Usuario.email == email))
-    existing = result.scalar_one_or_none()
-    if existing is not None:
-        response.status_code = status.HTTP_200_OK
-        return existing
+    if len(senha) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="A senha deve ter pelo menos 6 caracteres.",
+        )
 
-    # Determinação segura do papel com princípio do menor privilégio
-    user_exists = db.execute(select(Usuario.id)).scalars().first()
-    raw_role = str(data.get("papel") or data.get("role") or "").upper()
-    if raw_role in [r.value for r in RoleUsuario]:
-        papel_atribuido = RoleUsuario(raw_role)
-    elif user_exists is None:
-        papel_atribuido = RoleUsuario.GESTOR
-    else:
-        papel_atribuido = RoleUsuario.CAMPO
+    existing = db.execute(
+        select(Usuario.id).where(func.lower(Usuario.email) == email)
+    ).scalar_one_or_none()
+    if existing is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Não foi possível concluir o cadastro com este e-mail.",
+        )
+
+    primeiro_usuario = db.execute(select(Usuario.id).limit(1)).scalar_one_or_none() is None
 
     user = Usuario(
         nome_completo=nome,
         email=email,
         senha_hash=hash_password(senha),
-        papel=papel_atribuido,
+        papel=RoleUsuario.GESTOR if primeiro_usuario else RoleUsuario.CAMPO,
         telefone_emergencia=telefone,
-        ativo=True,
+        ativo=primeiro_usuario,
     )
     db.add(user)
     db.flush()
@@ -150,7 +158,9 @@ async def registrar_usuario(
 @router.get("/me", response_model=UsuarioResponse)
 async def perfil_atual(current_user: Usuario = Depends(get_current_user)):
     """Retorna os dados do usuário autenticado."""
-    return current_user
+    resposta = UsuarioResponse.model_validate(current_user)
+    resposta.is_superadmin = is_superadmin(current_user)
+    return resposta
 
 
 @router.put("/me/senha")
@@ -175,6 +185,25 @@ async def alterar_senha(
 from uuid import UUID
 
 
+def verificar_alvo_gerenciavel(alvo: Usuario, atual: Usuario) -> None:
+    """Impede que um GESTOR comum altere contas de superadmin ou exclua a própria conta."""
+    if is_superadmin(alvo) and not is_superadmin(atual):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Somente a Administração Central pode alterar esta conta.",
+        )
+
+
+def excluir_usuario_por_id(db: Session, user_id: UUID, atual: Usuario) -> None:
+    if user_id == atual.id:
+        raise HTTPException(status_code=400, detail="Não é possível excluir a própria conta.")
+    u = db.get(Usuario, user_id)
+    if u:
+        verificar_alvo_gerenciavel(u, atual)
+        db.delete(u)
+        db.flush()
+
+
 @router.delete("/users/{user_id}", status_code=204)
 @router.delete("/usuarios/{user_id}", status_code=204)
 async def deletar_usuario(
@@ -183,10 +212,7 @@ async def deletar_usuario(
     _user: Usuario = Depends(has_role([RoleUsuario.GESTOR])),
 ):
     """Deleta um usuário por ID (exclusivo para GESTOR)."""
-    u = db.execute(select(Usuario).where(Usuario.id == user_id)).scalar_one_or_none()
-    if u:
-        db.delete(u)
-        db.flush()
+    excluir_usuario_por_id(db, user_id, _user)
     return Response(status_code=204)
 
 
@@ -200,9 +226,6 @@ async def deletar_usuario_global(
     _user: Usuario = Depends(has_role([RoleUsuario.GESTOR])),
 ):
     """Deleta um usuário por ID (exclusivo para GESTOR)."""
-    u = db.execute(select(Usuario).where(Usuario.id == user_id)).scalar_one_or_none()
-    if u:
-        db.delete(u)
-        db.flush()
+    excluir_usuario_por_id(db, user_id, _user)
     return Response(status_code=204)
 

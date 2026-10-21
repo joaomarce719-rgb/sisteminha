@@ -17,6 +17,8 @@ export interface TokenResponse {
   token_type: string;
   role: RoleUsuario;
   nome: string;
+  email?: string | null;
+  is_superadmin?: boolean;
 }
 
 export interface Usuario {
@@ -27,6 +29,7 @@ export interface Usuario {
   telefone_emergencia: string | null;
   ativo: boolean;
   created_at: string;
+  is_superadmin?: boolean;
 }
 
 // ── Viveiro ───────────────────────────────────────────

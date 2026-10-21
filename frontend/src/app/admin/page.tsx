@@ -454,10 +454,11 @@ export default function AdminPage() {
   const handleResetSenhaGestor = async (id: string, nome: string) => {
     setResetting(id);
     try {
-      await adminApi.resetarSenha(id);
+      const res = await adminApi.resetarSenha(id);
       toast.success(
         "Senha redefinida com sucesso!",
-        `Nova senha provisória de ${nome}: mudar123`
+        `Senha temporária de ${nome}: ${res.senha_temporaria}`,
+        60000
       );
     } catch (err: any) {
       toast.error("Falha ao resetar senha", err.message || "Tente novamente");

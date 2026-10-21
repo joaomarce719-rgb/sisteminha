@@ -21,7 +21,7 @@ import {
   ShieldCheck,
   Utensils,
 } from "lucide-react";
-import { clearToken, getStoredUser, isSuperadmin } from "@/lib/api";
+import { clearToken, getStoredUser, isSuperadmin, type StoredUser } from "@/lib/api";
 
 const NAV_ITEMS = [
   { href: "/gestor/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -38,7 +38,7 @@ const NAV_ITEMS = [
 export default function GestorLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [user, setUser] = useState<{ nome: string; role: string; email?: string } | null>(null);
+  const [user, setUser] = useState<StoredUser | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
@@ -94,7 +94,7 @@ export default function GestorLayout({ children }: { children: React.ReactNode }
         <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
           {NAV_ITEMS.filter((item) => {
             if (item.href === "/admin") {
-              return isSuperadmin(user?.email);
+              return isSuperadmin(user);
             }
             return true;
           }).map((item) => {

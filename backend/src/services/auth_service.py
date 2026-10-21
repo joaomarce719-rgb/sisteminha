@@ -103,6 +103,24 @@ async def get_current_user(
     return user
 
 
+def is_superadmin(user: Usuario) -> bool:
+    """Superadmin = GESTOR cujo e-mail está em SUPERADMIN_EMAILS (configuração)."""
+    return (
+        user.papel == RoleUsuario.GESTOR
+        and user.email.lower().strip() in settings.superadmin_emails_set
+    )
+
+
+async def require_superadmin(current_user: Usuario = Depends(get_current_user)) -> Usuario:
+    """Restringe o acesso à equipe de Administração Central."""
+    if not is_superadmin(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso restrito exclusivamente à equipe de Administração Central.",
+        )
+    return current_user
+
+
 def has_role(allowed_roles: list[RoleUsuario]):
     """Factory de dependency que restringe acesso por papel (RN-11)."""
 

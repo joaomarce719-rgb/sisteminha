@@ -13,14 +13,14 @@ import {
   ExternalLink,
   Shell,
 } from "lucide-react";
-import { clearToken, getStoredUser, isSuperadmin } from "@/lib/api";
+import { clearToken, getStoredUser, isSuperadmin, type StoredUser } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/components/ui/toast";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [user, setUser] = useState<{ nome: string; role: string; email?: string } | null>(null);
+  const [user, setUser] = useState<StoredUser | null>(null);
 
   useEffect(() => {
     const stored = getStoredUser();
@@ -28,7 +28,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       router.push("/login");
       return;
     }
-    if (!isSuperadmin(stored.email)) {
+    if (!isSuperadmin(stored)) {
       toast.error(
         "Acesso Restrito",
         "Este painel é de uso exclusivo da Administração Central do Sistema."

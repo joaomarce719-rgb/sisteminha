@@ -36,7 +36,7 @@ npx tsc --noEmit
 
 - `src/config.py` (pydantic-settings) lê `backend/.env`; modelo em `backend/.env.example`. Sem `DATABASE_URL`, usa `sqlite:///./local_dev.db`. Produção usa Postgres/Supabase via **pg8000** (driver síncrono).
 - Se o banco remoto falhar na inicialização, a app aborta, a menos que `DB_FALLBACK_SQLITE=true`.
-- Não há migrações: `init_db()` (`src/database.py`) roda `Base.metadata.create_all` e cria organização, propriedade, usuários padrão (senha `senha123`) e tabela de preços — **somente quando `APP_DEBUG=true`**. `create_all` não altera tabelas existentes; mudanças de coluna exigem ajuste manual do banco.
+- Não há migrações: `init_db()` (`src/database.py`) roda `Base.metadata.create_all` e cria organização, propriedade, usuários de demonstração (senha `senha123`, só se ainda não existirem) e tabela de preços — **somente quando `APP_DEBUG=true`**. Com `APP_DEBUG=false` é obrigatório definir `JWT_SECRET_KEY`. `create_all` não altera tabelas existentes; mudanças de coluna exigem ajuste manual do banco.
 - Os testes em `backend/tests/` são unitários (funções puras e schemas); não sobem a API nem o banco. Para testar endpoints, use `fastapi.testclient.TestClient(src.main.app)` com `DATABASE_URL` apontando para um SQLite temporário (definido antes de importar `src`).
 
 ## Arquitetura do backend
@@ -48,7 +48,7 @@ Camadas em `backend/src/`: `models/` (SQLAlchemy 2, `Mapped`) → `schemas/` (Py
 - **Hierarquia de domínio**: Organização → Propriedade → Viveiro → CicloProdutivo → (Biometria, ManejoAlimentar, CustoOperacional, SimulacaoDespesca, RondaNoturna → MonitoramentoAerador). Não há filtro por organização nas consultas.
 - **Rotas aninhadas e globais**: biometrias, manejos, custos e simulação têm um router sob `/api/v1/ciclos/{ciclo_id}/...` (usado pelo frontend) e um `global_router` (`/api/v1/biometrias`, `/manejos`, `/custos`, `/simulacao`) criado para os testes do TestSprite.
 - **Schemas tolerantes**: vários schemas têm `model_validator(mode="before")` que aceitam aliases (`data`, `valor`, `nome`, `area`…) e preenchem campos virtuais na resposta. Ao mudar um campo, verifique o `populate_virtual_fields` / `map_aliases` correspondente.
-- **RBAC**: papéis `CAMPO`, `VIGIA`, `GESTOR` (`models/enums.py`). Proteja rotas com `Depends(has_role([...]))` de `services/auth_service.py` (ou os atalhos de `src/dependencies.py`). JWT HS256 carrega `sub`, `email`, `role`, `nome`. "Superadmin" = GESTOR cujo e-mail está em `SUPERADMIN_EMAILS` (`routers/admin.py`), lista duplicada em `isSuperadmin()` no `frontend/src/lib/api.ts`.
+- **RBAC**: papéis `CAMPO`, `VIGIA`, `GESTOR` (`models/enums.py`). Proteja rotas com `Depends(has_role([...]))` de `services/auth_service.py` (ou os atalhos de `src/dependencies.py`). JWT HS256 carrega `sub`, `email`, `role`, `nome`. "Superadmin" = GESTOR cujo e-mail está na variável `SUPERADMIN_EMAILS` (`auth_service.is_superadmin` / `require_superadmin`); o login e o `/auth/me` devolvem `is_superadmin`, que o frontend guarda em `sad_user`. O auto-cadastro público cria contas CAMPO inativas até um GESTOR aprovar.
 - **Auditoria**: chame `services/audit.registrar_auditoria(db, acao, entidade, registro_id, usuario, dados_anteriores, dados_novos)` nas mutações relevantes (hoje feito em ciclos, custos, organizações, propriedades e tabelas alimentares).
 
 ### Motores de decisão (`services/`)

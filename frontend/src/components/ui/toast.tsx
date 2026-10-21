@@ -15,7 +15,7 @@ interface ToastItem {
 
 interface ToastContextType {
   toasts: ToastItem[];
-  addToast: (type: ToastType, message: string, description?: string) => void;
+  addToast: (type: ToastType, message: string, description?: string, durationMs?: number) => void;
   removeToast: (id: string) => void;
 }
 
@@ -25,13 +25,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = React.useState<ToastItem[]>([]);
 
   const addToast = React.useCallback(
-    (type: ToastType, message: string, description?: string) => {
+    (type: ToastType, message: string, description?: string, durationMs = 4000) => {
       const id = Math.random().toString(36).substring(2, 9);
       setToasts((prev) => [...prev, { id, type, message, description }]);
 
       setTimeout(() => {
         setToasts((prev) => prev.filter((t) => t.id !== id));
-      }, 4000);
+      }, durationMs);
     },
     []
   );
@@ -113,9 +113,9 @@ function ToasterOverlay({
 
 // Global hook / helper
 export const toast = {
-  success: (message: string, description?: string) => {
+  success: (message: string, description?: string, durationMs?: number) => {
     if (typeof window !== "undefined" && (window as any).__sad_add_toast) {
-      (window as any).__sad_add_toast("success", message, description);
+      (window as any).__sad_add_toast("success", message, description, durationMs);
     }
   },
   error: (message: string, description?: string) => {

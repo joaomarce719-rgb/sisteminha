@@ -32,6 +32,8 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     role: RoleUsuario
     nome: str
+    email: str | None = None
+    is_superadmin: bool = False
 
 
 class TokenPayload(BaseModel):
@@ -79,6 +81,7 @@ class UsuarioResponse(BaseModel):
     telefone_emergencia: str | None
     ativo: bool
     created_at: datetime
+    is_superadmin: bool = False
 
     model_config = {"from_attributes": True}
 

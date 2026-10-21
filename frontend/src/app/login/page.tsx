@@ -12,13 +12,10 @@ import {
   ShieldCheck,
   UserCheck,
   UserPlus,
-  Briefcase,
-  Wheat,
-  Moon,
   Sparkles,
   CheckCircle2,
 } from "lucide-react";
-import { login, registrarUsuario, isSuperadmin } from "@/lib/api";
+import { login, registrarUsuario } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -40,7 +37,6 @@ export default function LoginPage() {
   const [regNome, setRegNome] = useState("");
   const [regEmail, setRegEmail] = useState("");
   const [regTelefone, setRegTelefone] = useState("");
-  const [regPapel, setRegPapel] = useState<"GESTOR" | "CAMPO" | "VIGIA">("GESTOR");
   const [regSenha, setRegSenha] = useState("");
   const [regConfirmaSenha, setRegConfirmaSenha] = useState("");
   const [regShowSenha, setRegShowSenha] = useState(false);
@@ -114,17 +110,22 @@ export default function LoginPage() {
 
     setRegLoading(true);
     try {
-      await registrarUsuario({
+      const novo = await registrarUsuario({
         nome_completo: regNome.trim(),
         email: regEmail.trim(),
         senha: regSenha,
-        papel: regPapel,
         telefone_emergencia: regTelefone.trim() || undefined,
       });
 
-      toast.success("Usuário criado com sucesso!", "Iniciando sessão automaticamente...");
+      if (!novo.ativo) {
+        // Contas novas aguardam aprovação de um gestor, que define o perfil de acesso
+        toast.success("Cadastro enviado!", "Aguarde a aprovação de um gestor para acessar o sistema.");
+        setEmail(regEmail.trim());
+        setTab("login");
+        return;
+      }
 
-      // Autenticação automática logo após o cadastro
+      // Primeiro usuário do sistema: conta já ativa como gestor
       const loginData = await login(regEmail.trim(), regSenha);
       toast.info(`Bem-vindo, ${loginData.nome || regNome}!`, `Perfil ativo: ${loginData.role}`);
       handleRedirect(loginData.role);
@@ -186,7 +187,7 @@ export default function LoginPage() {
             <p className="text-slate-500 text-xs mt-1">
               {tab === "login"
                 ? "Sistema de Apoio à Decisão para Fazendas de Camarão"
-                : "Cadastre um novo operador, gestor ou vigia da fazenda"}
+                : "Solicite acesso; um gestor aprovará e definirá seu perfil"}
             </p>
           </div>
 
@@ -311,8 +312,9 @@ export default function LoginPage() {
                 </div>
               </form>
 
-              {/* Atalhos Rápidos para Demonstração e Testes */}
-              <div className="mt-8 pt-6 border-t border-slate-100">
+              {/* Atalhos de demonstração: somente em desenvolvimento (contas seed) */}
+              {process.env.NODE_ENV === "development" && (
+                <div className="mt-8 pt-6 border-t border-slate-100">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
                     Acesso Rápido de Teste
@@ -362,6 +364,7 @@ export default function LoginPage() {
                   </div>
                 </div>
               </div>
+              )}
             </>
           )}
 
@@ -407,56 +410,6 @@ export default function LoginPage() {
                   className="mt-1"
                   required
                 />
-              </div>
-
-              {/* Seletor Visual de Papel (RBAC) */}
-              <div>
-                <Label className="text-xs font-semibold text-slate-700 mb-1.5 block">
-                  Perfil de Acesso / Função
-                </Label>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setRegPapel("GESTOR")}
-                    className={`flex flex-col items-center justify-center p-2 rounded-xl border text-center transition-all ${
-                      regPapel === "GESTOR"
-                        ? "border-sky-500 bg-sky-50/80 text-sky-800 shadow-sm ring-1 ring-sky-400"
-                        : "border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
-                    }`}
-                  >
-                    <Briefcase className="w-4 h-4 mb-1 text-sky-600" />
-                    <span className="text-[11px] font-bold leading-tight">Gestor</span>
-                    <span className="text-[9px] text-slate-400 leading-tight">Total</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setRegPapel("CAMPO")}
-                    className={`flex flex-col items-center justify-center p-2 rounded-xl border text-center transition-all ${
-                      regPapel === "CAMPO"
-                        ? "border-emerald-500 bg-emerald-50/80 text-emerald-800 shadow-sm ring-1 ring-emerald-400"
-                        : "border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
-                    }`}
-                  >
-                    <Wheat className="w-4 h-4 mb-1 text-emerald-600" />
-                    <span className="text-[11px] font-bold leading-tight">Campo</span>
-                    <span className="text-[9px] text-slate-400 leading-tight">Manejo</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setRegPapel("VIGIA")}
-                    className={`flex flex-col items-center justify-center p-2 rounded-xl border text-center transition-all ${
-                      regPapel === "VIGIA"
-                        ? "border-amber-500 bg-amber-50/80 text-amber-800 shadow-sm ring-1 ring-amber-400"
-                        : "border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
-                    }`}
-                  >
-                    <Moon className="w-4 h-4 mb-1 text-amber-600" />
-                    <span className="text-[11px] font-bold leading-tight">Vigia</span>
-                    <span className="text-[9px] text-slate-400 leading-tight">Ronda O₂</span>
-                  </button>
-                </div>
               </div>
 
               <div>
@@ -532,7 +485,7 @@ export default function LoginPage() {
                 ) : (
                   <span className="flex items-center gap-2">
                     <UserPlus className="w-4 h-4" />
-                    Cadastrar e Acessar Sistema
+                    Solicitar Acesso
                   </span>
                 )}
               </Button>

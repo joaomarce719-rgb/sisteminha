@@ -1,5 +1,6 @@
 """SAD Carcinicultura — Rotas Administrativas e Governança (RF-002, RF-003, RF-014)."""
 
+import secrets
 from datetime import datetime
 from uuid import UUID
 
@@ -15,22 +16,10 @@ from src.models.propriedade import Propriedade
 from src.models.usuario import Usuario
 from src.models.viveiro import Viveiro
 from src.schemas.auth import UsuarioCreate, UsuarioResponse, UsuarioUpdate
-from src.services.auth_service import get_current_user, has_role, hash_password
+from src.routers.auth import excluir_usuario_por_id, verificar_alvo_gerenciavel
+from src.services.auth_service import has_role, hash_password, require_superadmin
 
 router = APIRouter(prefix="/api/v1/admin", tags=["Administração & Governança"])
-
-# E-mails autorizados para governança central da plataforma
-SUPERADMIN_EMAILS = {"admin@sad.com", "gestor@sad.com", "testedoapp1@gmail.com"}
-
-
-def require_superadmin(current_user: Usuario = Depends(get_current_user)) -> Usuario:
-    """Garante que apenas membros da equipe de Administração Central acessem a governança."""
-    if current_user.papel != RoleUsuario.GESTOR or current_user.email.lower().strip() not in SUPERADMIN_EMAILS:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Acesso restrito exclusivamente à equipe de Administração Central.",
-        )
-    return current_user
 
 
 # ── Schemas de Administração ──────────────────────────────────
@@ -250,7 +239,12 @@ async def criar_usuario(
             detail="Email já cadastrado.",
         )
 
-    senha_bruta = payload.senha or payload.password or "senha123"
+    senha_bruta = payload.senha or payload.password
+    if not senha_bruta or len(senha_bruta) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Informe uma senha com pelo menos 6 caracteres.",
+        )
     user = Usuario(
         nome_completo=payload.nome_completo,
         email=payload.email,
@@ -286,6 +280,7 @@ async def atualizar_usuario(
     user = db.get(Usuario, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+    verificar_alvo_gerenciavel(user, _user)
 
     update_data = payload.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -308,6 +303,7 @@ async def aprovar_usuario(
     user = db.get(Usuario, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+    verificar_alvo_gerenciavel(user, _user)
 
     user.papel = payload.papel
     user.ativo = payload.ativo
@@ -323,15 +319,20 @@ async def resetar_senha(
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
 ):
-    """Reseta a senha de um usuário para 'mudar123' (somente GESTOR)."""
+    """Gera uma senha temporária aleatória, exibida uma única vez ao GESTOR (somente GESTOR)."""
     user = db.get(Usuario, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado.")
+    verificar_alvo_gerenciavel(user, _user)
 
-    user.senha_hash = hash_password("mudar123")
+    senha_temporaria = secrets.token_urlsafe(9)
+    user.senha_hash = hash_password(senha_temporaria)
     db.add(user)
     db.flush()
-    return {"detail": f"Senha de {user.nome_completo} resetada. Nova senha: mudar123"}
+    return {
+        "detail": f"Senha de {user.nome_completo} redefinida. Repasse a senha temporária ao usuário.",
+        "senha_temporaria": senha_temporaria,
+    }
 
 
 @router.delete("/usuarios/{user_id}", status_code=204)
@@ -341,10 +342,7 @@ async def excluir_usuario(
     _user=Depends(has_role([RoleUsuario.GESTOR])),
 ):
     """Remove permanentemente um usuário (somente GESTOR)."""
-    user = db.get(Usuario, user_id)
-    if user:
-        db.delete(user)
-        db.flush()
+    excluir_usuario_por_id(db, user_id, _user)
     return None
 
 
