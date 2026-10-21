@@ -3,10 +3,8 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
-
-
 from typing import Any
+
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -55,7 +53,6 @@ class ViveiroResponse(BaseModel):
     profundidade_media_m: float | None = None
     localizacao: str | None = None
     descricao: str | None = None
-    capacidade: float | None = None
     status_ativo: bool
     created_at: datetime
     updated_at: datetime
@@ -64,32 +61,23 @@ class ViveiroResponse(BaseModel):
     @classmethod
     def populate_virtual_fields(cls, data: Any) -> Any:
         if isinstance(data, dict):
-            ident = data.get("identificacao") or data.get("nome") or data.get("codigo")
-            area = data.get("area_util_m2") or data.get("area_m2") or data.get("area") or 1000.0
-            data["nome"] = ident
-            data["codigo"] = ident
-            data["area_m2"] = area
+            data["nome"] = data["codigo"] = data.get("identificacao")
+            data["area_m2"] = data.get("area_util_m2")
             data["descricao"] = data.get("descricao") or data.get("localizacao")
-            data["capacidade"] = data.get("capacidade") or 5000.0
             return data
-
-        ident = getattr(data, "identificacao", None)
-        area = getattr(data, "area_util_m2", 1000.0)
-        loc = getattr(data, "localizacao", None)
         return {
-            "id": getattr(data, "id", None),
-            "identificacao": ident,
-            "nome": ident,
-            "codigo": ident,
-            "area_util_m2": area,
-            "area_m2": area,
-            "profundidade_media_m": getattr(data, "profundidade_media_m", None),
-            "localizacao": loc,
-            "descricao": loc,
-            "capacidade": 5000.0,
-            "status_ativo": getattr(data, "status_ativo", True),
-            "created_at": getattr(data, "created_at", datetime.now()),
-            "updated_at": getattr(data, "updated_at", datetime.now()),
+            "id": data.id,
+            "identificacao": data.identificacao,
+            "nome": data.identificacao,
+            "codigo": data.identificacao,
+            "area_util_m2": data.area_util_m2,
+            "area_m2": data.area_util_m2,
+            "profundidade_media_m": data.profundidade_media_m,
+            "localizacao": data.localizacao,
+            "descricao": data.localizacao,
+            "status_ativo": data.status_ativo,
+            "created_at": data.created_at,
+            "updated_at": data.updated_at,
         }
 
     model_config = {"from_attributes": True}

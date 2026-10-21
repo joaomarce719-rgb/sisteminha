@@ -56,8 +56,6 @@ async def criar_ciclo(
     densidade = de.calcular_densidade(payload.quantidade_pos_larvas, viveiro.area_util_m2)
 
     ciclo_data = payload.model_dump()
-    for extra_field in ("descricao", "densidade_inicial", "biomassa_inicial", "data_inicio"):
-        ciclo_data.pop(extra_field, None)
 
     import uuid
     ciclo_id = uuid.uuid4()
@@ -355,7 +353,7 @@ async def metricas_atuais(
         classificacao_fca=class_fca.value if class_fca else None,
         taxa_alimentar_clifford_pct=round(taxa_clifford, 2) if taxa_clifford is not None else None,
         racao_diaria_sugerida_kg=round(racao_diaria, 2) if racao_diaria is not None else None,
-        custo_operacional_total_rs=round(metricas.custo_operacional_total, 2) if mostrar_financeiro else 0.0,
+        custo_operacional_total_rs=round(metricas.custo_operacional_total, 2) if mostrar_financeiro else None,
         receita_bruta_estimada_rs=round(metricas.receita_bruta, 2) if (metricas.receita_bruta is not None and mostrar_financeiro) else None,
         lucro_operacional_rs=round(metricas.lucro_operacional, 2) if (metricas.lucro_operacional is not None and mostrar_financeiro) else None,
         margem_operacional_pct=round(metricas.margem_operacional_pct, 2) if (metricas.margem_operacional_pct is not None and mostrar_financeiro) else None,

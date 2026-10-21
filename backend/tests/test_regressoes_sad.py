@@ -230,7 +230,7 @@ class TestValidacao(unittest.TestCase):
             costs.CustoCreate(descricao="Ração")
 
     def test_custo_alias_valido(self):
-        r = costs.CustoCreate(descricao="Ração", valor=123.45, categoria="RACAO")
+        r = costs.CustoCreate(descricao="Ração", valor=123.45, categoria="RACAO", data="2026-10-13")
         self.assertEqual(r.valor_rs, 123.45)
         self.assertEqual(r.categoria, enums.CategoriaCusto.RACAO)
 

@@ -28,7 +28,7 @@ async def lancar_custo(
     """Registra uma despesa operacional vinculada ao ciclo (RF-08)."""
     custo = CustoOperacional(
         ciclo_id=ciclo_id,
-        **payload.model_dump(),
+        **payload.model_dump(exclude={"ciclo_id"}),
     )
     db.add(custo)
     db.flush()
@@ -144,24 +144,9 @@ async def lancar_custo_global(
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
 ):
-    ciclo_id = payload.ciclo_id
-    if not ciclo_id:
-        from src.models.ciclo_produtivo import CicloProdutivo
-        ciclo = db.scalar(select(CicloProdutivo).order_by(CicloProdutivo.created_at.desc()).limit(1))
-        if ciclo:
-            ciclo_id = ciclo.id
-
-    custo = CustoOperacional(
-        ciclo_id=ciclo_id,
-        data_lancamento=payload.data_lancamento,
-        categoria=payload.categoria,
-        descricao=payload.descricao,
-        valor_rs=payload.valor_rs,
-    )
-    db.add(custo)
-    db.flush()
-    db.refresh(custo)
-    return custo
+    if not payload.ciclo_id:
+        raise HTTPException(status_code=422, detail="ciclo_id é obrigatório.")
+    return await lancar_custo(payload.ciclo_id, payload, db, _user)
 
 
 @global_router.get("/", response_model=CustoListResponse)

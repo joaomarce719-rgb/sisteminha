@@ -23,6 +23,7 @@ class SimulacaoRequest(BaseModel):
 
 class SimulacaoResponse(BaseModel):
     """Resultado completo da simulação de despesca (RF-06, RN-07)."""
+    simulacao_id: UUID | None = None  # preenchido quando a simulação é registrada
     ciclo_id: UUID
     data_referencia: date
 
@@ -46,13 +47,15 @@ class SimulacaoResponse(BaseModel):
 
 
 class SimulacaoGenericRequest(BaseModel):
-    ciclo_id: UUID | None = None
-    biomassa_atual: float | None = None
-    peso_medio: float | None = None
-    sobrevivencia: float | None = None
-    cenario: dict[str, Any] | None = None
+    """Simulação pela rota global: usa os dados reais do ciclo informado."""
+    ciclo_id: UUID
+    dias_horizonte: int = Field(15, description="Horizonte de projeção: 7, 10 ou 15 dias")
+    preco_kg_customizado: float | None = Field(None, gt=0)
     descricao: str | None = None
-    dias_horizonte: int | None = 15
+
+    def model_post_init(self, __context) -> None:
+        if self.dias_horizonte not in (7, 10, 15):
+            raise ValueError("dias_horizonte deve ser 7, 10 ou 15")
 
 
 class SimulacaoGenericResponse(BaseModel):

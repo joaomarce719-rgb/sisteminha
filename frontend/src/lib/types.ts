@@ -76,7 +76,7 @@ export interface MetricasAtuais {
   classificacao_fca: string | null;
   taxa_alimentar_clifford_pct: number | null;
   racao_diaria_sugerida_kg: number | null;
-  custo_operacional_total_rs: number;
+  custo_operacional_total_rs: number | null;
   receita_bruta_estimada_rs: number | null;
   lucro_operacional_rs: number | null;
   margem_operacional_pct: number | null;

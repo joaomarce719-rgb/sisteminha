@@ -258,7 +258,7 @@ function BiometriaDialog({
     try {
       await biometriasApi.criar(cicloId, {
         data_medicao: form.data_medicao,
-        quantidade_amostrada: parseInt(form.quantidade_amostrada) || 50,
+        quantidade_amostrada: parseInt(form.quantidade_amostrada),
         peso_medio_g: parseFloat(form.peso_medio_g),
         uniformidade_percentual: form.uniformidade_percentual
           ? parseFloat(form.uniformidade_percentual)
@@ -1042,7 +1042,11 @@ export default function ViveiroDetalhePage() {
                     />
                     <MetricCard
                       title="Custo Total Acumulado"
-                      value={`R$ ${metricas.custo_operacional_total_rs.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+                      value={
+                        metricas.custo_operacional_total_rs != null
+                          ? `R$ ${metricas.custo_operacional_total_rs.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+                          : "Indisponível"
+                      }
                       subtitle="Ração + insumos + PLs"
                       icon={DollarSign}
                       accent="purple"
