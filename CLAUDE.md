@@ -37,7 +37,7 @@ npx tsc --noEmit
 - `src/config.py` (pydantic-settings) lê `backend/.env`; modelo em `backend/.env.example`. Sem `DATABASE_URL`, usa `sqlite:///./local_dev.db`. Produção usa Postgres/Supabase via **pg8000** (driver síncrono).
 - Se o banco remoto falhar na inicialização, a app aborta, a menos que `DB_FALLBACK_SQLITE=true`.
 - Não há migrações: `init_db()` (`src/database.py`) roda `Base.metadata.create_all` e cria organização, propriedade, usuários de demonstração (senha `senha123`, só se ainda não existirem) e tabela de preços — **somente quando `APP_DEBUG=true`**. Com `APP_DEBUG=false` é obrigatório definir `JWT_SECRET_KEY`. `create_all` não altera tabelas existentes; mudanças de coluna exigem ajuste manual do banco.
-- Os testes em `backend/tests/` são unitários (funções puras e schemas); não sobem a API nem o banco. Para testar endpoints, use `fastapi.testclient.TestClient(src.main.app)` com `DATABASE_URL` apontando para um SQLite temporário (definido antes de importar `src`).
+- Testes em `backend/tests/`: `test_decision_engine.py`/`test_regressoes_sad.py` são unitários; `test_api_*.py` sobem a API via `TestClient`. O `conftest.py` define as variáveis de ambiente (SQLite temporário, `SUPERADMIN_EMAILS=admin@sad.com`) **antes** de importar `src` e expõe as fixtures `client`, `gestor`, `admin`, `campo`, `vigia` (headers já autenticados com as contas seed), `login`, `novo_viveiro` e `novo_ciclo`. O banco é compartilhado na sessão: use `unico()` para identificadores.
 
 ## Arquitetura do backend
 
