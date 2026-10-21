@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.database import get_db
+from src.services.audit import registrar_auditoria, snapshot
 from src.models.usuario import Usuario
 from src.schemas.auth import (
     AlterarSenhaRequest,
@@ -55,6 +56,22 @@ async def parse_request_data(request: Request) -> dict:
             return {}
 
 
+def _registrar_falha_login(
+    db: Session, email: str, ip: str | None, user: Usuario | None, motivo: str = "credenciais inválidas"
+) -> None:
+    """Grava a tentativa recusada e confirma já, pois o erro HTTP desfaz a transação."""
+    registrar_auditoria(
+        db,
+        "LOGIN_FALHA",
+        "Usuario",
+        user.id if user else email,
+        user,
+        dados_novos={"email": email, "motivo": motivo},
+        ip_origem=ip,
+    )
+    db.commit()
+
+
 @router.post("/login", response_model=TokenResponse)
 @router.post("/login/", response_model=TokenResponse)
 async def login(
@@ -76,18 +93,22 @@ async def login(
     result = db.execute(select(Usuario).where(func.lower(Usuario.email) == email))
     user = result.scalar_one_or_none()
 
+    ip = request.client.host if request.client else None
     if user is None or not verify_password(senha, user.senha_hash):
+        _registrar_falha_login(db, email, ip, user)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciais inválidas.",
         )
 
     if not user.ativo:
+        _registrar_falha_login(db, email, ip, user, motivo="conta inativa")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Conta desativada. Contate o gestor.",
         )
 
+    registrar_auditoria(db, "LOGIN", "Usuario", user.id, user, ip_origem=ip)
     token = create_access_token(user)
     return TokenResponse(
         access_token=token,
@@ -152,6 +173,7 @@ async def registrar_usuario(
     db.add(user)
     db.flush()
     db.refresh(user)
+    registrar_auditoria(db, "AUTOCADASTRO", "Usuario", user.id, user, dados_novos=snapshot(user))
     return user
 
 
@@ -179,6 +201,7 @@ async def alterar_senha(
     current_user.senha_hash = hash_password(payload.nova_senha)
     db.add(current_user)
     db.flush()
+    registrar_auditoria(db, "ALTERAR_SENHA", "Usuario", current_user.id, current_user)
     return {"detail": "Senha alterada com sucesso."}
 
 
@@ -215,6 +238,7 @@ def excluir_usuario_por_id(db: Session, user_id: UUID, atual: Usuario) -> None:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Usuário possui registros operacionais; desative a conta em vez de excluí-la.",
             )
+        registrar_auditoria(db, "EXCLUIR", "Usuario", u.id, atual, dados_anteriores=snapshot(u))
         db.delete(u)
         db.flush()
 

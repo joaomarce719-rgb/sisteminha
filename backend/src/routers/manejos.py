@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.database import get_db
+from src.services.audit import registrar_auditoria, snapshot
 from src.models.ciclo_produtivo import CicloProdutivo
 from src.models.enums import RoleUsuario, StatusAlimentar, StatusCiclo
 from src.models.manejo_alimentar import ManejoAlimentar
@@ -135,6 +136,7 @@ async def registrar_manejo(
     db.add(manejo)
     db.flush()
     db.refresh(manejo)
+    registrar_auditoria(db, "CRIAR", "ManejoAlimentar", manejo.id, _user, dados_novos=snapshot(manejo))
     return manejo
 
 
@@ -239,6 +241,7 @@ async def deletar_manejo(
     man = result.scalar_one_or_none()
     if not man:
         raise HTTPException(status_code=404, detail="Manejo não encontrado.")
+    registrar_auditoria(db, "EXCLUIR", "ManejoAlimentar", man.id, _user, dados_anteriores=snapshot(man))
     db.delete(man)
     db.flush()
     return {"detail": "Manejo excluído com sucesso.", "id": str(manejo_id)}

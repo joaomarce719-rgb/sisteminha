@@ -8,6 +8,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from src.database import get_db
+from src.services.audit import registrar_auditoria, snapshot
 from src.models.biometria import Biometria
 from src.models.ciclo_produtivo import CicloProdutivo
 from src.models.custo_operacional import CustoOperacional
@@ -18,7 +19,6 @@ from src.models.viveiro import Viveiro
 from src.schemas.ciclo import CicloCreate, CicloEncerrar, CicloResponse, MetricasAtuaisResponse
 from src.services.auth_service import get_current_user, has_role
 from src.services import decision_engine as de
-from src.services.audit import registrar_auditoria
 from src.services.regras_ciclo import ciclo_aberto_do_viveiro
 
 router = APIRouter(prefix="/api/v1/ciclos", tags=["Ciclos Produtivos"])
@@ -419,6 +419,7 @@ async def exportar_ciclo_csv(
             "",
         ])
 
+    registrar_auditoria(db, "EXPORTAR", "CicloProdutivo", ciclo.id, _user, dados_novos={"formato": "csv"})
     content = output.getvalue().encode("utf-8-sig")
     return Response(
         content=content,
@@ -440,6 +441,7 @@ async def deletar_ciclo(
     ciclo = result.scalar_one_or_none()
     if not ciclo:
         raise HTTPException(status_code=404, detail="Ciclo não encontrado.")
+    registrar_auditoria(db, "EXCLUIR", "CicloProdutivo", ciclo.id, _user, dados_anteriores=snapshot(ciclo))
     db.delete(ciclo)
     db.flush()
     return {"detail": "Ciclo excluído com sucesso.", "id": str(ciclo_id)}

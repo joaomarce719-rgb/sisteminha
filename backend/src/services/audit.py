@@ -1,10 +1,12 @@
 """SAD Carcinicultura — Serviço de Registro de Auditoria (RF-027, RNF-017, Critério 10)."""
 
-import json
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
+from enum import Enum
 from typing import Any
 
+from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 
 from src.models.auditoria import LogAuditoria
@@ -17,11 +19,28 @@ def _sanitize_for_json(obj: Any) -> Any:
         return None
     if isinstance(obj, (uuid.UUID, date, datetime)):
         return str(obj)
+    if isinstance(obj, Enum):
+        return obj.value
+    if isinstance(obj, Decimal):
+        return float(obj)
     if isinstance(obj, dict):
         return {str(k): _sanitize_for_json(v) for k, v in obj.items()}
     if isinstance(obj, (list, tuple, set)):
         return [_sanitize_for_json(i) for i in obj]
     return obj
+
+
+# Colunas nunca gravadas na trilha (RNF-017)
+_CAMPOS_SENSIVEIS = {"senha_hash"}
+
+
+def snapshot(obj: Any) -> dict[str, Any]:
+    """Estado das colunas de um objeto ORM, sem campos sensíveis, para antes/depois."""
+    return {
+        attr.key: getattr(obj, attr.key)
+        for attr in inspect(obj).mapper.column_attrs
+        if attr.key not in _CAMPOS_SENSIVEIS
+    }
 
 
 def registrar_auditoria(

@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from src.database import get_db
@@ -52,6 +52,7 @@ def listar_logs_auditoria(
         except Exception:
             pass
 
+    total = db.scalar(select(func.count()).select_from(query.order_by(None).subquery())) or 0
     query = query.offset(offset).limit(limite)
     logs = list(db.scalars(query).all())
     
@@ -65,8 +66,9 @@ def listar_logs_auditoria(
         "items": items,
         "results": items,
         "data": items,
-        "total": len(items),
+        "total": total,
         "count": len(items),
-        "page": 1,
+        "limite": limite,
+        "offset": offset,
     }
 

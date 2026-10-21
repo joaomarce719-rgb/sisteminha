@@ -2,6 +2,7 @@
 
 import type {
   Alerta,
+  LogAuditoria,
   RondaNoturna,
   SimulacaoComparativa,
   SimulacaoResponse,
@@ -300,7 +301,7 @@ export const auditoriaApi = {
     if (params?.acao) q.set("acao", params.acao);
     if (params?.limite) q.set("limite", params.limite.toString());
     if (params?.offset) q.set("offset", params.offset.toString());
-    return apiFetch<any[]>(`/auditoria/?${q.toString()}`);
+    return apiFetch<{ items: LogAuditoria[]; total: number }>(`/auditoria/?${q.toString()}`);
   },
 };
 

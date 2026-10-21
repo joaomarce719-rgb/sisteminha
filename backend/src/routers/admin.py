@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.database import get_db
+from src.services.audit import registrar_auditoria, snapshot
 from src.models.enums import RoleUsuario
 from src.models.organizacao import Organizacao
 from src.models.propriedade import Propriedade
@@ -181,6 +182,7 @@ async def criar_fazenda_admin(
     db.add(nova_fazenda)
     db.flush()
     db.refresh(nova_fazenda)
+    registrar_auditoria(db, "CRIAR", "Propriedade", nova_fazenda.id, _user, dados_novos=snapshot(nova_fazenda))
 
     return FazendaAdminResponse(
         id=nova_fazenda.id,
@@ -208,6 +210,10 @@ async def alternar_status_fazenda(
     fazenda.status_ativo = not fazenda.status_ativo
     db.add(fazenda)
     db.flush()
+    registrar_auditoria(
+        db, "ATUALIZAR", "Propriedade", fazenda.id, _user,
+        {"status_ativo": not fazenda.status_ativo}, {"status_ativo": fazenda.status_ativo},
+    )
 
     total_v = db.scalar(select(func.count(Viveiro.id)).where(Viveiro.propriedade_id == fazenda.id)) or 0
     org_nome = fazenda.organizacao.nome if fazenda.organizacao else None
@@ -256,6 +262,7 @@ async def criar_usuario(
     db.add(user)
     db.flush()
     db.refresh(user)
+    registrar_auditoria(db, "CRIAR", "Usuario", user.id, _user, dados_novos=snapshot(user))
     return user
 
 
@@ -282,6 +289,7 @@ async def atualizar_usuario(
         raise HTTPException(status_code=404, detail="Usuário não encontrado.")
     verificar_alvo_gerenciavel(user, _user)
 
+    antes = snapshot(user)
     update_data = payload.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(user, field, value)
@@ -289,6 +297,7 @@ async def atualizar_usuario(
     db.add(user)
     db.flush()
     db.refresh(user)
+    registrar_auditoria(db, "ATUALIZAR", "Usuario", user.id, _user, antes, snapshot(user))
     return user
 
 
@@ -305,11 +314,13 @@ async def aprovar_usuario(
         raise HTTPException(status_code=404, detail="Usuário não encontrado.")
     verificar_alvo_gerenciavel(user, _user)
 
+    antes = snapshot(user)
     user.papel = payload.papel
     user.ativo = payload.ativo
     db.add(user)
     db.flush()
     db.refresh(user)
+    registrar_auditoria(db, "APROVAR", "Usuario", user.id, _user, antes, snapshot(user))
     return user
 
 
@@ -329,6 +340,7 @@ async def resetar_senha(
     user.senha_hash = hash_password(senha_temporaria)
     db.add(user)
     db.flush()
+    registrar_auditoria(db, "RESETAR_SENHA", "Usuario", user.id, _user)
     return {
         "detail": f"Senha de {user.nome_completo} redefinida. Repasse a senha temporária ao usuário.",
         "senha_temporaria": senha_temporaria,
@@ -419,6 +431,7 @@ async def criar_gestor_admin(
     db.add(user)
     db.flush()
     db.refresh(user)
+    registrar_auditoria(db, "CRIAR", "Usuario", user.id, _user, dados_novos=snapshot(user))
 
     return GestorAdminResponse(
         id=user.id,
@@ -475,4 +488,5 @@ async def criar_operador_normal(
     db.add(user)
     db.flush()
     db.refresh(user)
+    registrar_auditoria(db, "CRIAR", "Usuario", user.id, _user, dados_novos=snapshot(user))
     return user

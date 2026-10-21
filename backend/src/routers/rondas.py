@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.database import get_db
+from src.services.audit import registrar_auditoria, snapshot
 from src.models.ciclo_produtivo import CicloProdutivo
 from src.models.enums import RoleUsuario, StatusCiclo
 from src.models.monitoramento_aerador import MonitoramentoAerador
@@ -141,6 +142,10 @@ async def registrar_ronda(
         alertas.append(alerta)
     db.flush()
 
+    registrar_auditoria(
+        db, "CRIAR", "RondaNoturna", ronda.id, current_user,
+        dados_novos={**snapshot(ronda), "alertas": [a.codigo for a in alertas]},
+    )
     resposta = _build_ronda_response(ronda)
     resposta.alertas = [alerta_response(a) for a in alertas]
     return resposta

@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.database import get_db
+from src.services.audit import registrar_auditoria, snapshot
 from src.models.biometria import Biometria
 from src.models.ciclo_produtivo import CicloProdutivo
 from src.models.enums import RoleUsuario, StatusCiclo
@@ -88,6 +89,7 @@ async def registrar_biometria(
     db.add(bio)
     db.flush()
     db.refresh(bio)
+    registrar_auditoria(db, "CRIAR", "Biometria", bio.id, _user, dados_novos=snapshot(bio))
     return _build_biometria_response(bio)
 
 
@@ -143,6 +145,7 @@ async def deletar_biometria(
     bio = result.scalar_one_or_none()
     if not bio:
         raise HTTPException(status_code=404, detail="Biometria não encontrada.")
+    registrar_auditoria(db, "EXCLUIR", "Biometria", bio.id, _user, dados_anteriores=snapshot(bio))
     db.delete(bio)
     db.flush()
     return {"detail": "Biometria excluída com sucesso.", "id": str(biometria_id)}

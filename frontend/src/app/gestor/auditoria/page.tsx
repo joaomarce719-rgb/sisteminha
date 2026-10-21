@@ -23,6 +23,7 @@ import { toast } from "@/components/ui/toast";
 
 export default function AuditoriaPage() {
   const [logs, setLogs] = useState<LogAuditoria[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [entidadeFiltro, setEntidadeFiltro] = useState<string>("");
   const [acaoFiltro, setAcaoFiltro] = useState<string>("");
@@ -36,7 +37,8 @@ export default function AuditoriaPage() {
         acao: acaoFiltro || undefined,
         limite: 100,
       });
-      setLogs(data);
+      setLogs(data.items);
+      setTotal(data.total);
     } catch (err: any) {
       toast.error("Erro ao carregar auditoria", err.message || "Tente novamente");
     } finally {
@@ -78,6 +80,11 @@ export default function AuditoriaPage() {
           <p className="text-sm text-slate-500 mt-1">
             Registro imutável de eventos críticos com rastreabilidade completa e diff de dados antes/depois
           </p>
+          {!loading && (
+            <p className="text-xs text-slate-400 mt-1">
+              Exibindo {logs.length} de {total} eventos
+            </p>
+          )}
         </div>
         <Button
           variant="outline"

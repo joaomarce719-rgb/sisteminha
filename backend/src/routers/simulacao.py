@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.database import get_db
+from src.services.audit import registrar_auditoria, snapshot
 from src.models.ciclo_produtivo import CicloProdutivo
 from src.models.enums import CategoriaCusto, RoleUsuario, StatusCiclo
 from src.models.simulacao_despesca import SimulacaoDespesca
@@ -354,6 +355,7 @@ async def deletar_simulacao(
     sim = result.scalar_one_or_none()
     if not sim:
         raise HTTPException(status_code=404, detail="Simulação não encontrada.")
+    registrar_auditoria(db, "EXCLUIR", "SimulacaoDespesca", sim.id, _user, dados_anteriores=snapshot(sim))
     db.delete(sim)
     db.flush()
     return {"detail": "Simulação excluída com sucesso.", "id": str(sim_id)}

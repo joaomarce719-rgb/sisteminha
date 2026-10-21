@@ -7,11 +7,11 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from src.database import get_db
+from src.services.audit import registrar_auditoria, snapshot
 from src.models.custo_operacional import CustoOperacional
 from src.models.enums import RoleUsuario
 from src.schemas.custo import CustoCreate, CustoListResponse, CustoResumoResponse, CustoResponse
 from src.services.auth_service import has_role
-from src.services.audit import registrar_auditoria
 from src.services.regras_ciclo import obter_ciclo
 
 router = APIRouter(prefix="/api/v1/ciclos/{ciclo_id}/custos", tags=["Custos Operacionais"])
@@ -127,6 +127,9 @@ async def exportar_custos_csv(
             f"{float(c.valor_rs):.2f}".replace(".", ","),
         ])
 
+    registrar_auditoria(
+        db, "EXPORTAR", "CustoOperacional", ciclo_id, _user, dados_novos={"formato": "csv", "registros": len(custos)}
+    )
     content = output.getvalue().encode("utf-8-sig")
     return Response(
         content=content,
@@ -185,6 +188,7 @@ async def deletar_custo(
     custo = result.scalar_one_or_none()
     if not custo:
         raise HTTPException(status_code=404, detail="Custo não encontrado.")
+    registrar_auditoria(db, "EXCLUIR", "CustoOperacional", custo.id, _user, dados_anteriores=snapshot(custo))
     db.delete(custo)
     db.flush()
     return {"detail": "Custo excluído com sucesso.", "id": str(custo_id)}

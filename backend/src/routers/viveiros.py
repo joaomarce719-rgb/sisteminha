@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.database import get_db
+from src.services.audit import registrar_auditoria, snapshot
 from src.models.enums import RoleUsuario, StatusCiclo
 from src.models.viveiro import Viveiro
 from src.schemas.viveiro import ViveiroCreate, ViveiroListResponse, ViveiroResponse, ViveiroUpdate
@@ -37,6 +38,7 @@ async def criar_viveiro(
     db.add(viveiro)
     db.flush()
     db.refresh(viveiro)
+    registrar_auditoria(db, "CRIAR", "Viveiro", viveiro.id, _user, dados_novos=snapshot(viveiro))
     return viveiro
 
 
@@ -93,6 +95,7 @@ async def atualizar_viveiro(
     if not viveiro:
         raise HTTPException(status_code=404, detail="Viveiro não encontrado.")
 
+    antes = snapshot(viveiro)
     update_data = payload.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(viveiro, field, value)
@@ -100,6 +103,7 @@ async def atualizar_viveiro(
     db.add(viveiro)
     db.flush()
     db.refresh(viveiro)
+    registrar_auditoria(db, "ATUALIZAR", "Viveiro", viveiro.id, _user, antes, snapshot(viveiro))
     return viveiro
 
 
@@ -119,6 +123,7 @@ async def deletar_viveiro(
             status_code=status.HTTP_409_CONFLICT,
             detail="Viveiro possui ciclos registrados; inative-o para preservar o histórico.",
         )
+    registrar_auditoria(db, "EXCLUIR", "Viveiro", viveiro.id, _user, dados_anteriores=snapshot(viveiro))
     db.delete(viveiro)
     db.flush()
     return {"detail": "Viveiro excluído com sucesso.", "id": str(viveiro_id)}
