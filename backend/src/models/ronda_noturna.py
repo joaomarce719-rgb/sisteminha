@@ -50,5 +50,6 @@ class RondaNoturna(AuditMixin, Base):
     ciclo = relationship("CicloProdutivo", back_populates="rondas_noturnas")
     vigia = relationship("Usuario", lazy="selectin")
     monitoramento_aeradores = relationship(
-        "MonitoramentoAerador", back_populates="ronda", lazy="selectin"
+        "MonitoramentoAerador", back_populates="ronda", lazy="selectin",
+        cascade="all, delete-orphan",
     )

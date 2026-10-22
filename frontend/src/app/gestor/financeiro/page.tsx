@@ -4,19 +4,29 @@ import { useEffect, useState } from "react";
 import {
   DollarSign,
   Plus,
-  X,
   Loader2,
-  AlertTriangle,
   Shell,
   CalendarDays,
   BarChart3,
   TrendingUp,
   Tag,
+  Receipt,
+  PieChart,
+  Download,
+  Percent,
 } from "lucide-react";
 import { ciclosApi, custosApi, precosApi, viveirosApi } from "@/lib/api";
+import { mensagemErro } from "@/lib/utils";
 import type { CicloProdutivo, Viveiro, CustoOperacional, CustoResumo, PrecoMercado } from "@/lib/types";
-
-type Tab = "custos" | "precos";
+import { Dialog } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { MetricCard } from "@/components/ui/metric-card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { toast } from "@/components/ui/toast";
 
 const CATEGORIAS: Record<string, string> = {
   RACAO: "Ração",
@@ -29,11 +39,11 @@ const CATEGORIAS: Record<string, string> = {
 };
 
 const CAT_COLORS: Record<string, string> = {
-  RACAO: "#ff7d33",
+  RACAO: "#f97316",
   ENERGIA_ELETRICA: "#f59e0b",
-  MAO_DE_OBRA: "#1aa0ff",
-  POS_LARVAS: "#28d280",
-  PROBIOTICOS_QUIMICOS: "#a78bfa",
+  MAO_DE_OBRA: "#0284c7",
+  POS_LARVAS: "#10b981",
+  PROBIOTICOS_QUIMICOS: "#8b5cf6",
   MANUTENCAO: "#64748b",
   OUTROS: "#94a3b8",
 };
@@ -41,113 +51,13 @@ const CAT_COLORS: Record<string, string> = {
 function fmtMoney(v: number) {
   return `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString("pt-BR");
 }
 
-// ── Modal Lançar Custo ──────────────────────────────
-function CustoModal({ open, onClose, onCreated, cicloId }: { open: boolean; onClose: () => void; onCreated: () => void; cicloId: string }) {
-  const [form, setForm] = useState({ data_lancamento: new Date().toISOString().split("T")[0], categoria: "RACAO", descricao: "", valor_rs: "" });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    try {
-      await custosApi.criar(cicloId, {
-        data_lancamento: form.data_lancamento,
-        categoria: form.categoria,
-        descricao: form.descricao,
-        valor_rs: parseFloat(form.valor_rs),
-      });
-      onCreated();
-      onClose();
-      setForm({ data_lancamento: new Date().toISOString().split("T")[0], categoria: "RACAO", descricao: "", valor_rs: "" });
-    } catch (err: any) { setError(err.message || "Erro"); } finally { setLoading(false); }
-  };
-
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="glass-card p-6 w-full max-w-md relative animate-in">
-        <button onClick={onClose} className="absolute top-4 right-4 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"><X className="w-5 h-5" /></button>
-        <h2 className="text-xl font-bold text-[var(--text-primary)] mb-1">Lançar Custo</h2>
-        <p className="text-sm text-[var(--text-muted)] mb-6">Registre uma despesa operacional</p>
-        {error && <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm mb-4"><AlertTriangle className="w-4 h-4 shrink-0" />{error}</div>}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div><label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Data *</label><input required type="date" value={form.data_lancamento} onChange={(e) => setForm({ ...form, data_lancamento: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-white/5 border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-ocean-500 focus:ring-1 focus:ring-ocean-500/50 transition-all" /></div>
-          <div><label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Categoria *</label>
-            <select value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-white/5 border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-ocean-500 transition-all appearance-none">
-              {Object.entries(CATEGORIAS).map(([k, v]) => <option key={k} value={k} className="bg-[var(--bg-secondary)]">{v}</option>)}
-            </select>
-          </div>
-          <div><label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Descrição *</label><input required minLength={3} value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} placeholder="Ex: Compra de ração mês 2" className="w-full px-4 py-3 rounded-xl bg-white/5 border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-ocean-500 focus:ring-1 focus:ring-ocean-500/50 transition-all" /></div>
-          <div><label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Valor (R$) *</label><input required type="number" step="0.01" min="0.01" inputMode="decimal" value={form.valor_rs} onChange={(e) => setForm({ ...form, valor_rs: e.target.value })} placeholder="1500.00" className="w-full px-4 py-3 rounded-xl bg-white/5 border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-ocean-500 focus:ring-1 focus:ring-ocean-500/50 transition-all" /></div>
-          <button type="submit" disabled={loading} className="w-full py-3 rounded-xl bg-gradient-to-r from-ocean-600 to-ocean-500 text-white font-semibold flex items-center justify-center gap-2 hover:from-ocean-500 hover:to-ocean-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-ocean-500/20 active:scale-[0.98]">
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><DollarSign className="w-5 h-5" /> Lançar Custo</>}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// ── Modal Preço de Mercado ──────────────────────────
-function PrecoModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: () => void }) {
-  const [form, setForm] = useState({ faixa_gramatura_min: "", faixa_gramatura_max: "", preco_por_kg: "", vigencia_inicio: new Date().toISOString().split("T")[0], vigencia_fim: "" });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    try {
-      await precosApi.criar({
-        faixa_gramatura_min: parseFloat(form.faixa_gramatura_min),
-        faixa_gramatura_max: parseFloat(form.faixa_gramatura_max),
-        preco_por_kg: parseFloat(form.preco_por_kg),
-        vigencia_inicio: form.vigencia_inicio,
-        vigencia_fim: form.vigencia_fim || null,
-      });
-      onCreated();
-      onClose();
-      setForm({ faixa_gramatura_min: "", faixa_gramatura_max: "", preco_por_kg: "", vigencia_inicio: new Date().toISOString().split("T")[0], vigencia_fim: "" });
-    } catch (err: any) { setError(err.message || "Erro"); } finally { setLoading(false); }
-  };
-
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="glass-card p-6 w-full max-w-md relative animate-in">
-        <button onClick={onClose} className="absolute top-4 right-4 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"><X className="w-5 h-5" /></button>
-        <h2 className="text-xl font-bold text-[var(--text-primary)] mb-1">Novo Preço de Mercado</h2>
-        <p className="text-sm text-[var(--text-muted)] mb-6">Cadastre uma faixa de preço por gramatura</p>
-        {error && <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm mb-4"><AlertTriangle className="w-4 h-4 shrink-0" />{error}</div>}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Gramatura mín (g) *</label><input required type="number" step="0.1" min="0" inputMode="decimal" value={form.faixa_gramatura_min} onChange={(e) => setForm({ ...form, faixa_gramatura_min: e.target.value })} placeholder="8" className="w-full px-4 py-3 rounded-xl bg-white/5 border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-ocean-500 focus:ring-1 focus:ring-ocean-500/50 transition-all" /></div>
-            <div><label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Gramatura máx (g) *</label><input required type="number" step="0.1" min="0" inputMode="decimal" value={form.faixa_gramatura_max} onChange={(e) => setForm({ ...form, faixa_gramatura_max: e.target.value })} placeholder="12" className="w-full px-4 py-3 rounded-xl bg-white/5 border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-ocean-500 focus:ring-1 focus:ring-ocean-500/50 transition-all" /></div>
-          </div>
-          <div><label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Preço por kg (R$) *</label><input required type="number" step="0.01" min="0.01" inputMode="decimal" value={form.preco_por_kg} onChange={(e) => setForm({ ...form, preco_por_kg: e.target.value })} placeholder="28.00" className="w-full px-4 py-3 rounded-xl bg-white/5 border border-[var(--border-subtle)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-ocean-500 focus:ring-1 focus:ring-ocean-500/50 transition-all" /></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Vigência início *</label><input required type="date" value={form.vigencia_inicio} onChange={(e) => setForm({ ...form, vigencia_inicio: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-white/5 border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-ocean-500 transition-all" /></div>
-            <div><label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Vigência fim</label><input type="date" value={form.vigencia_fim} onChange={(e) => setForm({ ...form, vigencia_fim: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-white/5 border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-ocean-500 transition-all" /></div>
-          </div>
-          <button type="submit" disabled={loading} className="w-full py-3 rounded-xl bg-gradient-to-r from-pond-600 to-pond-500 text-white font-semibold flex items-center justify-center gap-2 hover:from-pond-500 hover:to-pond-400 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-pond-500/20 active:scale-[0.98]">
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Tag className="w-5 h-5" /> Cadastrar Preço</>}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// ── Main Page ───────────────────────────────────────
 export default function FinanceiroPage() {
-  const [tab, setTab] = useState<Tab>("custos");
+  const [tab, setTab] = useState("custos");
   const [viveiros, setViveiros] = useState<Viveiro[]>([]);
   const [ciclos, setCiclos] = useState<CicloProdutivo[]>([]);
   const [selectedCiclo, setSelectedCiclo] = useState("");
@@ -155,8 +65,26 @@ export default function FinanceiroPage() {
   const [resumo, setResumo] = useState<CustoResumo[]>([]);
   const [precos, setPrecos] = useState<PrecoMercado[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Modals state
   const [showCustoModal, setShowCustoModal] = useState(false);
+  const [custoForm, setCustoForm] = useState({
+    data_lancamento: new Date().toISOString().split("T")[0],
+    categoria: "RACAO",
+    descricao: "",
+    valor_rs: "",
+  });
+  const [custoSubmitting, setCustoSubmitting] = useState(false);
+
   const [showPrecoModal, setShowPrecoModal] = useState(false);
+  const [precoForm, setPrecoForm] = useState({
+    faixa_gramatura_min: "",
+    faixa_gramatura_max: "",
+    preco_por_kg: "",
+    vigencia_inicio: new Date().toISOString().split("T")[0],
+    vigencia_fim: "",
+  });
+  const [precoSubmitting, setPrecoSubmitting] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -200,153 +128,514 @@ export default function FinanceiroPage() {
     setResumo(rs);
   };
 
-  const refreshPrecos = async () => {
-    const prcs = await precosApi.listar();
-    setPrecos(prcs);
+  const handleCustoSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCiclo) return;
+    setCustoSubmitting(true);
+    try {
+      await custosApi.criar(selectedCiclo, {
+        data_lancamento: custoForm.data_lancamento,
+        categoria: custoForm.categoria,
+        descricao: custoForm.descricao,
+        valor_rs: parseFloat(custoForm.valor_rs),
+      });
+      toast.success("Custo lançado com sucesso!", `${custoForm.descricao} — ${fmtMoney(parseFloat(custoForm.valor_rs))}`);
+      await refreshCustos();
+      setShowCustoModal(false);
+      setCustoForm({
+        data_lancamento: new Date().toISOString().split("T")[0],
+        categoria: "RACAO",
+        descricao: "",
+        valor_rs: "",
+      });
+    } catch (err) {
+      toast.error("Erro ao lançar custo", mensagemErro(err, "Tente novamente"));
+    } finally {
+      setCustoSubmitting(false);
+    }
+  };
+
+  const handlePrecoSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPrecoSubmitting(true);
+    try {
+      await precosApi.criar({
+        faixa_gramatura_min: parseFloat(precoForm.faixa_gramatura_min),
+        faixa_gramatura_max: parseFloat(precoForm.faixa_gramatura_max),
+        preco_por_kg: parseFloat(precoForm.preco_por_kg),
+        vigencia_inicio: precoForm.vigencia_inicio,
+        vigencia_fim: precoForm.vigencia_fim || null,
+      });
+      toast.success("Preço de mercado cadastrado!", `${precoForm.faixa_gramatura_min}g–${precoForm.faixa_gramatura_max}g a ${fmtMoney(parseFloat(precoForm.preco_por_kg))}/kg`);
+      const prcs = await precosApi.listar();
+      setPrecos(prcs);
+      setShowPrecoModal(false);
+      setPrecoForm({
+        faixa_gramatura_min: "",
+        faixa_gramatura_max: "",
+        preco_por_kg: "",
+        vigencia_inicio: new Date().toISOString().split("T")[0],
+        vigencia_fim: "",
+      });
+    } catch (err) {
+      toast.error("Erro ao cadastrar preço", mensagemErro(err, "Tente novamente"));
+    } finally {
+      setPrecoSubmitting(false);
+    }
   };
 
   const getViveiroName = (vId: string) => viveiros.find((v) => v.id === vId)?.identificacao || "—";
   const totalCustos = resumo.reduce((sum, r) => sum + r.total_rs, 0);
+  const maiorCategoria = resumo.length > 0 ? [...resumo].sort((a, b) => b.total_rs - a.total_rs)[0] : null;
 
-  if (loading) return <div className="flex items-center justify-center py-32"><Loader2 className="w-8 h-8 text-ocean-400 animate-spin" /></div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-32">
+        <Loader2 className="w-8 h-8 text-sky-500 animate-spin" />
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)]">Financeiro</h1>
-        <p className="text-[var(--text-secondary)] text-sm mt-1">Custos operacionais e tabela de preços de mercado</p>
+    <div className="max-w-6xl mx-auto space-y-6">
+      {/* ── Page Header Inspirado na Captura de Gestão Financeira ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-slate-200">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              Módulo Econômico
+            </span>
+            <span className="h-1 w-1 rounded-full bg-slate-300" />
+            <span className="text-xs font-semibold text-sky-600">
+              Controle de Despesas & Insumos
+            </span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+            Gestão Financeira e Custos
+          </h1>
+          <p className="text-slate-500 text-xs mt-1">
+            Acompanhamento de custos acumulados do ciclo e cotação de venda no frigorífico.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {tab === "custos" && selectedCiclo && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  await custosApi.exportarCsv(selectedCiclo);
+                  toast.success("Download concluído!", "Arquivo CSV de custos baixado com sucesso.");
+                } catch (err) {
+                  toast.error("Erro na exportação", mensagemErro(err, "Tente novamente"));
+                }
+              }}
+            >
+              <Download className="w-4 h-4 mr-1.5 text-slate-600" />
+              Exportar CSV
+            </Button>
+          )}
+
+          {tab === "custos" ? (
+            <Button onClick={() => setShowCustoModal(true)} disabled={ciclos.length === 0} size="sm">
+              <Plus className="w-4 h-4" /> Lançar Despesa
+            </Button>
+          ) : (
+            <Button onClick={() => setShowPrecoModal(true)} size="sm" variant="emerald">
+              <Plus className="w-4 h-4" /> Nova Faixa de Preço
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-white/5 p-1 rounded-xl border border-[var(--border-subtle)] w-fit">
-        {[
-          { key: "custos" as Tab, label: "Custos", icon: DollarSign },
-          { key: "precos" as Tab, label: "Preços de Mercado", icon: Tag },
-        ].map((t) => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === t.key ? "bg-ocean-500/15 text-ocean-400" : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"}`}>
-            <t.icon className="w-4 h-4" /> {t.label}
-          </button>
-        ))}
+      {/* ── KPI Metric Cards (Inspirados em 112858.png + RF-019/RN-014) ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <MetricCard
+          label="Custo Operacional Total"
+          value={fmtMoney(totalCustos)}
+          accentColor="coral"
+          icon={DollarSign}
+          badge={{
+            text: `${custos.length} lançamentos`,
+            variant: "destructive",
+          }}
+          subtitle="Acumulado do ciclo selecionado"
+        />
+
+        <MetricCard
+          label="Principal Centro de Custo"
+          value={maiorCategoria ? CATEGORIAS[maiorCategoria.categoria] || maiorCategoria.categoria : "—"}
+          accentColor="amber"
+          icon={PieChart}
+          badge={{
+            text: maiorCategoria ? `${((maiorCategoria.total_rs / (totalCustos || 1)) * 100).toFixed(0)}% do total` : "—",
+            variant: "warning",
+          }}
+          subtitle={maiorCategoria ? fmtMoney(maiorCategoria.total_rs) : "Sem dados"}
+        />
+
+        <MetricCard
+          label="Tabela de Mercado"
+          value={`${precos.length} faixas`}
+          accentColor="ocean"
+          icon={Tag}
+          badge={{
+            text: "Cotações vigentes",
+            variant: "info",
+          }}
+          subtitle="Atualizado recentemente"
+        />
+
+        {/* ROA (RF-019, RN-014, Critério 4: não exibir como zero quando faltar insumo) */}
+        <MetricCard
+          label="ROA (Retorno s/ Ativo)"
+          value="Indisponível"
+          accentColor="slate"
+          icon={Percent}
+          badge={{
+            text: "Requer Ativo Total",
+            variant: "neutral",
+          }}
+          subtitle="Lucro Líquido / Ativo Total"
+        />
+
+        {/* ROE (RF-019, RN-014, Critério 4: não exibir como zero quando faltar insumo) */}
+        <MetricCard
+          label="ROE (Retorno s/ Patrimônio)"
+          value="Indisponível"
+          accentColor="slate"
+          icon={TrendingUp}
+          badge={{
+            text: "Requer Patr. Líquido",
+            variant: "neutral",
+          }}
+          subtitle="Lucro Líquido / Patrimônio Líquido"
+        />
       </div>
 
-      {/* Custos Tab */}
-      {tab === "custos" && (
-        <>
+      {/* ── Navegação por Abas (Tabs) ── */}
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="custos">
+            <DollarSign className="w-4 h-4 mr-1.5" /> Custos Operacionais
+          </TabsTrigger>
+          <TabsTrigger value="precos">
+            <Tag className="w-4 h-4 mr-1.5" /> Tabela de Preços do Mercado
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ── Aba Custos ── */}
+        <TabsContent value="custos" className="space-y-6">
           {ciclos.length === 0 ? (
-            <div className="glass-card p-12 text-center">
-              <Shell className="w-12 h-12 text-[var(--text-muted)] mx-auto mb-4" />
-              <p className="text-[var(--text-muted)]">Nenhum ciclo ativo para lançar custos</p>
-            </div>
+            <Card className="p-10 text-center">
+              <Shell className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+              <h3 className="font-bold text-slate-800">Nenhum ciclo ativo encontrado</h3>
+              <p className="text-xs text-slate-500 mt-1">Inicie um ciclo em um viveiro para lançar despesas.</p>
+            </Card>
           ) : (
             <>
-              <div className="flex flex-col sm:flex-row gap-4 items-end mb-6">
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1.5">Ciclo</label>
-                  <select value={selectedCiclo} onChange={(e) => setSelectedCiclo(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl bg-white/5 border border-[var(--border-subtle)] text-[var(--text-primary)] focus:outline-none focus:border-ocean-500 transition-all appearance-none">
-                    {ciclos.map((c) => <option key={c.id} value={c.id} className="bg-[var(--bg-secondary)]">{getViveiroName(c.viveiro_id)} — {fmtDate(c.data_povoamento)}</option>)}
+              {/* Seletor de Ciclo */}
+              <div className="flex flex-col sm:flex-row items-end gap-3 bg-white p-4 rounded-2xl border border-slate-200">
+                <div className="flex-1 w-full">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-1.5">
+                    Filtrar por Viveiro / Ciclo Ativo
+                  </label>
+                  <select
+                    value={selectedCiclo}
+                    onChange={(e) => setSelectedCiclo(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-800 focus:border-sky-500 focus:outline-none"
+                  >
+                    {ciclos.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {getViveiroName(c.viveiro_id)} — Povoado em {fmtDate(c.data_povoamento)} (Lote #{c.id.substring(0, 6)})
+                      </option>
+                    ))}
                   </select>
                 </div>
-                <button onClick={() => setShowCustoModal(true)} className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-ocean-600 to-ocean-500 text-white font-semibold text-sm hover:from-ocean-500 hover:to-ocean-400 transition-all shadow-lg shadow-ocean-500/20 active:scale-[0.98]">
-                  <Plus className="w-4 h-4" /> Lançar Custo
-                </button>
               </div>
 
-              {/* Resumo por categoria */}
+              {/* Distribuição por Categoria de Custo */}
               {resumo.length > 0 && (
-                <div className="glass-card p-5 mb-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-base font-bold text-[var(--text-primary)]">Resumo por Categoria</h3>
-                    <p className="text-lg font-bold text-red-400">{fmtMoney(totalCustos)}</p>
-                  </div>
-                  <div className="space-y-2">
-                    {resumo.sort((a, b) => b.total_rs - a.total_rs).map((r) => {
-                      const pct = totalCustos > 0 ? (r.total_rs / totalCustos) * 100 : 0;
-                      return (
-                        <div key={r.categoria}>
-                          <div className="flex justify-between text-sm mb-1">
-                            <span className="text-[var(--text-secondary)]">{CATEGORIAS[r.categoria] || r.categoria}</span>
-                            <span className="text-[var(--text-primary)] font-semibold tabular-nums">{fmtMoney(r.total_rs)} <span className="text-[var(--text-muted)] text-xs">({r.qtd_lancamentos}x)</span></span>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <BarChart3 className="w-4 h-4 text-sky-600" />
+                        Distribuição por Categoria
+                      </CardTitle>
+                      <span className="text-xs font-bold text-slate-500">
+                        Total: <strong className="text-slate-900">{fmtMoney(totalCustos)}</strong>
+                      </span>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {resumo.sort((a, b) => b.total_rs - a.total_rs).map((r) => {
+                        const pct = totalCustos > 0 ? (r.total_rs / totalCustos) * 100 : 0;
+                        return (
+                          <div key={r.categoria}>
+                            <div className="flex justify-between text-xs mb-1 font-semibold">
+                              <span className="text-slate-700">{CATEGORIAS[r.categoria] || r.categoria}</span>
+                              <span className="text-slate-900 tabular-nums">
+                                {fmtMoney(r.total_rs)} <span className="text-slate-400 font-normal">({pct.toFixed(1)}%)</span>
+                              </span>
+                            </div>
+                            <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all duration-500"
+                                style={{ width: `${pct}%`, background: CAT_COLORS[r.categoria] || "#94a3b8" }}
+                              />
+                            </div>
                           </div>
-                          <div className="h-2 rounded-full bg-white/5 overflow-hidden">
-                            <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: CAT_COLORS[r.categoria] || "#94a3b8" }} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
               )}
 
-              {/* Lista de custos */}
-              {custos.length === 0 ? (
-                <div className="glass-card p-8 text-center">
-                  <DollarSign className="w-10 h-10 text-[var(--text-muted)] mx-auto mb-3" />
-                  <p className="text-[var(--text-muted)]">Nenhum custo lançado neste ciclo</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {[...custos].reverse().map((c) => (
-                    <div key={c.id} className="glass-card p-4 flex flex-wrap items-center gap-x-6 gap-y-2">
-                      <div className="flex items-center gap-2 min-w-[120px]">
-                        <CalendarDays className="w-4 h-4 text-[var(--text-muted)]" />
-                        <span className="text-sm text-[var(--text-primary)]">{fmtDate(c.data_lancamento)}</span>
-                      </div>
-                      <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: `${CAT_COLORS[c.categoria] || "#94a3b8"}20`, color: CAT_COLORS[c.categoria] || "#94a3b8", border: `1px solid ${CAT_COLORS[c.categoria] || "#94a3b8"}40` }}>
-                        {CATEGORIAS[c.categoria] || c.categoria}
-                      </span>
-                      <span className="text-sm text-[var(--text-secondary)] flex-1 min-w-0 truncate">{c.descricao}</span>
-                      <span className="text-sm font-bold text-red-400 tabular-nums">{fmtMoney(c.valor_rs)}</span>
+              {/* Tabela de Lançamentos de Despesas */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Receipt className="w-4 h-4 text-sky-600" />
+                      Histórico de Despesas Lançadas
+                    </CardTitle>
+                    <Badge variant="secondary">{custos.length} registros</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  {custos.length === 0 ? (
+                    <div className="py-12 text-center text-xs text-slate-400">
+                      Nenhuma despesa registrada para este ciclo ainda.
                     </div>
-                  ))}
-                </div>
-              )}
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {[...custos].reverse().map((c) => (
+                        <div key={c.id} className="py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+                          <div className="flex items-center gap-3 min-w-[140px]">
+                            <CalendarDays className="w-4 h-4 text-slate-400 shrink-0" />
+                            <span className="font-semibold text-slate-700">{fmtDate(c.data_lancamento)}</span>
+                          </div>
+
+                          <div className="w-36">
+                            <span
+                              className="inline-block px-2 py-0.5 rounded-md text-[11px] font-bold"
+                              style={{
+                                background: `${CAT_COLORS[c.categoria] || "#94a3b8"}15`,
+                                color: CAT_COLORS[c.categoria] || "#64748b",
+                                border: `1px solid ${CAT_COLORS[c.categoria] || "#94a3b8"}30`,
+                              }}
+                            >
+                              {CATEGORIAS[c.categoria] || c.categoria}
+                            </span>
+                          </div>
+
+                          <span className="flex-1 min-w-[180px] font-medium text-slate-600 truncate">
+                            {c.descricao}
+                          </span>
+
+                          <span className="font-black text-slate-900 tabular-nums text-sm">
+                            {fmtMoney(c.valor_rs)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </>
           )}
-        </>
-      )}
+        </TabsContent>
 
-      {/* Preços Tab */}
-      {tab === "precos" && (
-        <>
-          <div className="flex justify-end mb-4">
-            <button onClick={() => setShowPrecoModal(true)} className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-pond-600 to-pond-500 text-white font-semibold text-sm hover:from-pond-500 hover:to-pond-400 transition-all shadow-lg shadow-pond-500/20 active:scale-[0.98]">
-              <Plus className="w-4 h-4" /> Novo Preço
-            </button>
+        {/* ── Aba Preços de Mercado ── */}
+        <TabsContent value="precos" className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {precos.map((p) => (
+              <Card key={p.id} className="border-t-4 border-t-emerald-500">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      Faixa Zootécnica
+                    </span>
+                    <Badge variant="success">Vigente</Badge>
+                  </div>
+                  <CardTitle className="text-xl font-black text-slate-900 mt-1">
+                    {p.faixa_gramatura_min}g a {p.faixa_gramatura_max}g
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-black text-emerald-600 tabular-nums">
+                    {fmtMoney(p.preco_por_kg)} <span className="text-xs font-semibold text-slate-400">/ kg</span>
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-2 border-t border-slate-100 pt-2">
+                    Início: {fmtDate(p.vigencia_inicio)}
+                    {p.vigencia_fim ? ` • Até: ${fmtDate(p.vigencia_fim)}` : " • Preço atual de tabela"}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* ── Modal Lançar Custo (Shadcn Dialog) ── */}
+      <Dialog
+        open={showCustoModal}
+        onOpenChange={setShowCustoModal}
+        title="Lançar Custo Operacional"
+        description="Registre uma despesa zootécnica ou operacional deste ciclo"
+      >
+        <form onSubmit={handleCustoSubmit} className="space-y-4 pt-2">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Data de Lançamento *</Label>
+              <Input
+                required
+                type="date"
+                value={custoForm.data_lancamento}
+                onChange={(e) => setCustoForm({ ...custoForm, data_lancamento: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>Categoria *</Label>
+              <select
+                value={custoForm.categoria}
+                onChange={(e) => setCustoForm({ ...custoForm, categoria: e.target.value })}
+                className="w-full mt-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 focus:border-sky-500 focus:outline-none h-11"
+              >
+                {Object.entries(CATEGORIAS).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          {precos.length === 0 ? (
-            <div className="glass-card p-8 text-center">
-              <Tag className="w-10 h-10 text-[var(--text-muted)] mx-auto mb-3" />
-              <p className="text-[var(--text-muted)]">Nenhum preço cadastrado</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {precos.map((p) => (
-                <div key={p.id} className="glass-card p-5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Tag className="w-5 h-5 text-pond-400" />
-                    <span className="text-sm font-bold text-[var(--text-primary)]">
-                      {p.faixa_gramatura_min}g – {p.faixa_gramatura_max}g
-                    </span>
-                  </div>
-                  <p className="text-2xl font-bold text-pond-400 tabular-nums mb-2">
-                    {fmtMoney(p.preco_por_kg)} <span className="text-sm font-normal text-[var(--text-muted)]">/kg</span>
-                  </p>
-                  <div className="text-xs text-[var(--text-muted)]">
-                    Vigência: {fmtDate(p.vigencia_inicio)}
-                    {p.vigencia_fim ? ` — ${fmtDate(p.vigencia_fim)}` : " — Indeterminado"}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
+          <div>
+            <Label>Descrição da Despesa *</Label>
+            <Input
+              required
+              minLength={3}
+              value={custoForm.descricao}
+              onChange={(e) => setCustoForm({ ...custoForm, descricao: e.target.value })}
+              placeholder="Ex: 50 sacos ração 35% proteína"
+              className="mt-1"
+            />
+          </div>
 
-      {selectedCiclo && <CustoModal open={showCustoModal} onClose={() => setShowCustoModal(false)} onCreated={refreshCustos} cicloId={selectedCiclo} />}
-      <PrecoModal open={showPrecoModal} onClose={() => setShowPrecoModal(false)} onCreated={refreshPrecos} />
+          <div>
+            <Label>Valor Total (R$) *</Label>
+            <Input
+              required
+              type="number"
+              step="0.01"
+              min="0.01"
+              value={custoForm.valor_rs}
+              onChange={(e) => setCustoForm({ ...custoForm, valor_rs: e.target.value })}
+              placeholder="1500.00"
+              className="mt-1 text-lg font-bold"
+            />
+          </div>
+
+          <div className="pt-2 flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setShowCustoModal(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={custoSubmitting}>
+              {custoSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              Confirmar Despesa
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
+      {/* ── Modal Novo Preço (Shadcn Dialog) ── */}
+      <Dialog
+        open={showPrecoModal}
+        onOpenChange={setShowPrecoModal}
+        title="Cadastrar Preço de Mercado"
+        description="Defina uma cotação por gramatura para cálculo da receita bruta"
+      >
+        <form onSubmit={handlePrecoSubmit} className="space-y-4 pt-2">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Gramatura Mínima (g) *</Label>
+              <Input
+                required
+                type="number"
+                step="0.1"
+                min="0"
+                value={precoForm.faixa_gramatura_min}
+                onChange={(e) => setPrecoForm({ ...precoForm, faixa_gramatura_min: e.target.value })}
+                placeholder="8.0"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>Gramatura Máxima (g) *</Label>
+              <Input
+                required
+                type="number"
+                step="0.1"
+                min="0"
+                value={precoForm.faixa_gramatura_max}
+                onChange={(e) => setPrecoForm({ ...precoForm, faixa_gramatura_max: e.target.value })}
+                placeholder="12.0"
+                className="mt-1"
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label>Preço por Quilo (R$/kg) *</Label>
+            <Input
+              required
+              type="number"
+              step="0.01"
+              min="0.01"
+              value={precoForm.preco_por_kg}
+              onChange={(e) => setPrecoForm({ ...precoForm, preco_por_kg: e.target.value })}
+              placeholder="26.50"
+              className="mt-1 text-lg font-bold"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Início da Vigência *</Label>
+              <Input
+                required
+                type="date"
+                value={precoForm.vigencia_inicio}
+                onChange={(e) => setPrecoForm({ ...precoForm, vigencia_inicio: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label>Fim da Vigência (Opcional)</Label>
+              <Input
+                type="date"
+                value={precoForm.vigencia_fim}
+                onChange={(e) => setPrecoForm({ ...precoForm, vigencia_fim: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+          </div>
+
+          <div className="pt-2 flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setShowPrecoModal(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="emerald" disabled={precoSubmitting}>
+              {precoSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              Salvar Preço
+            </Button>
+          </div>
+        </form>
+      </Dialog>
     </div>
   );
 }

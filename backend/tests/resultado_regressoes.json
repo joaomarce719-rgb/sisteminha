@@ -1,0 +1,25 @@
+{
+  "executed_at_utc": "2026-10-14T18:27:21.099618+00:00",
+  "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+  "dependencies": {
+    "numpy": "2.4.6",
+    "pydantic": "2.13.5"
+  },
+  "source_sha256": {
+    "src/models/enums.py": "6d3253b960b5e58d7aaef9ec6f5403fd556587d815b0e2eecd6cdef84b4554eb",
+    "src/services/decision_engine.py": "0b1eee088f4ab5715c372dc3df77d7d26dde2c5a425a430d88382e94f8f18f9e",
+    "src/services/alert_engine.py": "27e265121078b745737152997dc3c1b3337fba09b7af89e2b0e42f62d26419b2",
+    "src/schemas/biometria.py": "c8b0176866723e937eb23b71dd6df5d11b983c48fcf35ce1722fecca9218237f",
+    "src/schemas/custo.py": "711b3e333af2a25ad6fcf5387c35a9d60dc9af5a81572ab91b133086f2457e0a",
+    "src/schemas/viveiro.py": "cfa4080f6ce4213d09eed70f8895d9076c9fa59ff3d6347f15e020a59b5a6e06",
+    "src/schemas/simulacao.py": "6cc71492712b27995d57c69dd0b53632c80f660480466ebb0e136c11142b33d7",
+    "testsprite_tests/TC001_test_authentication_api_login_with_valid_credentials.py": "6c2b1322ffd69adeb7e76cf3cea5ae0b539452fb0c542ab2b0ffd9f5fbf4af94"
+  },
+  "backend": "C:\\Users\\jm_montmaia\\Desktop\\sisteminha\\backend",
+  "tests_run": 42,
+  "passed": 42,
+  "failures": [],
+  "errors": [],
+  "skipped": [],
+  "scope": "Somente funções, schemas e reprodução offline do TC001; sem HTTP/banco/fuzzy"
+}

@@ -1,0 +1,2306 @@
+[
+  {
+    "id": "TC001",
+    "title": "Sign in and reach the authorized landing area",
+    "description": "This test verifies that a valid user can sign in and access the role-appropriate landing area.",
+    "category": "Authentication and Access Control",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the authorized landing area is displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC002",
+    "title": "Show manager dashboard KPIs and active cycles",
+    "description": "This test verifies that a manager can open the dashboard and review core KPI summaries, active cycles, and pond status.",
+    "category": "Manager Dashboard",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation entry for the manager dashboard"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify KPI summary cards are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify active cycles and ponds are displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC003",
+    "title": "Reject invalid sign-in credentials",
+    "description": "This test verifies that invalid credentials are rejected and the user remains unable to access protected data.",
+    "category": "Authentication and Access Control",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with invalid@example.com"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with invalid-password"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an invalid credentials message is visible"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC004",
+    "title": "Start a stocking cycle successfully",
+    "description": "Verifies that a manager can create a new stocking cycle with valid data and see it opened with the expected initial population context.",
+    "category": "Stocking Registration",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /gestor/viveiros"
+      },
+      {
+        "type": "action",
+        "description": "Start a new cycle"
+      },
+      {
+        "type": "action",
+        "description": "Fill a valid start date into the start date field"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the species or lineage field with a valid value"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the post-larvae quantity field with a valid quantity"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the origin field with a valid value"
+      },
+      {
+        "type": "action",
+        "description": "Save the stocking record"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the cycle is opened with the initial population context"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the stocking record is available in the pond and cycle view"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC005",
+    "title": "Register a biometric sampling and calculate indicators",
+    "description": "This verifies that a field operator can record biometric sampling data for an active cycle and see the calculated biological indicators update successfully.",
+    "category": "Biological Indicator Calculation",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to the biometric registration page"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the biometric sampling fields with valid values"
+      },
+      {
+        "type": "action",
+        "description": "Submit the biometric registration"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the biological indicator results are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the sampling record is shown in the recent history"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC006",
+    "title": "Create a pond and start a stocking cycle",
+    "description": "This verifies that an authorized user can create a pond, start a cycle, and see the new active record available for downstream workflows.",
+    "category": "Pond and Cycle Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /gestor/viveiros"
+      },
+      {
+        "type": "action",
+        "description": "Create a new pond"
+      },
+      {
+        "type": "action",
+        "description": "Save the pond"
+      },
+      {
+        "type": "action",
+        "description": "Start a stocking cycle for the pond"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the pond is listed as active"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the cycle is available in downstream selection forms"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC007",
+    "title": "Create a pond and make it available for cycles",
+    "description": "This test verifies that a user can create a pond with identification and area details and then use it for future cycle setup.",
+    "category": "Pond and Cycle Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation entry for pond management"
+      },
+      {
+        "type": "action",
+        "description": "Create a new pond record"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the pond identification field with a unique pond name"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the usable area field with a valid value"
+      },
+      {
+        "type": "action",
+        "description": "Save the pond"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the new pond is available for cycles"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC008",
+    "title": "Record biometry for an active cycle",
+    "description": "Verifies that a field operator can select an active cycle, submit biometric samples, and see the calculated average weight.",
+    "category": "Biometry Registration",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /campo/biometria"
+      },
+      {
+        "type": "action",
+        "description": "Select an active cycle"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the sample size field with a valid value"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the sample weights field with valid values"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the uniformity percentage field with a valid value"
+      },
+      {
+        "type": "action",
+        "description": "Submit the biometric measurement"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the calculated average weight is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the biometric measurement is stored for the selected cycle"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC009",
+    "title": "Run a harvest simulation and review the recommendation",
+    "description": "This verifies that an authorized user can select an active cycle, enter simulation inputs, run the model, and see a harvest recommendation with results.",
+    "category": "Harvest Decision Simulation",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /gestor/simulacao"
+      },
+      {
+        "type": "action",
+        "description": "Select an active cycle"
+      },
+      {
+        "type": "action",
+        "description": "Select a projection horizon in days"
+      },
+      {
+        "type": "action",
+        "description": "Enter a valid daily gain"
+      },
+      {
+        "type": "action",
+        "description": "Enter a valid market price"
+      },
+      {
+        "type": "action",
+        "description": "Run the simulation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a harvest recommendation is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify simulation results are displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC010",
+    "title": "Record feeding and leftover feed for a cycle",
+    "description": "This verifies that a field operator can confirm a feeding recommendation, register delivered feed, and log leftover feed with the actions linked in history.",
+    "category": "Feeding Plan and Feeding Log",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to the feeding management page"
+      },
+      {
+        "type": "action",
+        "description": "Confirm the feeding recommendation"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the delivered feed amount with a valid value"
+      },
+      {
+        "type": "action",
+        "description": "Submit the feeding log"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the leftover feed amount with a valid value"
+      },
+      {
+        "type": "action",
+        "description": "Submit the leftover feed log"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the feeding execution is recorded in history"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the leftover feed record is displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC011",
+    "title": "Register biometry for an active cycle",
+    "description": "This verifies that a field operator can choose an active cycle, register a biometric sample, and see the record saved with calculated average weight.",
+    "category": "Biometry Registration and Average Weight Calculation",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /campo/biometria"
+      },
+      {
+        "type": "action",
+        "description": "Select an active cycle"
+      },
+      {
+        "type": "action",
+        "description": "Enter a valid sampling quantity"
+      },
+      {
+        "type": "action",
+        "description": "Enter valid sample measurements"
+      },
+      {
+        "type": "action",
+        "description": "Save the biometry record"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the biometry record is saved"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an average weight calculation is displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC012",
+    "title": "Review dashboard KPIs and alerts within authorized scope",
+    "description": "This verifies that a manager can open the dashboard, apply scope filters, and see KPIs, trend data, and alerts for the selected organization or property.",
+    "category": "Integrated Dashboard Monitoring",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /gestor/dashboard"
+      },
+      {
+        "type": "action",
+        "description": "Select an organization"
+      },
+      {
+        "type": "action",
+        "description": "Select a property"
+      },
+      {
+        "type": "action",
+        "description": "Select a pond"
+      },
+      {
+        "type": "action",
+        "description": "Select a cycle"
+      },
+      {
+        "type": "action",
+        "description": "Select a period"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify dashboard KPIs are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify alerts and trend charts are displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC013",
+    "title": "Register a biometric sample for an active cycle",
+    "description": "This test verifies that a field operator can record a biometric sample for an active cycle and see the measurement saved.",
+    "category": "Pond and Cycle Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation entry for biometric registration"
+      },
+      {
+        "type": "action",
+        "description": "Select an active cycle"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the biometric sample fields with valid values"
+      },
+      {
+        "type": "action",
+        "description": "Save the biometric registration"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the biometric sample is saved"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC014",
+    "title": "Register a sale and update profitability indicators",
+    "description": "This verifies that a manager can save a sale and see revenue, profit, margin, ROA, and ROE recalculate from the recorded transaction.",
+    "category": "Financial Records and Indicators",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to the financial page"
+      },
+      {
+        "type": "action",
+        "description": "Register a new sale entry with valid quantity, price, weight range, and sale date"
+      },
+      {
+        "type": "action",
+        "description": "Submit the sale entry"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the revenue and profit indicators are updated"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the profitability metrics are displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC015",
+    "title": "Record feeding and environmental measurements for an active cycle",
+    "description": "This verifies that a field operator can open the management form, enter feeding and environmental data for the active cycle, and save the log.",
+    "category": "Feeding and Manejo Registration",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /campo/manejo"
+      },
+      {
+        "type": "action",
+        "description": "Select an active cycle"
+      },
+      {
+        "type": "action",
+        "description": "Enter a valid feed quantity"
+      },
+      {
+        "type": "action",
+        "description": "Enter valid environmental measurements"
+      },
+      {
+        "type": "action",
+        "description": "Save the management log"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the feeding log is saved"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the environmental measurements are displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC016",
+    "title": "Register a cost and update financial indicators",
+    "description": "This verifies that a manager can save an operational cost and see the related financial totals and indicators refresh.",
+    "category": "Financial Records and Indicators",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to the financial page"
+      },
+      {
+        "type": "action",
+        "description": "Register a new operational cost entry with valid category, value, date, and period"
+      },
+      {
+        "type": "action",
+        "description": "Submit the cost entry"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the operational cost total is updated"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the financial indicators are displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC017",
+    "title": "Enter costs and a sale and review updated financial indicators",
+    "description": "This verifies that an authorized user can record operational costs and a sale, then see revenue, profit, margin, ROA, and ROE update in the financial view.",
+    "category": "Financial Cost and Sale Entry",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /gestor/financeiro"
+      },
+      {
+        "type": "action",
+        "description": "Enter a valid cost item"
+      },
+      {
+        "type": "action",
+        "description": "Save the cost entry"
+      },
+      {
+        "type": "action",
+        "description": "Enter a valid sale entry"
+      },
+      {
+        "type": "action",
+        "description": "Save the sale entry"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the revenue and profit indicators are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the margin, ROA, and ROE indicators are displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC018",
+    "title": "Enter operational costs and a sale to refresh financial indicators",
+    "description": "This test verifies that a manager can record costs and a sale and then see the financial performance indicators update.",
+    "category": "Manager Dashboard",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation entry for financial management"
+      },
+      {
+        "type": "action",
+        "description": "Enter a cost record"
+      },
+      {
+        "type": "action",
+        "description": "Enter a sale record"
+      },
+      {
+        "type": "action",
+        "description": "Save the financial entries"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify revenue, profit, margin, ROA, and ROE indicators update"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC019",
+    "title": "Record an environmental measurement",
+    "description": "Verifies that a user can store a manual environmental reading with its parameter, value, unit, timestamp, and origin.",
+    "category": "Environmental Condition Registration",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /campo/manejo"
+      },
+      {
+        "type": "action",
+        "description": "Record an environmental reading"
+      },
+      {
+        "type": "action",
+        "description": "Select a parameter"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the value field with a valid measurement"
+      },
+      {
+        "type": "action",
+        "description": "Select a valid unit"
+      },
+      {
+        "type": "action",
+        "description": "Fill a valid timestamp into the timestamp field"
+      },
+      {
+        "type": "action",
+        "description": "Select a valid origin"
+      },
+      {
+        "type": "action",
+        "description": "Save the measurement"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the environmental reading is stored with its source context"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the measurement appears in the selected cycle or pond context"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC020",
+    "title": "Filter the manager dashboard and review updated navigation",
+    "description": "This test verifies that dashboard filters update the displayed indicators and that submodule navigation remains available.",
+    "category": "Manager Dashboard",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation entry for the manager dashboard"
+      },
+      {
+        "type": "action",
+        "description": "Apply an organization filter"
+      },
+      {
+        "type": "action",
+        "description": "Apply a cycle filter"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the dashboard indicators update"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify submodule navigation remains available"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC021",
+    "title": "Compare a modified simulation against the realized scenario",
+    "description": "This verifies that an authorized user can start from the realized scenario, change assumptions, rerun the simulation, and review a comparison with the original result.",
+    "category": "Harvest Decision Simulation",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /gestor/simulacao"
+      },
+      {
+        "type": "action",
+        "description": "Select an active cycle"
+      },
+      {
+        "type": "action",
+        "description": "Copy the realized scenario"
+      },
+      {
+        "type": "action",
+        "description": "Change the market price assumption"
+      },
+      {
+        "type": "action",
+        "description": "Run the simulation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the simulated scenario is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the comparison with the realized scenario is displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC022",
+    "title": "Run a simulation and review the Delta V recommendation",
+    "description": "This test verifies that a user can run the harvest simulation with cycle inputs and review the resulting recommendation and scenario comparison.",
+    "category": "Manager Dashboard",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation entry for the simulation module"
+      },
+      {
+        "type": "action",
+        "description": "Select a cycle with valid inputs"
+      },
+      {
+        "type": "action",
+        "description": "Run the simulation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a Delta V recommendation is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify scenario comparison results are displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC023",
+    "title": "Edit a pond and preserve the updated record",
+    "description": "This test verifies that a user can edit an existing pond and keep the updated details after saving.",
+    "category": "Pond and Cycle Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation entry for pond management"
+      },
+      {
+        "type": "action",
+        "description": "Open an existing pond for editing"
+      },
+      {
+        "type": "action",
+        "description": "Update the pond details"
+      },
+      {
+        "type": "action",
+        "description": "Save the changes"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the updated pond record is preserved"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC024",
+    "title": "Assign a role to a user and save the change",
+    "description": "This test verifies that an administrator can update a user's role and see the change preserved in the user management view.",
+    "category": "User, Role, and Parameter Administration",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /gestor/usuarios"
+      },
+      {
+        "type": "action",
+        "description": "Select a user"
+      },
+      {
+        "type": "action",
+        "description": "Assign a role to the user"
+      },
+      {
+        "type": "action",
+        "description": "Save the change"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the updated role is preserved"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the permission history is visible"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC025",
+    "title": "Review and use the active feeding table for planning",
+    "description": "This verifies that a user can inspect the active feeding table version and use it as the reference for feeding recommendations.",
+    "category": "Feeding Plan and Feeding Log",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to the feeding table management page"
+      },
+      {
+        "type": "action",
+        "description": "Review the active feeding table"
+      },
+      {
+        "type": "action",
+        "description": "Select the table version applicable to the current cycle"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to the feeding management page"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the selected feeding table reference is available in the feeding recommendation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the feeding planning form is displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC026",
+    "title": "Compare two cycles on the dashboard",
+    "description": "This verifies that a manager can change dashboard filters to compare cycle-level information and see the visuals update within the authorized scope.",
+    "category": "Integrated Dashboard Monitoring",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /gestor/dashboard"
+      },
+      {
+        "type": "action",
+        "description": "Select an organization"
+      },
+      {
+        "type": "action",
+        "description": "Select a property"
+      },
+      {
+        "type": "action",
+        "description": "Select one cycle"
+      },
+      {
+        "type": "action",
+        "description": "Select another cycle"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the dashboard updates for the selected cycles"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the comparison view is displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC027",
+    "title": "Update the active feeding table version",
+    "description": "This test verifies that an administrator can create a new active parameter version while keeping the prior version preserved.",
+    "category": "User, Role, and Parameter Administration",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /gestor/tabelas-alimentares"
+      },
+      {
+        "type": "action",
+        "description": "Review the current parameter versions"
+      },
+      {
+        "type": "action",
+        "description": "Update the active reference with a new version"
+      },
+      {
+        "type": "action",
+        "description": "Save the change"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the new version is active"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the prior version remains preserved"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC028",
+    "title": "Edit a pond and inactivate it",
+    "description": "This verifies that an authorized user can update pond details, inactivate the pond, and see it reflected as historical or inactive.",
+    "category": "Pond and Cycle Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /gestor/viveiros"
+      },
+      {
+        "type": "action",
+        "description": "Open an existing pond"
+      },
+      {
+        "type": "action",
+        "description": "Edit the pond details"
+      },
+      {
+        "type": "action",
+        "description": "Save the changes"
+      },
+      {
+        "type": "action",
+        "description": "Inactivate the pond"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the updated pond record is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the pond is marked inactive or historical"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC029",
+    "title": "Keep simulation results from changing operational records",
+    "description": "This test verifies that running a simulation produces results without modifying previously recorded operational data.",
+    "category": "Manager Dashboard",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation entry for a previously recorded cycle's operational data"
+      },
+      {
+        "type": "action",
+        "description": "Note the current operational record details"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation entry for the simulation module"
+      },
+      {
+        "type": "action",
+        "description": "Select the same cycle with valid inputs"
+      },
+      {
+        "type": "action",
+        "description": "Run the simulation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the previously recorded operational data remains unchanged"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC030",
+    "title": "Trace an indicator back to its inputs and versions",
+    "description": "This test verifies that an authorized user can inspect an indicator's originating data, formula version, and parameter versions.",
+    "category": "Audit and Traceability",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /gestor/auditoria"
+      },
+      {
+        "type": "action",
+        "description": "Select an indicator"
+      },
+      {
+        "type": "action",
+        "description": "Open the indicator traceability details"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify indicator inputs are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify formula and parameter version details are visible"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC031",
+    "title": "Review an audit timeline for a changed record",
+    "description": "This test verifies that an authorized user can filter audit records and open before-and-after details for a selected change.",
+    "category": "Audit and Traceability",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /gestor/auditoria"
+      },
+      {
+        "type": "action",
+        "description": "Apply filters for a record or event"
+      },
+      {
+        "type": "action",
+        "description": "Open a selected change"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an audit timeline is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify before and after details are visible"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC032",
+    "title": "Export a scoped dashboard report",
+    "description": "This test verifies that an authorized manager can export a dashboard report using the selected scope and period and receive the generated file metadata.",
+    "category": "Report and Data Export",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /gestor/dashboard"
+      },
+      {
+        "type": "action",
+        "description": "Choose a report scope and period"
+      },
+      {
+        "type": "action",
+        "description": "Export the report"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an exported report file is generated"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the export reflects the selected filters"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC033",
+    "title": "Inactivate a pond and keep it available in history",
+    "description": "This test verifies that a user can inactivate a pond and that it is removed from active use while still remaining traceable in history.",
+    "category": "Pond and Cycle Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the navigation entry for pond management"
+      },
+      {
+        "type": "action",
+        "description": "Open an active pond record"
+      },
+      {
+        "type": "action",
+        "description": "Inactivate the pond"
+      },
+      {
+        "type": "action",
+        "description": "Confirm the inactivation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the pond is removed from active use"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the pond remains available in history"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC034",
+    "title": "Acknowledge an alert without removing its history",
+    "description": "This verifies that a manager can review an alert or recommendation, open its explanation, and acknowledge it while keeping its history visible.",
+    "category": "Alerts and Explainable Recommendations",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /gestor/dashboard"
+      },
+      {
+        "type": "action",
+        "description": "Open an alert or recommendation"
+      },
+      {
+        "type": "action",
+        "description": "Inspect the explanation details"
+      },
+      {
+        "type": "action",
+        "description": "Acknowledge the item"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the alert explanation is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the item remains available in history"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC035",
+    "title": "Export financial data for external analysis",
+    "description": "This test verifies that an authorized manager can export selected financial data and receive a downloadable report.",
+    "category": "Report and Data Export",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /gestor/financeiro"
+      },
+      {
+        "type": "action",
+        "description": "Select financial data for export"
+      },
+      {
+        "type": "action",
+        "description": "Generate the file"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an exported financial report file is generated"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the export includes the selected financial scope"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC036",
+    "title": "Handle incomplete biometric inputs without calculating indicators",
+    "description": "This verifies that incomplete biometric data cannot be processed and the user sees that the biological indicators are unavailable until required inputs are provided.",
+    "category": "Biological Indicator Calculation",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to the biometric registration page"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the biometric sampling fields leaving a required input empty"
+      },
+      {
+        "type": "action",
+        "description": "Submit the biometric registration"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a validation message is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the indicator results are not displayed"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC037",
+    "title": "Export audit traceability data",
+    "description": "This test verifies that an authorized user can export an audit view within permissions and receive the selected traceability data.",
+    "category": "Report and Data Export",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /gestor/auditoria"
+      },
+      {
+        "type": "action",
+        "description": "Select an audit view within permissions"
+      },
+      {
+        "type": "action",
+        "description": "Export the audit view"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an exported audit file is generated"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the export includes traceability data"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC038",
+    "title": "Show validation for invalid stocking quantity",
+    "description": "Verifies that a manager sees validation feedback when submitting stocking data with an invalid quantity.",
+    "category": "Stocking Registration",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /gestor/viveiros"
+      },
+      {
+        "type": "action",
+        "description": "Start a new cycle"
+      },
+      {
+        "type": "action",
+        "description": "Fill a valid start date into the start date field"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the species or lineage field with a valid value"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the post-larvae quantity field with an invalid quantity"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the origin field with a valid value"
+      },
+      {
+        "type": "action",
+        "description": "Save the stocking record"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a validation error for the stocking data is visible"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC039",
+    "title": "Show validation feedback for missing biometry inputs",
+    "description": "This verifies that attempting to save a biometry record without required inputs shows validation feedback instead of saving the record.",
+    "category": "Biometry Registration and Average Weight Calculation",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /campo/biometria"
+      },
+      {
+        "type": "action",
+        "description": "Select an active cycle"
+      },
+      {
+        "type": "action",
+        "description": "Save the biometry record"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a biometry validation error is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the record was not saved"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC040",
+    "title": "Show unavailable financial indicators when inputs are incomplete",
+    "description": "This verifies that financial indicators clearly show unavailable states when the required operational or sales inputs are missing.",
+    "category": "Financial Records and Indicators",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to the financial page"
+      },
+      {
+        "type": "action",
+        "description": "Review the indicators without registering the required inputs"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify unavailable indicator states are shown"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the financial dashboard remains accessible"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC041",
+    "title": "Prevent removing the last administrator",
+    "description": "This test verifies that the system blocks removal of the final administrator from the organization.",
+    "category": "User, Role, and Parameter Administration",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /gestor/usuarios"
+      },
+      {
+        "type": "action",
+        "description": "Select the last administrator user"
+      },
+      {
+        "type": "action",
+        "description": "Attempt to remove the administrator role"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a validation error is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the administrator role remains assigned"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC042",
+    "title": "Reject invalid biometry entry",
+    "description": "Verifies that a field operator sees validation feedback when biometric sample values are incomplete or inconsistent.",
+    "category": "Biometry Registration",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /campo/biometria"
+      },
+      {
+        "type": "action",
+        "description": "Select an active cycle"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the sample size field with an invalid value"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the sample weights field with inconsistent values"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the uniformity percentage field with a valid value"
+      },
+      {
+        "type": "action",
+        "description": "Submit the biometric measurement"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a validation error for the biometric entry is visible"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC043",
+    "title": "Show validation feedback when simulation inputs are incomplete",
+    "description": "This verifies that submitting a simulation without all required inputs produces validation feedback instead of a result.",
+    "category": "Harvest Decision Simulation",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /gestor/simulacao"
+      },
+      {
+        "type": "action",
+        "description": "Select an active cycle"
+      },
+      {
+        "type": "action",
+        "description": "Run the simulation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a validation error is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify no simulation result is displayed"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC044",
+    "title": "Block incompatible feeding entries with validation",
+    "description": "This verifies that feeding data tied to an incompatible or incomplete cycle context is rejected with clear validation feedback.",
+    "category": "Feeding Plan and Feeding Log",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to the feeding management page"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the feeding form with data that is missing the required cycle context"
+      },
+      {
+        "type": "action",
+        "description": "Submit the feeding entry"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a feeding validation message is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the feeding entry is not saved"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC045",
+    "title": "Block access to audit data outside the permitted scope",
+    "description": "This test verifies that protected audit data is not exposed when a user tries to access events outside their permitted scope.",
+    "category": "Audit and Traceability",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /gestor/auditoria"
+      },
+      {
+        "type": "action",
+        "description": "Attempt to open an out-of-scope audit event"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify protected audit data is not exposed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an access restriction message is visible"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC046",
+    "title": "Reject environmental readings with invalid units or values",
+    "description": "Verifies that a user sees validation feedback when entering an environmental reading with incompatible units or values.",
+    "category": "Environmental Condition Registration",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /campo/manejo"
+      },
+      {
+        "type": "action",
+        "description": "Record an environmental reading"
+      },
+      {
+        "type": "action",
+        "description": "Select a parameter"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the value field with an invalid measurement"
+      },
+      {
+        "type": "action",
+        "description": "Select an invalid unit"
+      },
+      {
+        "type": "action",
+        "description": "Fill a valid timestamp into the timestamp field"
+      },
+      {
+        "type": "action",
+        "description": "Select a valid origin"
+      },
+      {
+        "type": "action",
+        "description": "Save the measurement"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a validation error for the environmental reading is visible"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC047",
+    "title": "Prevent access to protected dashboard data outside scope",
+    "description": "This verifies that selecting an unauthorized organizational scope does not expose protected dashboard data and shows access-denied behavior.",
+    "category": "Integrated Dashboard Monitoring",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /gestor/dashboard"
+      },
+      {
+        "type": "action",
+        "description": "Select a scope outside the authorized organization"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify access denied behavior is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify protected data is not displayed"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC048",
+    "title": "Show an unavailable state for incomplete alert context",
+    "description": "This verifies that an incomplete calculation context is shown as unavailable or incomplete rather than as a final recommendation.",
+    "category": "Alerts and Explainable Recommendations",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /gestor/dashboard"
+      },
+      {
+        "type": "action",
+        "description": "Open an incomplete alert context"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an unavailable or incomplete state is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify no final recommendation is shown"
+      }
+    ],
+    "priority": "Low"
+  }
+]

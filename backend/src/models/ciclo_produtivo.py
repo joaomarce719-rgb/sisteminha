@@ -37,23 +37,38 @@ class CicloProdutivo(AuditMixin, Base):
     data_despesca_real: Mapped[date | None] = mapped_column(Date, nullable=True)
     biomassa_colhida_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
     receita_real_rs: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    tabela_alimentar_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tabelas_alimentares.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     # Relacionamentos
+    tabela_alimentar = relationship("TabelaAlimentar")
     viveiro = relationship("Viveiro", back_populates="ciclos", lazy="selectin")
     biometrias = relationship(
-        "Biometria", back_populates="ciclo", lazy="selectin",
-        order_by="Biometria.data_medicao"
+        "Biometria", back_populates="ciclo",
+        order_by="Biometria.data_medicao",
+        cascade="all, delete-orphan",
     )
     manejos_alimentares = relationship(
-        "ManejoAlimentar", back_populates="ciclo", lazy="selectin",
-        order_by="ManejoAlimentar.data_registro"
+        "ManejoAlimentar", back_populates="ciclo",
+        order_by="ManejoAlimentar.data_registro",
+        cascade="all, delete-orphan",
     )
     custos_operacionais = relationship(
-        "CustoOperacional", back_populates="ciclo", lazy="selectin"
+        "CustoOperacional", back_populates="ciclo",
+        cascade="all, delete-orphan",
     )
     simulacoes = relationship(
-        "SimulacaoDespesca", back_populates="ciclo", lazy="selectin"
+        "SimulacaoDespesca", back_populates="ciclo",
+        cascade="all, delete-orphan",
     )
     rondas_noturnas = relationship(
-        "RondaNoturna", back_populates="ciclo", lazy="selectin"
+        "RondaNoturna", back_populates="ciclo",
+        cascade="all, delete-orphan",
+    )
+    alertas = relationship(
+        "Alerta", back_populates="ciclo", lazy="select",
+        cascade="all, delete-orphan",
     )

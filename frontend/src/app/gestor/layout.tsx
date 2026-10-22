@@ -6,43 +6,45 @@ import Link from "next/link";
 import {
   Shell,
   LayoutDashboard,
-  FlaskConical,
   DollarSign,
-  BarChart3,
   Users,
   Moon,
-  Settings,
   LogOut,
   Menu,
   X,
   ChevronRight,
   TrendingUp,
+  Shield,
+  ShieldCheck,
+  Utensils,
 } from "lucide-react";
-import { clearToken, getStoredUser } from "@/lib/api";
+import { clearToken, isSuperadmin } from "@/lib/api";
+import { useSessao } from "@/lib/sessao";
 
 const NAV_ITEMS = [
   { href: "/gestor/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/gestor/viveiros", label: "Viveiros & Ciclos", icon: Shell },
   { href: "/gestor/simulacao", label: "Simulador ΔV", icon: TrendingUp },
   { href: "/gestor/financeiro", label: "Financeiro", icon: DollarSign },
+  { href: "/gestor/tabelas-alimentares", label: "Tabelas Alimentares", icon: Utensils },
   { href: "/gestor/painel-noturno", label: "Painel Noturno", icon: Moon },
-  { href: "/gestor/usuarios", label: "Usuários", icon: Users },
+  { href: "/campo/manejo", label: "Registro de Campo", icon: Utensils },
+  { href: "/vigia/ronda", label: "Ronda Noturna", icon: Moon },
+  { href: "/gestor/auditoria", label: "Auditoria", icon: ShieldCheck },
+  { href: "/gestor/usuarios", label: "Operadores da Fazenda", icon: Users },
+  { href: "/admin", label: "Painel Superadmin", icon: Shield },
 ];
 
 export default function GestorLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [user, setUser] = useState<{ nome: string; role: string } | null>(null);
+  const { montado, user: sessao } = useSessao();
+  const user = sessao?.role === "GESTOR" ? sessao : null;
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    const stored = getStoredUser();
-    if (!stored || stored.role !== "GESTOR") {
-      router.push("/login");
-      return;
-    }
-    setUser(stored);
-  }, [router]);
+    if (montado && !user) router.push("/login");
+  }, [montado, user, router]);
 
   const handleLogout = () => {
     clearToken();
@@ -63,66 +65,71 @@ export default function GestorLayout({ children }: { children: React.ReactNode }
 
       {/* Sidebar */}
       <aside
-        className={`fixed lg:sticky top-0 left-0 z-50 h-screen w-72 bg-[#0d1321] border-r border-[var(--border-subtle)] flex flex-col transition-transform duration-300 lg:translate-x-0 ${
+        className={`fixed lg:sticky top-0 left-0 z-50 h-screen w-72 bg-[#0c1427] border-r border-slate-800/80 flex flex-col transition-transform duration-300 lg:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         {/* Logo */}
-        <div className="p-6 flex items-center gap-3 border-b border-[var(--border-subtle)]">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-ocean-500 to-shrimp-500 flex items-center justify-center shadow-lg shadow-ocean-500/20">
+        <div className="p-6 flex items-center gap-3 border-b border-slate-800">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-ocean-500 to-sky-400 flex items-center justify-center shadow-lg shadow-ocean-500/20">
             <Shell className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h2 className="font-bold text-base text-[var(--text-primary)]">SAD Carcinicultura</h2>
-            <span className="text-xs text-ocean-400 font-medium">Gestor</span>
+            <h2 className="font-bold text-base text-white">SAD Carcinicultura</h2>
+            <span className="text-xs text-sky-400 font-semibold uppercase tracking-wider">Gestor</span>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="ml-auto lg:hidden text-[var(--text-muted)]"
+            className="ml-auto lg:hidden text-slate-400 hover:text-white"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {NAV_ITEMS.map((item) => {
+        <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
+          {NAV_ITEMS.filter((item) => {
+            if (item.href === "/admin") {
+              return isSuperadmin(user);
+            }
+            return true;
+          }).map((item) => {
             const isActive = pathname === item.href;
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 onClick={() => setSidebarOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
                   isActive
-                    ? "bg-ocean-500/15 text-ocean-400 border border-ocean-500/25"
-                    : "text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)]"
+                    ? "bg-sky-500/15 text-sky-400 border border-sky-500/30 shadow-sm"
+                    : "text-slate-400 hover:bg-white/5 hover:text-slate-100"
                 }`}
               >
                 <item.icon className="w-5 h-5" />
                 {item.label}
-                {isActive && <ChevronRight className="w-4 h-4 ml-auto" />}
+                {isActive && <ChevronRight className="w-4 h-4 ml-auto text-sky-400" />}
               </Link>
             );
           })}
         </nav>
 
         {/* User */}
-        <div className="p-4 border-t border-[var(--border-subtle)]">
+        <div className="p-4 border-t border-slate-800">
           <div className="flex items-center gap-3 px-3 mb-3">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-ocean-600 to-pond-500 flex items-center justify-center text-white font-bold text-sm">
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-sky-600 to-emerald-500 flex items-center justify-center text-white font-bold text-sm">
               {user.nome.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-[var(--text-primary)] truncate">
+              <p className="text-sm font-bold text-white truncate">
                 {user.nome}
               </p>
-              <p className="text-xs text-ocean-400">Gestor / Dono</p>
+              <p className="text-xs text-sky-400">Gestor / Dono</p>
             </div>
           </div>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-2 w-full px-4 py-2.5 rounded-xl text-sm text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/10 transition-all"
+            className="flex items-center gap-2 w-full px-4 py-2.5 rounded-xl text-sm text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all font-semibold"
           >
             <LogOut className="w-4 h-4" />
             Sair
@@ -130,17 +137,17 @@ export default function GestorLayout({ children }: { children: React.ReactNode }
         </div>
       </aside>
 
-      {/* Main */}
-      <main className="flex-1 min-w-0">
+      {/* Main Content Area com fundo limpo enterprise */}
+      <main className="flex-1 min-w-0 bg-[#f8fafc]">
         {/* Top bar (mobile) */}
-        <div className="lg:hidden sticky top-0 z-30 flex items-center gap-3 p-4 bg-[var(--bg-primary)]/95 backdrop-blur-lg border-b border-[var(--border-subtle)]">
+        <div className="lg:hidden sticky top-0 z-30 flex items-center gap-3 p-4 bg-white/95 backdrop-blur-lg border-b border-slate-200">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="p-2 rounded-xl hover:bg-white/5"
+            className="p-2 rounded-xl hover:bg-slate-100"
           >
-            <Menu className="w-5 h-5 text-[var(--text-secondary)]" />
+            <Menu className="w-5 h-5 text-slate-700" />
           </button>
-          <h1 className="font-semibold text-[var(--text-primary)]">SAD Carcinicultura</h1>
+          <h1 className="font-bold text-slate-900">SAD Carcinicultura</h1>
         </div>
 
         <div className="p-4 sm:p-6 lg:p-8">{children}</div>

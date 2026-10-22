@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { ToastProvider, Toaster } from "@/components/ui/toast";
 
 export const metadata: Metadata = {
   title: "SAD Carcinicultura — Sistema de Apoio à Decisão",
@@ -14,7 +15,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body className="antialiased">{children}</body>
+      <body className="antialiased bg-[#f8fafc] text-slate-900 min-h-screen">
+        <ToastProvider>
+          {children}
+          <Toaster />
+        </ToastProvider>
+      </body>
     </html>
   );
 }

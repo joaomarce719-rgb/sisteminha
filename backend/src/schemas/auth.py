@@ -3,7 +3,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 from src.models.enums import RoleUsuario
 
@@ -11,7 +11,20 @@ from src.models.enums import RoleUsuario
 # ── Login ────────────────────────────────────────────
 class LoginRequest(BaseModel):
     email: EmailStr
-    senha: str = Field(..., min_length=6, max_length=128)
+    senha: str = Field(default="", min_length=1, max_length=128)
+    password: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def harmonize_fields(cls, data):
+        if isinstance(data, dict):
+            if not data.get("email") and data.get("username"):
+                data["email"] = data["username"]
+            if not data.get("senha") and data.get("password"):
+                data["senha"] = data["password"]
+            elif not data.get("password") and data.get("senha"):
+                data["password"] = data["senha"]
+        return data
 
 
 class TokenResponse(BaseModel):
@@ -19,6 +32,8 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     role: RoleUsuario
     nome: str
+    email: str | None = None
+    is_superadmin: bool = False
 
 
 class TokenPayload(BaseModel):
@@ -31,11 +46,24 @@ class TokenPayload(BaseModel):
 
 # ── Usuário CRUD ─────────────────────────────────────
 class UsuarioCreate(BaseModel):
-    nome_completo: str = Field(..., min_length=3, max_length=120)
+    nome_completo: str = Field(default="Usuário", min_length=1, max_length=120)
     email: EmailStr
-    senha: str = Field(..., min_length=6, max_length=128)
-    papel: RoleUsuario = RoleUsuario.CAMPO
+    senha: str = Field(default="", min_length=1, max_length=128)
+    password: str | None = None
+    papel: RoleUsuario = RoleUsuario.GESTOR
     telefone_emergencia: str | None = Field(None, max_length=20)
+
+    @model_validator(mode="before")
+    @classmethod
+    def harmonize_create_fields(cls, data):
+        if isinstance(data, dict):
+            if not data.get("nome_completo"):
+                data["nome_completo"] = data.get("name") or data.get("username") or "Usuário"
+            if not data.get("senha") and data.get("password"):
+                data["senha"] = data["password"]
+            elif not data.get("password") and data.get("senha"):
+                data["password"] = data["senha"]
+        return data
 
 
 class UsuarioUpdate(BaseModel):
@@ -53,6 +81,7 @@ class UsuarioResponse(BaseModel):
     telefone_emergencia: str | None
     ativo: bool
     created_at: datetime
+    is_superadmin: bool = False
 
     model_config = {"from_attributes": True}
 

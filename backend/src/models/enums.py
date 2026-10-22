@@ -20,6 +20,7 @@ class StatusCiclo(str, enum.Enum):
     """Estados possíveis de um ciclo produtivo."""
     PLANEJADO = "PLANEJADO"
     ATIVO = "ATIVO"
+    PAUSADO = "PAUSADO"
     FINALIZADO = "FINALIZADO"
     CANCELADO = "CANCELADO"
 
@@ -74,6 +75,20 @@ class StatusEnergia(str, enum.Enum):
     REDE_CONCESSIONARIA = "REDE_CONCESSIONARIA"
     GERADOR_DIESEL = "GERADOR_DIESEL"
     SEM_ENERGIA_QUEDA = "SEM_ENERGIA_QUEDA"
+
+
+# ── Alertas ─────────────────────────────────────────
+class NivelAlerta(str, enum.Enum):
+    """Severidade do alerta."""
+    INFO = "INFO"
+    AVISO = "AVISO"
+    CRITICO = "CRITICO"
+
+
+class StatusAlerta(str, enum.Enum):
+    """Situação de tratamento do alerta (RF-021)."""
+    ABERTO = "ABERTO"
+    RESOLVIDO = "RESOLVIDO"
 
 
 # ── Classificação de Oxigênio (RN-09) ──────────────

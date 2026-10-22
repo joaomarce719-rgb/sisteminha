@@ -1,6 +1,7 @@
 """SAD Carcinicultura — Schemas Pydantic para Simulação de Despesca (Δ V)."""
 
 from datetime import date
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -14,6 +15,10 @@ class SimulacaoRequest(BaseModel):
         None, gt=0,
         description="Se null, busca da tabela de preços vigente"
     )
+    custo_diario_rs: float | None = Field(
+        None, gt=0,
+        description="Se null, usa a média diária dos custos lançados no ciclo (exceto PLs)"
+    )
 
     def model_post_init(self, __context) -> None:
         if self.dias_horizonte not in (7, 10, 15):
@@ -22,6 +27,7 @@ class SimulacaoRequest(BaseModel):
 
 class SimulacaoResponse(BaseModel):
     """Resultado completo da simulação de despesca (RF-06, RN-07)."""
+    simulacao_id: UUID | None = None  # preenchido quando a simulação é registrada
     ciclo_id: UUID
     data_referencia: date
 
@@ -43,8 +49,50 @@ class SimulacaoResponse(BaseModel):
     recomendacao: RecomendacaoDespesca
     justificativa: str
 
+    # Entradas usadas (explicabilidade — RF-022)
+    preco_atual_rs_kg: float
+    preco_futuro_rs_kg: float
+    custo_diario_rs: float
+    premissas: list[str] = Field(default_factory=list)
+
+
+class SimulacaoGenericRequest(BaseModel):
+    """Simulação pela rota global: usa os dados reais do ciclo informado."""
+    ciclo_id: UUID
+    dias_horizonte: int = Field(15, description="Horizonte de projeção: 7, 10 ou 15 dias")
+    preco_kg_customizado: float | None = Field(None, gt=0)
+    custo_diario_rs: float | None = Field(None, gt=0)
+    descricao: str | None = None
+
+    def model_post_init(self, __context) -> None:
+        if self.dias_horizonte not in (7, 10, 15):
+            raise ValueError("dias_horizonte deve ser 7, 10 ou 15")
+
+
+class SimulacaoGenericResponse(BaseModel):
+    id: UUID
+    simulacao_id: UUID
+    ciclo_id: UUID | None = None
+    delta_v: float
+    delta_v_rs: float
+    deltaV: float
+    recomendacao: str
+    decision: str
+    resultado: dict[str, Any]
+    dias_projecao: int
+    peso_medio_projetado_g: float
+    biomassa_projetada_kg: float
+    receita_projetada_rs: float
+    custo_adicional_projetado_rs: float
+    lucro_projetado_rs: float
+    justificativa: str
+    descricao: str | None = None
+
+    model_config = {"from_attributes": True}
+
 
 class SimulacaoComparativaResponse(BaseModel):
     """Comparativo para os 3 horizontes (7, 10, 15 dias)."""
     simulacoes: list[SimulacaoResponse]
     melhor_cenario: SimulacaoResponse | None
+

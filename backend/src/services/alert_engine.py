@@ -6,15 +6,8 @@ alertas visuais, sonoros ou notificações push para operadores e gestores.
 
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from enum import Enum
 
-from src.models.enums import ClassificacaoOxigenio, ComportamentoCamarao
-
-
-class NivelAlerta(str, Enum):
-    INFO = "INFO"
-    AVISO = "AVISO"
-    CRITICO = "CRITICO"
+from src.models.enums import ClassificacaoOxigenio, ComportamentoCamarao, NivelAlerta, StatusEnergia
 
 
 @dataclass
@@ -104,9 +97,11 @@ def verificar_aeracao_noturna(
     taxa_aeracao_pct: float,
     biomassa_estimada_kg_ha: float,
     hora_atual: int,
+    minuto_atual: int = 0,
 ) -> Alerta | None:
     """Gera advertência se aeração < 75% entre 00h e 05h30 com alta biomassa."""
-    if 0 <= hora_atual <= 5 and taxa_aeracao_pct < 75.0 and biomassa_estimada_kg_ha > 2500:
+    na_madrugada = (hora_atual, minuto_atual) <= (5, 30)
+    if na_madrugada and taxa_aeracao_pct < 75.0 and biomassa_estimada_kg_ha > 2500:
         return Alerta(
             nivel=NivelAlerta.AVISO,
             codigo="AERACAO_INSUFICIENTE",
@@ -116,6 +111,31 @@ def verificar_aeracao_noturna(
                 f"Biomassa estimada: {biomassa_estimada_kg_ha:.0f} kg/ha. "
                 f"Recomenda-se ligar aeradores adicionais no período noturno."
             ),
+            timestamp=datetime.now(),
+        )
+    return None
+
+
+def verificar_energia_e_aeradores(
+    fonte_energia: StatusEnergia,
+    falha_mecanica: bool,
+    detalhes_falha: str | None,
+) -> Alerta | None:
+    """Alerta crítico para queda de energia ou falha mecânica de aeradores."""
+    if fonte_energia == StatusEnergia.SEM_ENERGIA_QUEDA:
+        return Alerta(
+            nivel=NivelAlerta.CRITICO,
+            codigo="SEM_ENERGIA",
+            titulo="⚡ Viveiro sem energia",
+            mensagem="Queda de energia na ronda. Acionar gerador e verificar a aeração imediatamente.",
+            timestamp=datetime.now(),
+        )
+    if falha_mecanica:
+        return Alerta(
+            nivel=NivelAlerta.AVISO,
+            codigo="FALHA_AERADOR",
+            titulo="🔧 Falha mecânica em aerador",
+            mensagem=f"Falha relatada pelo vigia: {detalhes_falha or 'sem detalhes'}.",
             timestamp=datetime.now(),
         )
     return None

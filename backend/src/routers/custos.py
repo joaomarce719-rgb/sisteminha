@@ -7,34 +7,65 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from src.database import get_db
+from src.services.escopo import (
+    ciclo_da_organizacao,
+    ids_ciclos_da_organizacao,
+    verificar_ciclo_da_organizacao,
+)
+from src.services.audit import registrar_auditoria, snapshot
 from src.models.custo_operacional import CustoOperacional
 from src.models.enums import RoleUsuario
-from src.schemas.custo import CustoCreate, CustoResumoResponse, CustoResponse
+from src.schemas.custo import CustoCreate, CustoListResponse, CustoResumoResponse, CustoResponse
 from src.services.auth_service import has_role
+from src.services.regras_ciclo import obter_ciclo
 
-router = APIRouter(prefix="/api/v1/ciclos/{ciclo_id}/custos", tags=["Custos Operacionais"])
+router = APIRouter(
+    prefix="/api/v1/ciclos/{ciclo_id}/custos",
+    tags=["Custos Operacionais"],
+    dependencies=[Depends(verificar_ciclo_da_organizacao)],
+)
 
 
+
+@router.post("", response_model=CustoResponse, status_code=201)
 @router.post("/", response_model=CustoResponse, status_code=201)
-async def lancar_custo(
+def lancar_custo(
     ciclo_id: UUID,
     payload: CustoCreate,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
 ):
     """Registra uma despesa operacional vinculada ao ciclo (RF-08)."""
+    obter_ciclo(db, ciclo_id)
     custo = CustoOperacional(
         ciclo_id=ciclo_id,
-        **payload.model_dump(),
+        **payload.model_dump(exclude={"ciclo_id"}),
     )
     db.add(custo)
     db.flush()
+
+    registrar_auditoria(
+        db=db,
+        acao="CRIAR_CUSTO",
+        entidade="CustoOperacional",
+        registro_id=custo.id,
+        usuario=_user,
+        dados_novos={
+            "ciclo_id": str(ciclo_id),
+            "data_lancamento": str(custo.data_lancamento),
+            "categoria": custo.categoria.value,
+            "descricao": custo.descricao,
+            "valor_rs": float(custo.valor_rs),
+        },
+    )
+
     db.refresh(custo)
     return custo
 
 
+@router.get("", response_model=list[CustoResponse])
 @router.get("/", response_model=list[CustoResponse])
-async def listar_custos(
+def listar_custos(
     ciclo_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
@@ -49,7 +80,7 @@ async def listar_custos(
 
 
 @router.get("/resumo", response_model=list[CustoResumoResponse])
-async def resumo_custos(
+def resumo_custos(
     ciclo_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
@@ -73,3 +104,107 @@ async def resumo_custos(
         )
         for row in rows
     ]
+
+
+@router.get("/exportar-csv")
+def exportar_custos_csv(
+    ciclo_id: UUID,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.GESTOR])),
+):
+    """Exporta custos do ciclo em formato CSV delimitado para Excel (RF-025, UC-012)."""
+    import csv
+    import io
+    from fastapi.responses import Response
+
+    result = db.execute(
+        select(CustoOperacional)
+        .where(CustoOperacional.ciclo_id == ciclo_id)
+        .order_by(CustoOperacional.data_lancamento)
+    )
+    custos = result.scalars().all()
+
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=";")
+    writer.writerow(["ID", "Data_Lancamento", "Categoria", "Descricao", "Valor_RS"])
+    for c in custos:
+        writer.writerow([
+            str(c.id),
+            c.data_lancamento.isoformat(),
+            c.categoria.value,
+            c.descricao,
+            f"{float(c.valor_rs):.2f}".replace(".", ","),
+        ])
+
+    registrar_auditoria(
+        db, "EXPORTAR", "CustoOperacional", ciclo_id, _user, dados_novos={"formato": "csv", "registros": len(custos)}
+    )
+    content = output.getvalue().encode("utf-8-sig")
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="custos_ciclo_{str(ciclo_id)[:8]}.csv"'
+        },
+    )
+
+
+global_router = APIRouter(prefix="/api/v1/custos", tags=["Custos Operacionais"])
+
+
+@global_router.post("", response_model=CustoResponse, status_code=201)
+@global_router.post("/", response_model=CustoResponse, status_code=201)
+def lancar_custo_global(
+    payload: CustoCreate,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.GESTOR])),
+):
+    if not payload.ciclo_id:
+        raise HTTPException(status_code=422, detail="ciclo_id é obrigatório.")
+    ciclo_da_organizacao(db, payload.ciclo_id, _user)
+    return lancar_custo(payload.ciclo_id, payload, db, _user)
+
+
+@global_router.get("", response_model=CustoListResponse)
+@global_router.get("/", response_model=CustoListResponse)
+def listar_custos_global(
+    ciclo_id: UUID | None = None,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.GESTOR])),
+):
+    query = select(CustoOperacional).order_by(CustoOperacional.data_lancamento.desc())
+    query = query.where(CustoOperacional.ciclo_id.in_(ids_ciclos_da_organizacao(_user)))
+    if ciclo_id:
+        query = query.where(CustoOperacional.ciclo_id == ciclo_id)
+    custos = db.scalars(query).all()
+    total_rs = sum(float(c.valor_rs) for c in custos)
+    return {
+        "items": custos,
+        "total": len(custos),
+        "summary": {
+            "total_custos_rs": total_rs,
+            "total_valor": total_rs,
+            "quantidade": len(custos),
+            "roa": 0.0,
+            "roe": 0.0,
+        },
+    }
+
+
+@global_router.delete("/{custo_id}", status_code=200)
+def deletar_custo(
+    custo_id: UUID,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.GESTOR])),
+):
+    result = db.execute(select(CustoOperacional).where(CustoOperacional.id == custo_id))
+    custo = result.scalar_one_or_none()
+    if not custo:
+        raise HTTPException(status_code=404, detail="Custo não encontrado.")
+    ciclo_da_organizacao(db, custo.ciclo_id, _user)
+    registrar_auditoria(db, "EXCLUIR", "CustoOperacional", custo.id, _user, dados_anteriores=snapshot(custo))
+    db.delete(custo)
+    db.flush()
+    return {"detail": "Custo excluído com sucesso.", "id": str(custo_id)}
+
+

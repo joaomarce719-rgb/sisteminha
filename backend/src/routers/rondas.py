@@ -8,18 +8,28 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.database import get_db
+from src.services.escopo import (
+    ciclo_da_organizacao,
+    ids_ciclos_da_organizacao,
+    verificar_ciclo_da_organizacao,
+)
+from src.services.audit import registrar_auditoria, snapshot
 from src.models.ciclo_produtivo import CicloProdutivo
 from src.models.enums import RoleUsuario, StatusCiclo
 from src.models.monitoramento_aerador import MonitoramentoAerador
 from src.models.ronda_noturna import RondaNoturna
 from src.models.usuario import Usuario
 from src.schemas.ronda import PainelNoturnoResponse, RondaNoturnaCreate, RondaNoturnaResponse
+from src.models.alerta import Alerta
+from src.routers.alertas import alerta_response
 from src.services.alert_engine import (
     calcular_taxa_aeracao,
     classificar_oxigenio,
     gerar_alerta_oxigenio,
     verificar_aeracao_noturna,
+    verificar_energia_e_aeradores,
 )
+from src.services.decision_engine import calcular_biomassa_kg, calcular_populacao_atual
 from src.services.auth_service import get_current_user, has_role
 
 router = APIRouter(prefix="/api/v1/rondas-noturnas", tags=["Rondas Noturnas"])
@@ -55,18 +65,16 @@ def _build_ronda_response(ronda: RondaNoturna) -> RondaNoturnaResponse:
     )
 
 
+@router.post("", response_model=RondaNoturnaResponse, status_code=201)
 @router.post("/", response_model=RondaNoturnaResponse, status_code=201)
-async def registrar_ronda(
+def registrar_ronda(
     payload: RondaNoturnaCreate,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(has_role([RoleUsuario.VIGIA, RoleUsuario.GESTOR])),
 ):
     """Registra ronda noturna com parâmetros de água e aeradores (RF-12, RF-13)."""
     # Validar ciclo
-    result = db.execute(select(CicloProdutivo).where(CicloProdutivo.id == payload.ciclo_id))
-    ciclo = result.scalar_one_or_none()
-    if not ciclo:
-        raise HTTPException(status_code=404, detail="Ciclo não encontrado.")
+    ciclo = ciclo_da_organizacao(db, payload.ciclo_id, current_user)
     if ciclo.status != StatusCiclo.ATIVO:
         raise HTTPException(status_code=400, detail="Ciclo não está ativo.")
 
@@ -104,18 +112,63 @@ async def registrar_ronda(
     db.flush()
     db.refresh(ronda)
 
-    # Gerar alertas
-    alerta = gerar_alerta_oxigenio(
-        float(ronda.oxigenio_dissolvido_mg_l),
-        ronda.comportamento,
-        str(ciclo.viveiro_id),
+    # Gerar e persistir alertas (RF-021)
+    candidatos = [
+        gerar_alerta_oxigenio(
+            float(ronda.oxigenio_dissolvido_mg_l), ronda.comportamento, str(ciclo.viveiro_id)
+        ),
+        verificar_aeracao_noturna(
+            calcular_taxa_aeracao(payload.aeradores_ligados, payload.aeradores_instalados),
+            _biomassa_estimada_kg_ha(ciclo),
+            payload.data_hora_ronda.hour,
+            payload.data_hora_ronda.minute,
+        ),
+        verificar_energia_e_aeradores(
+            payload.fonte_energia, payload.falha_mecanica_detectada, payload.detalhes_falha
+        ),
+    ]
+    alertas = []
+    for a in candidatos:
+        if a is None:
+            continue
+        alerta = Alerta(
+            ciclo_id=ciclo.id,
+            viveiro_id=ciclo.viveiro_id,
+            ronda_id=ronda.id,
+            nivel=a.nivel,
+            codigo=a.codigo,
+            titulo=a.titulo,
+            mensagem=a.mensagem,
+        )
+        db.add(alerta)
+        alertas.append(alerta)
+    db.flush()
+
+    registrar_auditoria(
+        db, "CRIAR", "RondaNoturna", ronda.id, current_user,
+        dados_novos={**snapshot(ronda), "alertas": [a.codigo for a in alertas]},
     )
+    resposta = _build_ronda_response(ronda)
+    resposta.alertas = [alerta_response(a) for a in alertas]
+    return resposta
 
-    return _build_ronda_response(ronda)
+
+def _biomassa_estimada_kg_ha(ciclo: CicloProdutivo) -> float:
+    """Biomassa viva estimada por hectare (0 se ainda não há biometria)."""
+    biometrias = sorted(ciclo.biometrias, key=lambda b: b.data_medicao)
+    if not biometrias or not ciclo.viveiro.area_util_m2:
+        return 0.0
+    sobrevivencia = 100.0
+    for m in sorted(ciclo.manejos_alimentares, key=lambda m: m.data_registro):
+        if m.taxa_sobrevivencia_estimada_fuzzy is not None:
+            sobrevivencia = m.taxa_sobrevivencia_estimada_fuzzy
+    populacao = calcular_populacao_atual(ciclo.quantidade_pos_larvas, sobrevivencia)
+    biomassa = calcular_biomassa_kg(populacao, biometrias[-1].peso_medio_g)
+    return biomassa / (ciclo.viveiro.area_util_m2 / 10_000)
 
 
-@router.get("/ciclo/{ciclo_id}", response_model=list[RondaNoturnaResponse])
-async def listar_rondas_ciclo(
+@router.get("/ciclo/{ciclo_id}", response_model=list[RondaNoturnaResponse], dependencies=[Depends(verificar_ciclo_da_organizacao)])
+def listar_rondas_ciclo(
     ciclo_id: UUID,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.VIGIA, RoleUsuario.GESTOR])),
@@ -131,7 +184,7 @@ async def listar_rondas_ciclo(
 
 
 @router.get("/painel-noturno", response_model=list[PainelNoturnoResponse])
-async def painel_noturno(
+def painel_noturno(
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
 ):
@@ -140,7 +193,10 @@ async def painel_noturno(
 
     result = db.execute(
         select(RondaNoturna)
-        .where(RondaNoturna.data_hora_ronda >= corte)
+        .where(
+            RondaNoturna.data_hora_ronda >= corte,
+            RondaNoturna.ciclo_id.in_(ids_ciclos_da_organizacao(_user)),
+        )
         .order_by(RondaNoturna.data_hora_ronda)
     )
     rondas = result.scalars().all()
