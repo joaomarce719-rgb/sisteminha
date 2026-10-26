@@ -51,6 +51,7 @@ export interface CicloProdutivo {
   data_povoamento: string;
   quantidade_pos_larvas: number;
   custo_aquisicao_pl: number;
+  peso_medio_pl_g?: number | null;
   laboratorio_origem: string | null;
   status: StatusCiclo;
   tabela_alimentar_id?: string | null;

@@ -124,8 +124,9 @@ class TestCalculos(unittest.TestCase):
         self.assertAlmostEqual(engine.calcular_ganho_semanal(0.2), 1.4)
 
     def test_clifford_interpolacao_exata_implementada(self):
-        # Caracterização dos 5 nós atuais, não validação da tabela técnica completa.
-        self.assertAlmostEqual(engine.taxa_alimentar_clifford(3.5), 6.10)
+        # Os 19 nós da Tabela 1 (Clifford, 1992); entre nós, interpolação linear.
+        self.assertAlmostEqual(engine.taxa_alimentar_clifford(3.0), 6.13)
+        self.assertAlmostEqual(engine.taxa_alimentar_clifford(3.5), 5.815)
 
     def test_tabela_customizada_nao_ordenada(self):
         self.assertAlmostEqual(engine.taxa_alimentar(2, [(3, 7), (1, 9.5)]), 8.25)

@@ -19,16 +19,13 @@ from src.schemas.tabela_alimentar import (
     TabelaAlimentarUpdate,
 )
 from src.services.audit import registrar_auditoria
+from src.services.decision_engine import _CLIFFORD_POINTS
 
 router = APIRouter(prefix="/api/v1/tabelas-alimentares", tags=["Tabelas Alimentares"])
 
-# Pontos padrão de Clifford (1992)
+# Pontos padrão de Clifford (1992), da mesma tabela usada pelo motor de decisão
 _CLIFFORD_DEFAULT_FAIXAS = [
-    {"peso_g": 2.0, "taxa_pct": 7.15},
-    {"peso_g": 5.0, "taxa_pct": 5.05},
-    {"peso_g": 10.0, "taxa_pct": 3.88},
-    {"peso_g": 15.0, "taxa_pct": 3.33},
-    {"peso_g": 20.0, "taxa_pct": 2.98},
+    {"peso_g": float(peso), "taxa_pct": float(taxa)} for peso, taxa in _CLIFFORD_POINTS
 ]
 
 

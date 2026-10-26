@@ -99,6 +99,7 @@ def criar_ciclo(
             "data_povoamento": str(ciclo.data_povoamento),
             "quantidade_pos_larvas": ciclo.quantidade_pos_larvas,
             "custo_aquisicao_pl": float(ciclo.custo_aquisicao_pl),
+            "peso_medio_pl_g": ciclo.peso_medio_pl_g,
             "laboratorio_origem": ciclo.laboratorio_origem,
         },
     )
@@ -299,14 +300,9 @@ def metricas_atuais(
 
     # População e biomassa
     pop_atual = de.calcular_populacao_atual(ciclo.quantidade_pos_larvas, taxa_sobrev)
-    if peso_medio is not None:
-        biomassa_atual = de.calcular_biomassa_kg(pop_atual, peso_medio)
-        biomassa_inicial = de.calcular_biomassa_kg(
-            ciclo.quantidade_pos_larvas, biometrias[0].peso_medio_g
-        )
-    else:
-        biomassa_atual = None
-        biomassa_inicial = None
+    biomassa_atual = de.calcular_biomassa_kg(pop_atual, peso_medio) if peso_medio is not None else None
+    # Biomassa inicial = biomassa no povoamento (PLs × peso da PL); sem o peso, considerada desprezível
+    biomassa_inicial = de.calcular_biomassa_kg(ciclo.quantidade_pos_larvas, ciclo.peso_medio_pl_g or 0.0)
 
     # Ração acumulada
     racao_total = sum(m.quantidade_racao_kg for m in manejos)
@@ -314,7 +310,7 @@ def metricas_atuais(
     # FCA
     fca = None
     class_fca = None
-    if biomassa_atual is not None and biomassa_inicial is not None:
+    if biomassa_atual is not None:
         fca = de.calcular_fca(racao_total, biomassa_atual, biomassa_inicial)
         class_fca = de.classificar_fca(fca)
 

@@ -19,12 +19,12 @@ from src.models.enums import ClassificacaoFCA, RecomendacaoDespesca
 
 # ── Tabela de Clifford (1992) — RN-04 ──────────────
 # Pontos de referência: peso (g) → taxa alimentar (%)
+# Tabela 1 do documento de referência (adaptado de Clifford, 1992), de 2 g a 20 g
 _CLIFFORD_POINTS = np.array([
-    [2.0, 7.15],
-    [5.0, 5.05],
-    [10.0, 3.88],
-    [15.0, 3.33],
-    [20.0, 2.98],
+    [2.0, 7.15], [3.0, 6.13], [4.0, 5.50], [5.0, 5.05], [6.0, 4.71],
+    [7.0, 4.44], [8.0, 4.22], [9.0, 4.04], [10.0, 3.88], [11.0, 3.74],
+    [12.0, 3.62], [13.0, 3.51], [14.0, 3.42], [15.0, 3.33], [16.0, 3.25],
+    [17.0, 3.17], [18.0, 3.10], [19.0, 3.04], [20.0, 2.98],
 ])
 _CLIFFORD_PESOS = _CLIFFORD_POINTS[:, 0]
 _CLIFFORD_TAXAS = _CLIFFORD_POINTS[:, 1]

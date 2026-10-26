@@ -14,6 +14,7 @@ class CicloCreate(BaseModel):
     data_povoamento: date
     quantidade_pos_larvas: int = Field(..., gt=0)
     custo_aquisicao_pl: float = Field(..., ge=0)
+    peso_medio_pl_g: float | None = Field(None, ge=0, le=5)
     laboratorio_origem: str | None = Field(None, max_length=120)
     tabela_alimentar_id: UUID | None = None
 
@@ -38,6 +39,7 @@ class CicloResponse(BaseModel):
     data_inicio: date | None = None
     quantidade_pos_larvas: int
     custo_aquisicao_pl: float
+    peso_medio_pl_g: float | None = None
     laboratorio_origem: str | None
     status: StatusCiclo
     tabela_alimentar_id: UUID | None = None
@@ -65,6 +67,7 @@ class CicloResponse(BaseModel):
             "data_inicio": data.data_povoamento,
             "quantidade_pos_larvas": data.quantidade_pos_larvas,
             "custo_aquisicao_pl": data.custo_aquisicao_pl,
+            "peso_medio_pl_g": data.peso_medio_pl_g,
             "laboratorio_origem": data.laboratorio_origem,
             "status": data.status,
             "tabela_alimentar_id": data.tabela_alimentar_id,
