@@ -231,7 +231,8 @@ export const custosApi = {
 
 // ── Preços ─────────────────────────────────────────────
 export const precosApi = {
-  listar: () => apiFetch<PrecoMercado[]>("/precos-mercado/"),
+  listar: (apenasVigentes = true) =>
+    apiFetch<PrecoMercado[]>(`/precos-mercado/?vigentes=${apenasVigentes}`),
   criar: (data: Payload) =>
     apiFetch<PrecoMercado>("/precos-mercado/", { method: "POST", body: JSON.stringify(data) }),
   atualizar: (id: string, data: Payload) =>

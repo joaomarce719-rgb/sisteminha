@@ -50,7 +50,9 @@ export default function SimulacaoPage() {
   const [custoDiario, setCustoDiario] = useState("");
   const [customResult, setCustomResult] = useState<SimulacaoResponse | null>(null);
   const [customLoading, setCustomLoading] = useState(false);
-  const [pesoAtual, setPesoAtual] = useState<number | null>(null);
+  const [pesoInfo, setPesoInfo] = useState<{ cicloId: string; peso: number | null } | null>(null);
+  // Só vale o peso do ciclo selecionado: ao trocar de ciclo o valor antigo não aparece
+  const pesoAtual = pesoInfo?.cicloId === selectedCiclo ? pesoInfo.peso : null;
 
   useEffect(() => {
     async function load() {
@@ -76,8 +78,8 @@ export default function SimulacaoPage() {
     let atual = true;
     ciclosApi
       .metricas(selectedCiclo)
-      .then((m) => atual && setPesoAtual(m.peso_medio_atual_g))
-      .catch(() => atual && setPesoAtual(null));
+      .then((m) => atual && setPesoInfo({ cicloId: selectedCiclo, peso: m.peso_medio_atual_g }))
+      .catch(() => atual && setPesoInfo({ cicloId: selectedCiclo, peso: null }));
     return () => {
       atual = false;
     };

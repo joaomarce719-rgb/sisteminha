@@ -58,7 +58,7 @@ export default function TabelaPrecosCard({ pesoAtualG, onAlterado }: Props) {
 
   const recarregar = useCallback(async () => {
     try {
-      setPrecos(await precosApi.listar());
+      setPrecos(await precosApi.listar(false));
     } catch (err) {
       toast.error("Não foi possível carregar a tabela de preços", mensagemErro(err, "Tente novamente"));
     }
@@ -68,8 +68,8 @@ export default function TabelaPrecosCard({ pesoAtualG, onAlterado }: Props) {
     let ativo = true;
     async function carregar() {
       try {
-        const lista = await precosApi.listar();
-        if (ativo) setPrecos(lista);
+        const todas = await precosApi.listar(false);
+        if (ativo) setPrecos(todas);
       } catch (err) {
         toast.error("Não foi possível carregar a tabela de preços", mensagemErro(err, "Tente novamente"));
       } finally {
@@ -82,18 +82,34 @@ export default function TabelaPrecosCard({ pesoAtualG, onAlterado }: Props) {
     };
   }, []);
 
+  // O servidor só usa faixas vigentes hoje; futuras e encerradas aparecem esmaecidas na lista
+  const hojeStr = hoje();
+  const situacao = (p: PrecoMercado): "vigente" | "futura" | "encerrada" =>
+    p.vigencia_inicio > hojeStr ? "futura" : p.vigencia_fim && p.vigencia_fim < hojeStr ? "encerrada" : "vigente";
+  const ordemSituacao = { vigente: 0, futura: 1, encerrada: 2 } as const;
+  const lista = [...precos].sort(
+    (a, b) =>
+      ordemSituacao[situacao(a)] - ordemSituacao[situacao(b)] || a.faixa_gramatura_min - b.faixa_gramatura_min
+  );
+  const vigentes = precos.filter((p) => situacao(p) === "vigente");
+
   // Mesma regra do servidor: na divisa entre duas faixas vale a de cima
   const faixaDoPeso =
     pesoAtualG == null
       ? undefined
-      : precos
+      : vigentes
           .filter((p) => p.faixa_gramatura_min <= pesoAtualG && pesoAtualG <= p.faixa_gramatura_max)
           .sort((a, b) => b.faixa_gramatura_min - a.faixa_gramatura_min)[0];
 
   const preencherComPesoAtual = () => {
     if (pesoAtualG == null) return;
     const min = Math.floor(pesoAtualG);
-    setForm((f) => ({ ...f, min: String(min), max: String(min + 2) }));
+    // Não invade a faixa seguinte (evita o erro de sobreposição)
+    const proximas = precos
+      .filter((p) => situacao(p) !== "encerrada" && p.faixa_gramatura_min > min)
+      .map((p) => p.faixa_gramatura_min);
+    const max = Math.min(min + 2, ...proximas);
+    setForm((f) => ({ ...f, min: String(min), max: String(max) }));
     document.getElementById("preco-min")?.focus();
   };
 
@@ -175,7 +191,7 @@ export default function TabelaPrecosCard({ pesoAtualG, onAlterado }: Props) {
             <Tag className="w-4 h-4 text-sky-600" />
             Tabela de Preços de Mercado
           </CardTitle>
-          <Badge variant="secondary">{precos.length} {precos.length === 1 ? "faixa vigente" : "faixas vigentes"}</Badge>
+          <Badge variant="secondary">{vigentes.length} {vigentes.length === 1 ? "faixa vigente" : "faixas vigentes"}</Badge>
         </div>
         <p className="text-xs text-slate-500 mt-1">
           Preço do kg pelo peso do camarão. A simulação usa a faixa do peso atual do lote (despescar hoje) e a do peso
@@ -221,14 +237,15 @@ export default function TabelaPrecosCard({ pesoAtualG, onAlterado }: Props) {
           </p>
         ) : (
           <div className="rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
-            {precos.map((p) => {
+            {lista.map((p) => {
+              const sit = situacao(p);
               const aplicada = faixaDoPeso?.id === p.id;
               const editando = editandoId === p.id;
               return (
                 <div
                   key={p.id}
                   className={`grid grid-cols-2 sm:grid-cols-[1.3fr_1fr_1.3fr_auto] items-center gap-x-3 gap-y-1 px-3 py-2.5 text-sm ${
-                    aplicada ? "bg-emerald-50/60" : "bg-white"
+                    aplicada ? "bg-emerald-50/60" : sit === "vigente" ? "bg-white" : "bg-slate-50 text-slate-500"
                   }`}
                 >
                   <div className="font-bold text-slate-900 tabular-nums">
@@ -238,13 +255,18 @@ export default function TabelaPrecosCard({ pesoAtualG, onAlterado }: Props) {
                         peso atual
                       </Badge>
                     )}
+                    {sit !== "vigente" && (
+                      <Badge variant="secondary" className="ml-2 align-middle">
+                        {sit}
+                      </Badge>
+                    )}
                   </div>
 
                   <div className="tabular-nums">
                     {editando ? (
                       <Input
                         type="number"
-                        step="0.5"
+                        step="any"
                         min="0"
                         value={precoEditado}
                         onChange={(e) => setPrecoEditado(e.target.value)}
@@ -307,15 +329,15 @@ export default function TabelaPrecosCard({ pesoAtualG, onAlterado }: Props) {
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             <div>
               <Label htmlFor="preco-min">Peso mínimo (g)</Label>
-              <Input id="preco-min" type="number" step="0.5" min="0" inputMode="decimal" value={form.min} onChange={campo("min")} placeholder="Ex: 12" className="mt-1.5" />
+              <Input id="preco-min" type="number" step="any" min="0" inputMode="decimal" value={form.min} onChange={campo("min")} placeholder="Ex: 12" className="mt-1.5" />
             </div>
             <div>
               <Label htmlFor="preco-max">Peso máximo (g)</Label>
-              <Input id="preco-max" type="number" step="0.5" min="0" inputMode="decimal" value={form.max} onChange={campo("max")} placeholder="Ex: 14" className="mt-1.5" />
+              <Input id="preco-max" type="number" step="any" min="0" inputMode="decimal" value={form.max} onChange={campo("max")} placeholder="Ex: 14" className="mt-1.5" />
             </div>
             <div>
               <Label htmlFor="preco-valor">Preço (R$/kg)</Label>
-              <Input id="preco-valor" type="number" step="0.5" min="0" inputMode="decimal" value={form.preco} onChange={campo("preco")} placeholder="Ex: 24.50" className="mt-1.5" />
+              <Input id="preco-valor" type="number" step="any" min="0" inputMode="decimal" value={form.preco} onChange={campo("preco")} placeholder="Ex: 24.50" className="mt-1.5" />
             </div>
             <div>
               <Label htmlFor="preco-inicio">Vigência desde</Label>
