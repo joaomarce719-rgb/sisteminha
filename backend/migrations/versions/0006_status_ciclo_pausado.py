@@ -6,6 +6,12 @@ retomar ciclo). Sem ele, criar ou pausar um ciclo falha com
 "invalid input value for enum status_ciclo". Bancos criados pela revisão 0001
 já têm o valor, e o IF NOT EXISTS torna a operação segura nos dois casos.
 
+Roda dentro da transação da migração, sem autocommit_block: o Postgres 12 ou
+mais novo aceita ADD VALUE em transação (o valor só não pode ser usado nela),
+e o autocommit_block do Alembic falha quando a conexão já está numa transação
+aberta por quem chama, como em executar_migracoes (src/database.py). No
+Postgres 11 ou mais antigo, rode o ALTER TYPE à mão fora de transação.
+
 No SQLite não há tipo enumerado nativo (a coluna é texto com CHECK gerado dos
 modelos), então não há o que fazer. O Postgres não remove valor de enum, por
 isso o downgrade é vazio; manter um valor a mais é inofensivo.
@@ -27,9 +33,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     if op.get_bind().dialect.name != "postgresql":
         return
-    # ADD VALUE não pode rodar dentro da transação da migração em todas as versões do Postgres
-    with op.get_context().autocommit_block():
-        op.execute("ALTER TYPE status_ciclo ADD VALUE IF NOT EXISTS 'PAUSADO'")
+    op.execute("ALTER TYPE status_ciclo ADD VALUE IF NOT EXISTS 'PAUSADO'")
 
 
 def downgrade() -> None:

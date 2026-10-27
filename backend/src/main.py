@@ -4,6 +4,7 @@ Registra todos os routers, configura CORS, e expõe a documentação
 Swagger/OpenAPI em /docs e /redoc (RNF-06).
 """
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -41,7 +42,7 @@ async def lifespan(app: FastAPI):
     """Lifecycle: cria tabelas no startup (dev)."""
     if settings.app_debug:
         init_db()
-    verificar_enums_do_banco()
+    await asyncio.to_thread(verificar_enums_do_banco)  # consulta síncrona: fora do event loop
     yield
 
 

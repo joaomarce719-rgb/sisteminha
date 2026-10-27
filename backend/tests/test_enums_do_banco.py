@@ -5,7 +5,9 @@ PAUSADO em status_ciclo, o que derrubava a criação de ciclos), e o SQLite dos 
 """
 
 import logging
+from types import SimpleNamespace
 
+import pytest
 from sqlalchemy import text
 
 from src import database
@@ -92,7 +94,48 @@ def test_verificacao_no_sqlite_e_silenciosa(caplog):
     assert not caplog.records
 
 
+def _head_das_migracoes() -> str:
+    from pathlib import Path
+
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    raiz = Path(__file__).resolve().parents[1]
+    cfg = Config(str(raiz / "alembic.ini"))
+    cfg.set_main_option("script_location", str(raiz / "migrations"))
+    return ScriptDirectory.from_config(cfg).get_current_head()
+
+
 def test_banco_de_teste_esta_na_ultima_revisao(client):
-    # O app sobe e aplica as migrações (inclusive a 0006, que no SQLite não faz nada)
+    # O app sobe e aplica as migrações até a mais nova (no SQLite a 0006 não faz nada)
     with database.engine.connect() as conn:
-        assert conn.execute(text("select version_num from alembic_version")).scalar() == "0006"
+        assert conn.execute(text("select version_num from alembic_version")).scalar() == _head_das_migracoes()
+
+
+def _migracao_0006():
+    import importlib.util
+    from pathlib import Path
+
+    caminho = Path(__file__).resolve().parents[1] / "migrations" / "versions" / "0006_status_ciclo_pausado.py"
+    spec = importlib.util.spec_from_file_location("migracao_0006", caminho)
+    modulo = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(modulo)
+    return modulo
+
+
+def test_migracao_0006_no_postgres_so_acrescenta_o_valor_sem_autocommit(monkeypatch):
+    """O autocommit_block do Alembic falha quando executar_migracoes já abriu a transação (AssertionError)."""
+    modulo = _migracao_0006()
+    executados = []
+    monkeypatch.setattr(modulo.op, "get_bind", lambda: SimpleNamespace(dialect=SimpleNamespace(name="postgresql")))
+    monkeypatch.setattr(modulo.op, "execute", executados.append)
+    monkeypatch.setattr(modulo.op, "get_context", lambda: pytest.fail("não usar autocommit_block na 0006"))
+    modulo.upgrade()
+    assert executados == ["ALTER TYPE status_ciclo ADD VALUE IF NOT EXISTS 'PAUSADO'"]
+
+
+def test_migracao_0006_no_sqlite_nao_faz_nada(monkeypatch):
+    modulo = _migracao_0006()
+    monkeypatch.setattr(modulo.op, "get_bind", lambda: SimpleNamespace(dialect=SimpleNamespace(name="sqlite")))
+    monkeypatch.setattr(modulo.op, "execute", lambda *_: pytest.fail("SQLite não tem enum nativo"))
+    modulo.upgrade()
