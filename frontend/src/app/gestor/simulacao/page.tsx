@@ -30,6 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/toast";
+import TabelaPrecosCard from "./tabela-precos";
 
 function fmtMoney(v: number) {
   return `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -49,6 +50,7 @@ export default function SimulacaoPage() {
   const [custoDiario, setCustoDiario] = useState("");
   const [customResult, setCustomResult] = useState<SimulacaoResponse | null>(null);
   const [customLoading, setCustomLoading] = useState(false);
+  const [pesoAtual, setPesoAtual] = useState<number | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -67,6 +69,19 @@ export default function SimulacaoPage() {
     }
     load();
   }, []);
+
+  // Peso atual do lote: define qual faixa da tabela de preços se aplica
+  useEffect(() => {
+    if (!selectedCiclo) return;
+    let atual = true;
+    ciclosApi
+      .metricas(selectedCiclo)
+      .then((m) => atual && setPesoAtual(m.peso_medio_atual_g))
+      .catch(() => atual && setPesoAtual(null));
+    return () => {
+      atual = false;
+    };
+  }, [selectedCiclo]);
 
   const getViveiroName = (vId: string) =>
     viveiros.find((v) => v.id === vId)?.identificacao || "—";
@@ -203,6 +218,15 @@ export default function SimulacaoPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* ── Tabela de preços: a simulação depende dela para calcular a receita ── */}
+          <TabelaPrecosCard
+            pesoAtualG={pesoAtual}
+            onAlterado={() => {
+              setResult(null);
+              setCustomResult(null);
+            }}
+          />
 
           {/* ── Card de Decisão Executiva em Destaque ── */}
           {result && melhorCenario && (
@@ -434,9 +458,10 @@ export default function SimulacaoPage() {
                     min="0"
                     value={customPreco}
                     onChange={(e) => setCustomPreco(e.target.value)}
-                    placeholder="Usar tabela padrão"
+                    placeholder="Usar tabela de preços"
                     className="mt-1.5"
                   />
+                  <p className="mt-1 text-[11px] text-slate-400">Preço esperado ao despescar depois do horizonte.</p>
                 </div>
 
                 <div className="w-full sm:w-56">
@@ -447,9 +472,10 @@ export default function SimulacaoPage() {
                     min="0"
                     value={custoDiario}
                     onChange={(e) => setCustoDiario(e.target.value)}
-                    placeholder="Média dos custos lançados"
+                    placeholder="Ração de hoje + custos fixos"
                     className="mt-1.5"
                   />
+                  <p className="mt-1 text-[11px] text-slate-400">Vazio: o sistema estima pelos custos lançados.</p>
                 </div>
 
                 <Button

@@ -234,6 +234,9 @@ export const precosApi = {
   listar: () => apiFetch<PrecoMercado[]>("/precos-mercado/"),
   criar: (data: Payload) =>
     apiFetch<PrecoMercado>("/precos-mercado/", { method: "POST", body: JSON.stringify(data) }),
+  atualizar: (id: string, data: Payload) =>
+    apiFetch<PrecoMercado>(`/precos-mercado/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  excluir: (id: string) => apiFetch<void>(`/precos-mercado/${id}`, { method: "DELETE" }),
 };
 
 // ── Simulação ──────────────────────────────────────────
