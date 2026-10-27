@@ -106,7 +106,13 @@ async function apiFetch<T>(
   }
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "Erro desconhecido" }));
+    // Resposta sem JSON (ex.: erro 500 do servidor): o código ajuda a localizar o problema
+    const body = await res.json().catch(() => ({
+      detail:
+        res.status >= 500
+          ? `Erro interno do servidor (código ${res.status}). Tente novamente ou avise o suporte.`
+          : `Erro ${res.status}`,
+    }));
     throw new Error(body.detail || `Erro ${res.status}`);
   }
 

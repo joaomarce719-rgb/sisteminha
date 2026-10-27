@@ -193,11 +193,11 @@ function IniciarCicloDialog({
             inputMode="decimal"
             value={form.peso_medio_pl_g}
             onChange={(e) => setForm({ ...form, peso_medio_pl_g: e.target.value })}
-            placeholder="Ex: 0.002"
+            placeholder="Ex: 0.01"
             className="mt-1"
           />
           <p className="text-xs text-slate-500 mt-1">
-            Base da biomassa inicial no cálculo do FCA. Se ficar vazio, a biomassa inicial é considerada desprezível.
+            Base da biomassa inicial no cálculo do FCA. Uma PL recém-saída do laboratório pesa cerca de 0.01 g; juvenis de berçário pesam mais. Se ficar vazio, a biomassa inicial é considerada desprezível.
           </p>
         </div>
 

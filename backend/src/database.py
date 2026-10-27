@@ -1,7 +1,7 @@
 import logging
 import sqlite3
 from contextlib import contextmanager
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, Session
 
 from src.config import get_settings
@@ -135,6 +135,58 @@ def conexao_para_migracao():
             if sqlite:
                 conn.exec_driver_sql("PRAGMA foreign_keys=ON")
                 conn.commit()
+
+
+def enums_do_codigo() -> dict[str, list[str]]:
+    """Tipos enumerados nativos declarados nos modelos: nome do tipo → valores."""
+    import src.models  # noqa: F401  (registra as tabelas no metadata)
+    from sqlalchemy import Enum
+
+    tipos: dict[str, list[str]] = {}
+    for tabela in Base.metadata.tables.values():
+        for coluna in tabela.columns:
+            tipo = coluna.type
+            if isinstance(tipo, Enum) and tipo.name and tipo.native_enum:
+                tipos[tipo.name] = list(tipo.enums)
+    return tipos
+
+
+def diferencas_enums(banco: dict[str, list[str]], codigo: dict[str, list[str]]) -> list[str]:
+    """Descreve os tipos enumerados do código que o banco não tem ou tem incompletos."""
+    problemas = []
+    for nome, valores in sorted(codigo.items()):
+        if nome not in banco:
+            problemas.append(f"o tipo '{nome}' não existe no banco")
+            continue
+        faltam = [v for v in valores if v not in banco[nome]]
+        if faltam:
+            problemas.append(f"o tipo '{nome}' não tem os valores {', '.join(faltam)}")
+    return problemas
+
+
+def verificar_enums_do_banco() -> None:
+    """No Postgres, registra um erro se algum tipo enumerado estiver atrasado em relação ao código.
+
+    Bancos criados antes do Alembic podem ter listas de valores antigas, e o SQLite dos testes não
+    acusa isso. Não derruba a aplicação: só avisa para rodar `alembic upgrade head`.
+    """
+    if engine.dialect.name != "postgresql":
+        return
+    try:
+        with engine.connect() as conn:
+            linhas = conn.execute(text(
+                "select t.typname, e.enumlabel from pg_type t "
+                "join pg_enum e on e.enumtypid = t.oid "
+                "join pg_namespace n on n.oid = t.typnamespace "
+                "where n.nspname = current_schema() order by t.typname, e.enumsortorder"
+            ))
+            banco: dict[str, list[str]] = {}
+            for tipo, rotulo in linhas:
+                banco.setdefault(tipo, []).append(rotulo)
+        for problema in diferencas_enums(banco, enums_do_codigo()):
+            logger.error("Banco desatualizado: %s. Rode `alembic upgrade head`.", problema)
+    except Exception:
+        logger.exception("Não foi possível verificar os tipos enumerados do banco.")
 
 
 def init_db() -> None:
