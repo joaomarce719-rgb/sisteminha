@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, model_validator
 
 from src.models.enums import StatusCiclo
+from src.schemas.manejo_alimentar import ConfrontoVivosResponse
 
 
 class CicloCreate(BaseModel):
@@ -14,6 +15,7 @@ class CicloCreate(BaseModel):
     data_povoamento: date
     quantidade_pos_larvas: int = Field(..., gt=0)
     custo_aquisicao_pl: float = Field(..., ge=0)
+    peso_medio_pl_g: float | None = Field(None, ge=0, le=5)
     laboratorio_origem: str | None = Field(None, max_length=120)
     tabela_alimentar_id: UUID | None = None
 
@@ -38,6 +40,7 @@ class CicloResponse(BaseModel):
     data_inicio: date | None = None
     quantidade_pos_larvas: int
     custo_aquisicao_pl: float
+    peso_medio_pl_g: float | None = None
     laboratorio_origem: str | None
     status: StatusCiclo
     tabela_alimentar_id: UUID | None = None
@@ -65,6 +68,7 @@ class CicloResponse(BaseModel):
             "data_inicio": data.data_povoamento,
             "quantidade_pos_larvas": data.quantidade_pos_larvas,
             "custo_aquisicao_pl": data.custo_aquisicao_pl,
+            "peso_medio_pl_g": data.peso_medio_pl_g,
             "laboratorio_origem": data.laboratorio_origem,
             "status": data.status,
             "tabela_alimentar_id": data.tabela_alimentar_id,
@@ -89,6 +93,8 @@ class MetricasAtuaisResponse(BaseModel):
     # População e biomassa
     populacao_inicial: int
     taxa_sobrevivencia_fuzzy_pct: float
+    # Vivos pela contagem de mortos x vivos pela alimentação
+    confronto_vivos: ConfrontoVivosResponse | None = None
     populacao_estimada: int
     peso_medio_atual_g: float | None = None
     biomassa_atual_kg: float | None = None

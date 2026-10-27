@@ -5,6 +5,17 @@ export type RoleUsuario = "CAMPO" | "VIGIA" | "GESTOR";
 export type StatusCiclo = "PLANEJADO" | "ATIVO" | "PAUSADO" | "FINALIZADO" | "CANCELADO";
 export type NivelSobraBandeja = "SEM_SOBRA" | "SOBRA_LEVE" | "SOBRA_MODERADA" | "SOBRA_EXCESSIVA";
 export type StatusAlimentar = "NORMAL" | "SUB_ARRAC_SUSPEITO" | "SUPER_ARRAC_SUSPEITO";
+
+// Vivos pela contagem de mortos x vivos pela alimentação
+export type SituacaoConfronto = "DE_ACORDO" | "PERDA_NAO_CONTADA" | "MORTOS_ACIMA_DO_CONSUMO" | "SEM_DADOS";
+
+export interface ConfrontoVivos {
+  mortos_acumulados: number;
+  sobrevivencia_por_mortos_pct: number;
+  sobrevivencia_por_consumo_pct: number | null;
+  sobrevivencia_estimada_pct: number;
+  situacao: SituacaoConfronto;
+}
 export type CategoriaCusto = "RACAO" | "ENERGIA_ELETRICA" | "MAO_DE_OBRA" | "POS_LARVAS" | "PROBIOTICOS_QUIMICOS" | "MANUTENCAO" | "OUTROS";
 export type RecomendacaoDespesca = "MANTER_CULTIVO" | "DESPESCA_IMEDIATA";
 export type ComportamentoCamarao = "NORMAL_FUNDO" | "FLOR_DAGUA_BOQUEANDO" | "NATACAO_AGITADA" | "ECDISE_MASSIVA" | "PRESENCA_BORDAS";
@@ -51,6 +62,7 @@ export interface CicloProdutivo {
   data_povoamento: string;
   quantidade_pos_larvas: number;
   custo_aquisicao_pl: number;
+  peso_medio_pl_g?: number | null;
   laboratorio_origem: string | null;
   status: StatusCiclo;
   tabela_alimentar_id?: string | null;
@@ -68,6 +80,7 @@ export interface MetricasAtuais {
   alerta_hiperdensidade: boolean;
   populacao_inicial: number;
   taxa_sobrevivencia_fuzzy_pct: number;
+  confronto_vivos?: ConfrontoVivos | null;
   populacao_estimada: number;
   peso_medio_atual_g: number | null;
   biomassa_atual_kg: number | null;
@@ -110,6 +123,7 @@ export interface ManejoAlimentar {
   sobra_bandeja_nivel: NivelSobraBandeja;
   status_alimentar_ajustado: StatusAlimentar | null;
   taxa_sobrevivencia_estimada_fuzzy: number | null;
+  camaroes_mortos?: number | null;
   created_at: string;
 }
 
@@ -118,6 +132,12 @@ export interface RecomendacaoAlimentar {
   taxa_clifford_pct: number;
   biomassa_estimada_kg: number;
   ajuste_sugerido: string;
+  // Confronto do dia: ração lançada hoje contra a ração da tabela alimentar
+  racao_tabela_dia_kg?: number | null;
+  racao_lancada_hoje_kg?: number | null;
+  consumo_vs_tabela_pct?: number | null;
+  status_alimentar?: StatusAlimentar | null;
+  confronto_vivos?: ConfrontoVivos | null;
 }
 
 // ── Simulação de Despesca ─────────────────────────────

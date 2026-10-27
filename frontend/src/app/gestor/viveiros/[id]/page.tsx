@@ -35,6 +35,7 @@ import {
   tabelasAlimentaresApi,
 } from "@/lib/api";
 import { mensagemErro } from "@/lib/utils";
+import { resumoConfronto } from "@/lib/confronto";
 import type {
   Viveiro,
   CicloProdutivo,
@@ -77,6 +78,7 @@ function IniciarCicloDialog({
     data_povoamento: new Date().toISOString().split("T")[0],
     quantidade_pos_larvas: "",
     custo_aquisicao_pl: "",
+    peso_medio_pl_g: "",
     laboratorio_origem: "",
     tabela_alimentar_id: "",
   });
@@ -109,6 +111,7 @@ function IniciarCicloDialog({
         data_povoamento: form.data_povoamento,
         quantidade_pos_larvas: parseInt(form.quantidade_pos_larvas),
         custo_aquisicao_pl: parseFloat(form.custo_aquisicao_pl),
+        peso_medio_pl_g: form.peso_medio_pl_g ? parseFloat(form.peso_medio_pl_g) : null,
         laboratorio_origem: form.laboratorio_origem.trim() || null,
         tabela_alimentar_id: form.tabela_alimentar_id || null,
       });
@@ -177,6 +180,25 @@ function IniciarCicloDialog({
             placeholder="Ex: 3500.00"
             className="mt-1"
           />
+        </div>
+
+        <div>
+          <Label htmlFor="peso_medio_pl_g">Peso Médio da PL no Povoamento (g)</Label>
+          <Input
+            id="peso_medio_pl_g"
+            type="number"
+            min="0"
+            max="5"
+            step="0.001"
+            inputMode="decimal"
+            value={form.peso_medio_pl_g}
+            onChange={(e) => setForm({ ...form, peso_medio_pl_g: e.target.value })}
+            placeholder="Ex: 0.002"
+            className="mt-1"
+          />
+          <p className="text-xs text-slate-500 mt-1">
+            Base da biomassa inicial no cálculo do FCA. Se ficar vazio, a biomassa inicial é considerada desprezível.
+          </p>
         </div>
 
         <div>
@@ -1004,9 +1026,9 @@ export default function ViveiroDetalhePage() {
                       accent="emerald"
                     />
                     <MetricCard
-                      title="Sobrevivência Fuzzy"
+                      title="Sobrevivência Estimada"
                       value={`${metricas.taxa_sobrevivencia_fuzzy_pct.toFixed(1)}%`}
-                      subtitle="Ajustada por manejo e dias"
+                      subtitle={metricas.confronto_vivos ? resumoConfronto(metricas.confronto_vivos) : "Ajustada por manejo e dias"}
                       icon={Activity}
                       accent={metricas.taxa_sobrevivencia_fuzzy_pct < 75 ? "red" : "emerald"}
                     />

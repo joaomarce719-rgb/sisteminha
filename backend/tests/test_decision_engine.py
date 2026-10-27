@@ -81,9 +81,12 @@ def test_clifford_interpolacao():
     assert taxa_alimentar_clifford(2.0) == 7.15
     assert taxa_alimentar_clifford(5.0) == 5.05
     assert taxa_alimentar_clifford(20.0) == 2.98
-    # Interpolação entre 2g (7.15%) e 5g (5.05%): em 3.5g deve ficar no meio
+    # Interpolação entre 3g (6.13%) e 4g (5.50%)
     taxa_meio = taxa_alimentar_clifford(3.5)
-    assert 5.05 < taxa_meio < 7.15
+    assert 5.50 < taxa_meio < 6.13
+    # Nós intermediários da Tabela 1
+    for peso, taxa in ((3.0, 6.13), (7.0, 4.44), (12.0, 3.62), (18.0, 3.10)):
+        assert taxa_alimentar_clifford(peso) == taxa
 
     # Ração diária para biomassa de 1000kg em peso de 10g (taxa 3.88%)
     racao = calcular_racao_diaria(1000.0, 10.0)

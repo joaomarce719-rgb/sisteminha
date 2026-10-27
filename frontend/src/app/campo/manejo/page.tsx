@@ -15,6 +15,20 @@ import { StepperCounter } from "@/components/ui/stepper-counter";
 import { TrayRemnantSelector, type NivelSobra } from "@/components/ui/tray-remnant-selector";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  ROTULO_CONFRONTO,
+  ROTULO_STATUS_ALIMENTAR,
+  VARIANTE_CONFRONTO,
+  VARIANTE_STATUS_ALIMENTAR,
+  explicacaoConfronto,
+} from "@/lib/confronto";
+
+// A tabela vale para o dia inteiro: sugere-se o que ainda falta lançar hoje
+function racaoParaOTrato(rec: RecomendacaoAlimentar): number {
+  const lancado = rec.racao_lancada_hoje_kg ?? 0;
+  const alvo = lancado > 0 ? rec.racao_diaria_sugerida_kg - lancado : rec.racao_diaria_sugerida_kg;
+  return Math.max(1, Math.round(alvo));
+}
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
@@ -33,6 +47,7 @@ export default function ManejoPage() {
 
   const [racaoKg, setRacaoKg] = useState<number>(45);
   const [sobraNivel, setSobraNivel] = useState<NivelSobra>("SEM_SOBRA");
+  const [mortos, setMortos] = useState("");
   const [dataRegistro, setDataRegistro] = useState(new Date().toISOString().split("T")[0]);
 
   useEffect(() => {
@@ -62,7 +77,7 @@ export default function ManejoPage() {
         setRecomendacao(rec);
         setManejos(mans);
         if (rec && rec.racao_diaria_sugerida_kg > 0) {
-          setRacaoKg(Math.round(rec.racao_diaria_sugerida_kg));
+          setRacaoKg(racaoParaOTrato(rec));
         }
       } catch { }
     }
@@ -86,8 +101,10 @@ export default function ManejoPage() {
         data_registro: dataRegistro,
         quantidade_racao_kg: racaoKg,
         sobra_bandeja_nivel: sobraNivel,
+        camaroes_mortos: mortos ? parseInt(mortos, 10) : null,
       });
       setSuccess(true);
+      setMortos("");
       // Refresh
       const [rec, mans] = await Promise.all([
         manejosApi.recomendacao(selectedCiclo).catch(() => null),
@@ -180,10 +197,12 @@ export default function ManejoPage() {
             </div>
             <button
               type="button"
-              onClick={() => setRacaoKg(Math.round(recomendacao.racao_diaria_sugerida_kg))}
+              onClick={() => setRacaoKg(racaoParaOTrato(recomendacao))}
               className="text-[11px] font-bold text-sky-700 underline hover:text-sky-900 dark:text-sky-300"
             >
-              Aplicar sugerido
+              {(recomendacao.racao_lancada_hoje_kg ?? 0) > 0
+                ? `Aplicar o que falta hoje (${racaoParaOTrato(recomendacao)} kg)`
+                : "Aplicar sugerido"}
             </button>
           </div>
 
@@ -198,6 +217,67 @@ export default function ManejoPage() {
               Taxa alimentar: <strong>{recomendacao.taxa_clifford_pct.toFixed(2)}%</strong>
             </span>
           </div>
+
+          {recomendacao.racao_tabela_dia_kg != null && (
+            <div className="mt-3 border-t border-sky-200/70 pt-2.5 text-xs dark:border-sky-800/40">
+              <div className="flex items-center justify-between gap-2">
+                <span>
+                  Tabela para hoje (dia inteiro): <strong>{recomendacao.racao_tabela_dia_kg.toFixed(1)} kg</strong>
+                </span>
+                {recomendacao.status_alimentar && (
+                  <Badge variant={VARIANTE_STATUS_ALIMENTAR[recomendacao.status_alimentar]}>
+                    {ROTULO_STATUS_ALIMENTAR[recomendacao.status_alimentar]}
+                  </Badge>
+                )}
+              </div>
+              <p className="mt-1 text-sky-700 dark:text-sky-400">
+                Lançado hoje: <strong>{(recomendacao.racao_lancada_hoje_kg ?? 0).toFixed(1)} kg</strong>
+                {recomendacao.consumo_vs_tabela_pct != null && <> ({recomendacao.consumo_vs_tabela_pct.toFixed(0)}% do previsto)</>}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Confronto: vivos pela contagem de mortos × vivos pela alimentação ── */}
+      {recomendacao?.confronto_vivos && (
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-[#151d2e]">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Vivos: contagem × alimentação
+            </span>
+            <Badge variant={VARIANTE_CONFRONTO[recomendacao.confronto_vivos.situacao]}>
+              {ROTULO_CONFRONTO[recomendacao.confronto_vivos.situacao]}
+            </Badge>
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+            <div>
+              <p className="text-slate-400">Pela contagem</p>
+              <p className="text-base font-black tabular-nums text-slate-800 dark:text-white">
+                {recomendacao.confronto_vivos.sobrevivencia_por_mortos_pct.toFixed(1)}%
+              </p>
+              <p className="text-[11px] text-slate-400">
+                {recomendacao.confronto_vivos.mortos_acumulados.toLocaleString("pt-BR")} mortos
+              </p>
+            </div>
+            <div>
+              <p className="text-slate-400">Pela alimentação</p>
+              <p className="text-base font-black tabular-nums text-slate-800 dark:text-white">
+                {recomendacao.confronto_vivos.sobrevivencia_por_consumo_pct != null
+                  ? `${recomendacao.confronto_vivos.sobrevivencia_por_consumo_pct.toFixed(1)}%`
+                  : "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-slate-400">Estimada</p>
+              <p className="text-base font-black tabular-nums text-sky-700 dark:text-sky-300">
+                {recomendacao.confronto_vivos.sobrevivencia_estimada_pct.toFixed(1)}%
+              </p>
+            </div>
+          </div>
+          <p className="mt-2.5 text-[11px] text-slate-500 dark:text-slate-400">
+            {explicacaoConfronto(recomendacao.confronto_vivos)}
+          </p>
         </div>
       )}
 
@@ -214,7 +294,7 @@ export default function ManejoPage() {
           onChange={(val) => setRacaoKg(val)}
           icon={Utensils}
           badge="Por Trato"
-          helperText="Ajuste fino de acordo com o clima e comportamento"
+          helperText="A tabela vale para o dia inteiro: os tratos do dia se somam"
           quickAddOptions={[20, 35, 45, 60, 80]}
         />
 
@@ -223,6 +303,26 @@ export default function ManejoPage() {
           value={sobraNivel}
           onChange={(val) => setSobraNivel(val)}
         />
+
+        {/* Camarões mortos encontrados pelo raçoador */}
+        <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-[#151d2e]">
+          <label htmlFor="mortos" className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Camarões mortos encontrados
+          </label>
+          <input
+            id="mortos"
+            type="number"
+            min={0}
+            inputMode="numeric"
+            value={mortos}
+            onChange={(e) => setMortos(e.target.value)}
+            placeholder="Opcional: conte os mortos vistos neste trato"
+            className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 focus:border-sky-500 focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white"
+          />
+          <p className="mt-1.5 text-[11px] text-slate-400">
+            Entram na estimativa de sobrevivência junto com o consumo da ração.
+          </p>
+        </div>
 
         {/* Feedback de sucesso ou erro */}
         {success && (
@@ -281,7 +381,10 @@ export default function ManejoPage() {
                     <span className="font-bold text-slate-800 dark:text-slate-200">
                       {m.quantidade_racao_kg} kg
                     </span>
-                    <p className="text-[11px] text-slate-400">{fmtDate(m.data_registro)}</p>
+                    <p className="text-[11px] text-slate-400">
+                      {fmtDate(m.data_registro)}
+                      {m.camaroes_mortos ? ` · ${m.camaroes_mortos.toLocaleString("pt-BR")} mortos` : ""}
+                    </p>
                   </div>
                 </div>
 

@@ -1,5 +1,6 @@
 """SAD Carcinicultura — Rotas de Ciclos Produtivos (RF-02, RF-09)."""
 
+from dataclasses import asdict
 from datetime import date
 from uuid import UUID
 
@@ -19,11 +20,13 @@ from src.models.ciclo_produtivo import CicloProdutivo
 from src.models.custo_operacional import CustoOperacional
 from src.models.enums import RoleUsuario, StatusCiclo
 from src.models.manejo_alimentar import ManejoAlimentar
-from src.models.tabela_preco import TabelaPrecoMercado
 from src.models.viveiro import Viveiro
 from src.schemas.ciclo import CicloCreate, CicloEncerrar, CicloResponse, MetricasAtuaisResponse
 from src.services.auth_service import get_current_user, has_role
 from src.services import decision_engine as de
+from src.services.alimentacao import pontos_alimentares
+from src.services.precos import tabela_vigente
+from src.services.sobrevivencia import confrontar_vivos, ordenar, peso_na_data, sobrevivencia_vigente
 from src.services.regras_ciclo import ciclo_aberto_do_viveiro
 
 router = APIRouter(prefix="/api/v1/ciclos", tags=["Ciclos Produtivos"])
@@ -99,6 +102,7 @@ def criar_ciclo(
             "data_povoamento": str(ciclo.data_povoamento),
             "quantidade_pos_larvas": ciclo.quantidade_pos_larvas,
             "custo_aquisicao_pl": float(ciclo.custo_aquisicao_pl),
+            "peso_medio_pl_g": ciclo.peso_medio_pl_g,
             "laboratorio_origem": ciclo.laboratorio_origem,
         },
     )
@@ -290,23 +294,24 @@ def metricas_atuais(
         peso_medio = None
         entradas_faltantes.append("biometria")
 
-    # Sobrevivência fuzzy mais recente
-    manejos = sorted(ciclo.manejos_alimentares, key=lambda m: m.data_registro)
-    taxa_sobrev = 100.0
-    for m in manejos:
-        if m.taxa_sobrevivencia_estimada_fuzzy is not None:
-            taxa_sobrev = m.taxa_sobrevivencia_estimada_fuzzy
+    # Sobrevivência estimada mais recente (mortos contados, consumo × tabela e fuzzy)
+    manejos = ordenar(ciclo.manejos_alimentares)
+    taxa_sobrev = sobrevivencia_vigente(manejos)
+
+    pontos = pontos_alimentares(ciclo, db)
+    confronto = confrontar_vivos(
+        manejos,
+        ciclo.quantidade_pos_larvas,
+        lambda data: peso_na_data(biometrias, data),
+        lambda peso: de.taxa_alimentar(peso, pontos),
+        hoje,
+    )
 
     # População e biomassa
     pop_atual = de.calcular_populacao_atual(ciclo.quantidade_pos_larvas, taxa_sobrev)
-    if peso_medio is not None:
-        biomassa_atual = de.calcular_biomassa_kg(pop_atual, peso_medio)
-        biomassa_inicial = de.calcular_biomassa_kg(
-            ciclo.quantidade_pos_larvas, biometrias[0].peso_medio_g
-        )
-    else:
-        biomassa_atual = None
-        biomassa_inicial = None
+    biomassa_atual = de.calcular_biomassa_kg(pop_atual, peso_medio) if peso_medio is not None else None
+    # Biomassa inicial = biomassa no povoamento (PLs × peso da PL); sem o peso, considerada desprezível
+    biomassa_inicial = de.calcular_biomassa_kg(ciclo.quantidade_pos_larvas, ciclo.peso_medio_pl_g or 0.0)
 
     # Ração acumulada
     racao_total = sum(m.quantidade_racao_kg for m in manejos)
@@ -314,7 +319,7 @@ def metricas_atuais(
     # FCA
     fca = None
     class_fca = None
-    if biomassa_atual is not None and biomassa_inicial is not None:
+    if biomassa_atual is not None:
         fca = de.calcular_fca(racao_total, biomassa_atual, biomassa_inicial)
         class_fca = de.classificar_fca(fca)
 
@@ -332,21 +337,8 @@ def metricas_atuais(
     # Preço de mercado vigente
     preco_kg = None
     if peso_medio is not None:
-        preco_result = db.execute(
-            select(TabelaPrecoMercado).where(
-                TabelaPrecoMercado.organizacao_id == viveiro.organizacao_id,
-                TabelaPrecoMercado.faixa_gramatura_min <= peso_medio,
-                TabelaPrecoMercado.faixa_gramatura_max >= peso_medio,
-                TabelaPrecoMercado.vigencia_inicio <= hoje,
-                (TabelaPrecoMercado.vigencia_fim.is_(None)) | (TabelaPrecoMercado.vigencia_fim >= hoje),
-            ).order_by(TabelaPrecoMercado.vigencia_inicio.desc()).limit(1)
-        )
-        preco_row = preco_result.scalar_one_or_none()
-        if preco_row:
-            preco_kg = float(preco_row.preco_por_kg)
-        else:
-            entradas_faltantes.append("preco_mercado")
-    else:
+        preco_kg = de.buscar_preco_por_gramatura(peso_medio, tabela_vigente(db, viveiro.organizacao_id, hoje))
+    if preco_kg is None:
         entradas_faltantes.append("preco_mercado")
 
     metricas = de.calcular_metricas_economicas(custos_vals, biomassa_atual, preco_kg)
@@ -363,6 +355,7 @@ def metricas_atuais(
         alerta_hiperdensidade=alerta_hiper,
         populacao_inicial=ciclo.quantidade_pos_larvas,
         taxa_sobrevivencia_fuzzy_pct=taxa_sobrev,
+        confronto_vivos=asdict(confronto),
         populacao_estimada=pop_atual,
         peso_medio_atual_g=round(peso_medio, 2) if peso_medio is not None else None,
         biomassa_atual_kg=round(biomassa_atual, 2) if biomassa_atual is not None else None,

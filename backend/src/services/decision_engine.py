@@ -19,12 +19,12 @@ from src.models.enums import ClassificacaoFCA, RecomendacaoDespesca
 
 # ── Tabela de Clifford (1992) — RN-04 ──────────────
 # Pontos de referência: peso (g) → taxa alimentar (%)
+# Tabela 1 do documento de referência (adaptado de Clifford, 1992), de 2 g a 20 g
 _CLIFFORD_POINTS = np.array([
-    [2.0, 7.15],
-    [5.0, 5.05],
-    [10.0, 3.88],
-    [15.0, 3.33],
-    [20.0, 2.98],
+    [2.0, 7.15], [3.0, 6.13], [4.0, 5.50], [5.0, 5.05], [6.0, 4.71],
+    [7.0, 4.44], [8.0, 4.22], [9.0, 4.04], [10.0, 3.88], [11.0, 3.74],
+    [12.0, 3.62], [13.0, 3.51], [14.0, 3.42], [15.0, 3.33], [16.0, 3.25],
+    [17.0, 3.17], [18.0, 3.10], [19.0, 3.04], [20.0, 2.98],
 ])
 _CLIFFORD_PESOS = _CLIFFORD_POINTS[:, 0]
 _CLIFFORD_TAXAS = _CLIFFORD_POINTS[:, 1]
@@ -274,17 +274,23 @@ def buscar_preco_por_gramatura(
 ) -> float | None:
     """Busca o preço R$/kg na tabela de mercado para uma dada gramatura.
 
+    Na borda entre duas faixas (ex.: 10 g em 8–10 e em 10–12) vale a de cima, pois a faixa
+    começa no seu peso mínimo; na mesma faixa, vale a vigência mais recente. O resultado não
+    depende da ordem em que as faixas chegam.
+
     Args:
         peso_g: Peso médio do camarão em gramas.
-        tabela: Lista de dicts com keys: faixa_gramatura_min, faixa_gramatura_max, preco_por_kg.
+        tabela: Lista de dicts com keys: faixa_gramatura_min, faixa_gramatura_max, preco_por_kg
+            e, opcionalmente, vigencia_inicio.
 
     Returns:
         Preço R$/kg ou None se não encontrado.
     """
-    for faixa in tabela:
-        if faixa["faixa_gramatura_min"] <= peso_g <= faixa["faixa_gramatura_max"]:
-            return float(faixa["preco_por_kg"])
-    return None
+    candidatas = [f for f in tabela if f["faixa_gramatura_min"] <= peso_g <= f["faixa_gramatura_max"]]
+    if not candidatas:
+        return None
+    escolhida = max(candidatas, key=lambda f: (f["faixa_gramatura_min"], f.get("vigencia_inicio") or date.min))
+    return float(escolhida["preco_por_kg"])
 
 
 def estimar_mortalidade_diaria(taxa_sobrev_pct: float, dias_cultivo: int) -> float:
@@ -295,3 +301,36 @@ def estimar_mortalidade_diaria(taxa_sobrev_pct: float, dias_cultivo: int) -> flo
     if dias_cultivo <= 0:
         return 0.0
     return (100.0 - taxa_sobrev_pct) / dias_cultivo
+
+
+@dataclass
+class CustoDiarioEstimado:
+    total_rs: float
+    racao_kg_dia: float | None      # ração de hoje; None quando o custo vem da média do ciclo
+    preco_racao_rs_kg: float | None
+    fixos_rs_dia: float | None
+    marginal: bool                  # True: ração de hoje × preço + fixos; False: média do ciclo
+
+
+def estimar_custo_diario(
+    custo_racao_total: float,
+    racao_total_kg: float,
+    custos_fixos_total: float,
+    dias_cultivo: int,
+    racao_diaria_hoje_kg: float | None,
+) -> CustoDiarioEstimado | None:
+    """Custo diário de manter o viveiro: ração de hoje × preço médio da ração + custos fixos por dia.
+
+    O preço da ração é o custo de ração lançado dividido pelos kg lançados nos manejos. Sem esses
+    dados cai na média dos custos do ciclo, que subestima o fim da safra (a ração cresce com o
+    peso). Retorna None se não há custo lançado para estimar.
+    """
+    dias = max(dias_cultivo, 1)
+    if custo_racao_total > 0 and racao_total_kg > 0 and racao_diaria_hoje_kg is not None:
+        preco = custo_racao_total / racao_total_kg
+        fixos = custos_fixos_total / dias
+        return CustoDiarioEstimado(racao_diaria_hoje_kg * preco + fixos, racao_diaria_hoje_kg, preco, fixos, True)
+    total = (custo_racao_total + custos_fixos_total) / dias
+    if total <= 0:
+        return None
+    return CustoDiarioEstimado(total, None, None, None, False)

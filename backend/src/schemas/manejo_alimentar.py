@@ -14,6 +14,7 @@ class ManejoAlimentarCreate(BaseModel):
     data_registro: date
     quantidade_racao_kg: float = Field(..., ge=0)
     sobra_bandeja_nivel: NivelSobraBandeja
+    camaroes_mortos: int | None = Field(None, ge=0, description="Camarões mortos encontrados neste trato")
     observacoes: str | None = Field(None, max_length=500)
 
     @model_validator(mode="before")
@@ -34,6 +35,7 @@ class ManejoAlimentarResponse(BaseModel):
     sobra_bandeja_nivel: NivelSobraBandeja
     status_alimentar_ajustado: StatusAlimentar | None = None
     taxa_sobrevivencia_estimada_fuzzy: float | None = None
+    camaroes_mortos: int | None = None
     observacoes: str | None = None
     created_at: datetime
 
@@ -53,11 +55,21 @@ class ManejoAlimentarResponse(BaseModel):
             "sobra_bandeja_nivel": data.sobra_bandeja_nivel,
             "status_alimentar_ajustado": data.status_alimentar_ajustado,
             "taxa_sobrevivencia_estimada_fuzzy": data.taxa_sobrevivencia_estimada_fuzzy,
+            "camaroes_mortos": data.camaroes_mortos,
             "observacoes": data.observacoes,
             "created_at": data.created_at,
         }
 
     model_config = {"from_attributes": True}
+
+
+class ConfrontoVivosResponse(BaseModel):
+    """Vivos pela contagem de mortos x vivos pela alimentação (confronto de informações)."""
+    mortos_acumulados: int
+    sobrevivencia_por_mortos_pct: float
+    sobrevivencia_por_consumo_pct: float | None = None
+    sobrevivencia_estimada_pct: float
+    situacao: str  # DE_ACORDO | PERDA_NAO_CONTADA | MORTOS_ACIMA_DO_CONSUMO | SEM_DADOS
 
 
 class RecomendacaoAlimentarResponse(BaseModel):
@@ -66,3 +78,9 @@ class RecomendacaoAlimentarResponse(BaseModel):
     taxa_clifford_pct: float
     biomassa_estimada_kg: float
     ajuste_sugerido: str
+    # Confronto do dia: ração lançada hoje contra a ração da tabela alimentar
+    racao_tabela_dia_kg: float | None = None
+    racao_lancada_hoje_kg: float | None = None
+    consumo_vs_tabela_pct: float | None = None
+    status_alimentar: StatusAlimentar | None = None
+    confronto_vivos: ConfrontoVivosResponse | None = None

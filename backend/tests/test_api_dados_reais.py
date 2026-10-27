@@ -67,3 +67,39 @@ def test_simulacao_global_usa_dados_do_ciclo(client, gestor, campo, novo_ciclo):
     # Sem biometria não há como simular: nenhum número padrão é inventado
     r = client.post(url, json={"ciclo_id": ciclo["id"]}, headers=gestor)
     assert r.status_code == 400
+
+
+def test_fca_usa_biomassa_do_povoamento(client, gestor, novo_viveiro):
+    # Ganho de biomassa = biomassa atual − biomassa no povoamento (PLs × peso da PL)
+    viveiro = novo_viveiro()
+    r = client.post(
+        "/api/v1/ciclos/",
+        json={"viveiro_id": viveiro["id"], "data_povoamento": "2026-08-01",
+              "quantidade_pos_larvas": 300_000, "custo_aquisicao_pl": 3_000, "peso_medio_pl_g": 0.002},
+        headers=gestor,
+    )
+    assert r.status_code == 201, r.text
+    ciclo = r.json()
+    assert ciclo["peso_medio_pl_g"] == 0.002
+    url = f"/api/v1/ciclos/{ciclo['id']}"
+    assert client.post(f"{url}/biometrias/", json={"data_medicao": "2026-09-01", "quantidade_amostrada": 50,
+                                                   "peso_medio_g": 5.0}, headers=gestor).status_code == 201
+    assert client.post(f"{url}/manejos-alimentares/", json={"data_registro": "2026-09-02", "quantidade_racao_kg": 40,
+                                                            "sobra_bandeja_nivel": "SEM_SOBRA"},
+                       headers=gestor).status_code == 201
+
+    m = client.get(f"{url}/metricas-atuais", headers=gestor).json()
+    # Com uma única biometria o FCA já é calculável
+    esperado = m["racao_acumulada_kg"] / (m["biomassa_atual_kg"] - 300_000 * 0.002 / 1000)
+    assert abs(m["fca_atual"] - esperado) < 0.001
+
+
+def test_peso_da_pl_fora_da_faixa_rejeitado(client, gestor, novo_viveiro):
+    viveiro = novo_viveiro()
+    r = client.post(
+        "/api/v1/ciclos/",
+        json={"viveiro_id": viveiro["id"], "data_povoamento": "2026-08-01",
+              "quantidade_pos_larvas": 1000, "custo_aquisicao_pl": 10, "peso_medio_pl_g": 50},
+        headers=gestor,
+    )
+    assert r.status_code == 422

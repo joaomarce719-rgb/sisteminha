@@ -18,6 +18,41 @@ from src.services.auth_service import has_role
 router = APIRouter(prefix="/api/v1/precos-mercado", tags=["Preços de Mercado"])
 
 
+def _exigir_sem_sobreposicao(
+    db: Session,
+    organizacao_id: UUID,
+    peso_min: float,
+    peso_max: float,
+    inicio: date,
+    fim: date | None,
+    ignorar_id: UUID | None = None,
+) -> None:
+    """Recusa faixa que dispute o mesmo peso e o mesmo período com outra da organização.
+
+    Faixas vizinhas (8–10 e 10–12) são válidas: o peso de divisa pertence à faixa de cima.
+    Preços de períodos diferentes para a mesma faixa também são válidos (histórico).
+    """
+    existentes = db.execute(
+        select(TabelaPrecoMercado).where(TabelaPrecoMercado.organizacao_id == organizacao_id)
+    ).scalars().all()
+    for f in existentes:
+        if f.id == ignorar_id:
+            continue
+        pesos_se_cruzam = peso_min < f.faixa_gramatura_max and f.faixa_gramatura_min < peso_max
+        periodos_se_cruzam = (fim is None or f.vigencia_inicio <= fim) and (
+            f.vigencia_fim is None or inicio <= f.vigencia_fim
+        )
+        if pesos_se_cruzam and periodos_se_cruzam:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"A faixa {peso_min:g}–{peso_max:g} g se sobrepõe à faixa "
+                    f"{f.faixa_gramatura_min:g}–{f.faixa_gramatura_max:g} g (R$ {float(f.preco_por_kg):,.2f}/kg) "
+                    "no mesmo período. Ajuste os pesos ou encerre a vigência da faixa anterior."
+                ),
+            )
+
+
 @router.post("", response_model=PrecoResponse, status_code=201)
 @router.post("/", response_model=PrecoResponse, status_code=201)
 def criar_faixa_preco(
@@ -32,7 +67,12 @@ def criar_faixa_preco(
             detail="faixa_gramatura_min deve ser menor que faixa_gramatura_max.",
         )
 
-    preco = TabelaPrecoMercado(**payload.model_dump(), organizacao_id=org_do_usuario(_user))
+    org_id = org_do_usuario(_user)
+    _exigir_sem_sobreposicao(
+        db, org_id, payload.faixa_gramatura_min, payload.faixa_gramatura_max,
+        payload.vigencia_inicio, payload.vigencia_fim,
+    )
+    preco = TabelaPrecoMercado(**payload.model_dump(), organizacao_id=org_id)
     db.add(preco)
     db.flush()
     db.refresh(preco)
@@ -81,6 +121,11 @@ def atualizar_preco(
 
     antes = snapshot(preco)
     update_data = payload.model_dump(exclude_unset=True)
+    if "vigencia_fim" in update_data:
+        _exigir_sem_sobreposicao(
+            db, preco.organizacao_id, preco.faixa_gramatura_min, preco.faixa_gramatura_max,
+            preco.vigencia_inicio, update_data["vigencia_fim"], ignorar_id=preco.id,
+        )
     for field, value in update_data.items():
         setattr(preco, field, value)
 
