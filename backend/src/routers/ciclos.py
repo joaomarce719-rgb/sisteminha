@@ -19,11 +19,11 @@ from src.models.ciclo_produtivo import CicloProdutivo
 from src.models.custo_operacional import CustoOperacional
 from src.models.enums import RoleUsuario, StatusCiclo
 from src.models.manejo_alimentar import ManejoAlimentar
-from src.models.tabela_preco import TabelaPrecoMercado
 from src.models.viveiro import Viveiro
 from src.schemas.ciclo import CicloCreate, CicloEncerrar, CicloResponse, MetricasAtuaisResponse
 from src.services.auth_service import get_current_user, has_role
 from src.services import decision_engine as de
+from src.services.precos import tabela_vigente
 from src.services.regras_ciclo import ciclo_aberto_do_viveiro
 
 router = APIRouter(prefix="/api/v1/ciclos", tags=["Ciclos Produtivos"])
@@ -328,21 +328,8 @@ def metricas_atuais(
     # Preço de mercado vigente
     preco_kg = None
     if peso_medio is not None:
-        preco_result = db.execute(
-            select(TabelaPrecoMercado).where(
-                TabelaPrecoMercado.organizacao_id == viveiro.organizacao_id,
-                TabelaPrecoMercado.faixa_gramatura_min <= peso_medio,
-                TabelaPrecoMercado.faixa_gramatura_max >= peso_medio,
-                TabelaPrecoMercado.vigencia_inicio <= hoje,
-                (TabelaPrecoMercado.vigencia_fim.is_(None)) | (TabelaPrecoMercado.vigencia_fim >= hoje),
-            ).order_by(TabelaPrecoMercado.vigencia_inicio.desc()).limit(1)
-        )
-        preco_row = preco_result.scalar_one_or_none()
-        if preco_row:
-            preco_kg = float(preco_row.preco_por_kg)
-        else:
-            entradas_faltantes.append("preco_mercado")
-    else:
+        preco_kg = de.buscar_preco_por_gramatura(peso_medio, tabela_vigente(db, viveiro.organizacao_id, hoje))
+    if preco_kg is None:
         entradas_faltantes.append("preco_mercado")
 
     metricas = de.calcular_metricas_economicas(custos_vals, biomassa_atual, preco_kg)

@@ -17,7 +17,6 @@ from src.services.audit import registrar_auditoria, snapshot
 from src.models.ciclo_produtivo import CicloProdutivo
 from src.models.enums import CategoriaCusto, RoleUsuario, StatusCiclo
 from src.models.simulacao_despesca import SimulacaoDespesca
-from src.models.tabela_preco import TabelaPrecoMercado
 from src.schemas.simulacao import (
     SimulacaoComparativaResponse,
     SimulacaoGenericRequest,
@@ -26,6 +25,7 @@ from src.schemas.simulacao import (
     SimulacaoResponse,
 )
 from src.services.auth_service import has_role
+from src.services.precos import tabela_vigente
 
 from src.services.decision_engine import (
     buscar_preco_por_gramatura,
@@ -103,22 +103,7 @@ def _executar_simulacao(
     premissas: list[str] = []
 
     # Preço de mercado
-    precos_result = db.execute(
-        select(TabelaPrecoMercado).where(
-            TabelaPrecoMercado.organizacao_id == ciclo.viveiro.organizacao_id,
-            TabelaPrecoMercado.vigencia_inicio <= hoje,
-            (TabelaPrecoMercado.vigencia_fim.is_(None))
-            | (TabelaPrecoMercado.vigencia_fim >= hoje),
-        )
-    )
-    tabela = [
-        {
-            "faixa_gramatura_min": p.faixa_gramatura_min,
-            "faixa_gramatura_max": p.faixa_gramatura_max,
-            "preco_por_kg": float(p.preco_por_kg),
-        }
-        for p in precos_result.scalars().all()
-    ]
+    tabela = tabela_vigente(db, ciclo.viveiro.organizacao_id, hoje)
 
     preco_atual = buscar_preco_por_gramatura(peso_atual, tabela)
     if preco_atual is None:

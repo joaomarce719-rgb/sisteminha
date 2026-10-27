@@ -274,17 +274,23 @@ def buscar_preco_por_gramatura(
 ) -> float | None:
     """Busca o preço R$/kg na tabela de mercado para uma dada gramatura.
 
+    Na borda entre duas faixas (ex.: 10 g em 8–10 e em 10–12) vale a de cima, pois a faixa
+    começa no seu peso mínimo; na mesma faixa, vale a vigência mais recente. O resultado não
+    depende da ordem em que as faixas chegam.
+
     Args:
         peso_g: Peso médio do camarão em gramas.
-        tabela: Lista de dicts com keys: faixa_gramatura_min, faixa_gramatura_max, preco_por_kg.
+        tabela: Lista de dicts com keys: faixa_gramatura_min, faixa_gramatura_max, preco_por_kg
+            e, opcionalmente, vigencia_inicio.
 
     Returns:
         Preço R$/kg ou None se não encontrado.
     """
-    for faixa in tabela:
-        if faixa["faixa_gramatura_min"] <= peso_g <= faixa["faixa_gramatura_max"]:
-            return float(faixa["preco_por_kg"])
-    return None
+    candidatas = [f for f in tabela if f["faixa_gramatura_min"] <= peso_g <= f["faixa_gramatura_max"]]
+    if not candidatas:
+        return None
+    escolhida = max(candidatas, key=lambda f: (f["faixa_gramatura_min"], f.get("vigencia_inicio") or date.min))
+    return float(escolhida["preco_por_kg"])
 
 
 def estimar_mortalidade_diaria(taxa_sobrev_pct: float, dias_cultivo: int) -> float:
