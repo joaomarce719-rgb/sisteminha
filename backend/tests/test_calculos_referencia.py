@@ -289,3 +289,30 @@ def test_estender_vigencia_para_dentro_de_outra_faixa_e_recusado(client, gestor_
     r = client.put(f"/api/v1/precos-mercado/{antiga['id']}", json={"vigencia_fim": "2026-07-31"},
                    headers=gestor_sem_precos)
     assert r.status_code == 409
+
+
+def test_excluir_faixa_permite_cadastrar_de_novo(client, gestor_sem_precos):
+    faixa = _criar_faixa(client, gestor_sem_precos, 8, 10, 18.0).json()
+    assert _criar_faixa(client, gestor_sem_precos, 9, 11).status_code == 409
+    r = client.delete(f"/api/v1/precos-mercado/{faixa['id']}", headers=gestor_sem_precos)
+    assert r.status_code == 204
+    restantes = client.get("/api/v1/precos-mercado/", headers=gestor_sem_precos).json()
+    assert faixa["id"] not in [f["id"] for f in restantes]
+    assert _criar_faixa(client, gestor_sem_precos, 9, 11).status_code == 201
+
+
+def test_excluir_faixa_de_outra_organizacao_ou_inexistente_da_404(client, gestor, gestor_sem_precos):
+    from uuid import uuid4
+    faixa = _criar_faixa(client, gestor_sem_precos, 8, 10, 18.0).json()
+    assert client.delete(f"/api/v1/precos-mercado/{faixa['id']}", headers=gestor).status_code == 404
+    assert client.delete(f"/api/v1/precos-mercado/{uuid4()}", headers=gestor_sem_precos).status_code == 404
+    # a faixa continua lá para a organização dona
+    ids = [f["id"] for f in client.get("/api/v1/precos-mercado/", headers=gestor_sem_precos).json()]
+    assert faixa["id"] in ids
+
+
+def test_excluir_faixa_fica_na_auditoria(client, gestor_sem_precos):
+    faixa = _criar_faixa(client, gestor_sem_precos, 8, 10, 18.0).json()
+    assert client.delete(f"/api/v1/precos-mercado/{faixa['id']}", headers=gestor_sem_precos).status_code == 204
+    itens = client.get("/api/v1/auditoria/?entidade=TabelaPrecoMercado&acao=EXCLUIR", headers=gestor_sem_precos).json()["items"]
+    assert any(i["registro_id"] == faixa["id"] for i in itens)

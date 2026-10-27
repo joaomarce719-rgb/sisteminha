@@ -134,3 +134,19 @@ def atualizar_preco(
     db.refresh(preco)
     registrar_auditoria(db, "ATUALIZAR", "TabelaPrecoMercado", preco.id, _user, antes, snapshot(preco))
     return preco
+
+
+@router.delete("/{preco_id}", status_code=204)
+def excluir_faixa_preco(
+    preco_id: UUID,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.GESTOR])),
+):
+    """Exclui uma faixa de preço da própria organização (correção de lançamento errado)."""
+    preco = db.get(TabelaPrecoMercado, preco_id)
+    if not preco or preco.organizacao_id != org_do_usuario(_user):
+        raise HTTPException(status_code=404, detail="Faixa de preço não encontrada.")
+    antes = snapshot(preco)
+    db.delete(preco)
+    db.flush()
+    registrar_auditoria(db, "EXCLUIR", "TabelaPrecoMercado", preco_id, _user, antes)
