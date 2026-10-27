@@ -24,6 +24,7 @@ from src.schemas.simulacao import (
     SimulacaoRequest,
     SimulacaoResponse,
 )
+from src.services.alimentacao import pontos_alimentares
 from src.services.auth_service import has_role
 from src.services.precos import tabela_vigente
 from src.services.sobrevivencia import sobrevivencia_vigente
@@ -33,6 +34,8 @@ from src.services.decision_engine import (
     calcular_biomassa_kg,
     calcular_ganho_diario,
     calcular_populacao_atual,
+    calcular_racao_diaria,
+    estimar_custo_diario,
     estimar_mortalidade_diaria,
     simular_delta_v,
 )
@@ -131,12 +134,18 @@ def _executar_simulacao(
         custo_diario_total = custo_diario_customizado
         premissas.append(f"Custo diário informado pelo usuário: R$ {custo_diario_total:,.2f}.")
     else:
-        custos_recorrentes = sum(
-            float(c.valor_rs)
-            for c in ciclo.custos_operacionais
-            if c.categoria != CategoriaCusto.POS_LARVAS
+        racao_hoje_kg = calcular_racao_diaria(biomassa_atual, peso_atual, pontos_alimentares(ciclo, db))
+        custo = estimar_custo_diario(
+            custo_racao_total=sum(float(c.valor_rs) for c in ciclo.custos_operacionais if c.categoria == CategoriaCusto.RACAO),
+            racao_total_kg=sum(m.quantidade_racao_kg for m in ciclo.manejos_alimentares),
+            custos_fixos_total=sum(
+                float(c.valor_rs) for c in ciclo.custos_operacionais
+                if c.categoria not in (CategoriaCusto.RACAO, CategoriaCusto.POS_LARVAS)
+            ),
+            dias_cultivo=dias_cultivo,
+            racao_diaria_hoje_kg=racao_hoje_kg,
         )
-        if custos_recorrentes <= 0:
+        if custo is None:
             raise HTTPException(
                 status_code=400,
                 detail=(
@@ -144,11 +153,17 @@ def _executar_simulacao(
                     "diário. Lance os custos do ciclo ou informe custo_diario_rs."
                 ),
             )
-        custo_diario_total = custos_recorrentes / max(dias_cultivo, 1)
-        premissas.append(
-            f"Custo diário estimado pela média dos custos lançados: R$ {custo_diario_total:,.2f} "
-            f"em {max(dias_cultivo, 1)} dias de cultivo."
-        )
+        custo_diario_total = custo.total_rs
+        if custo.marginal:
+            premissas.append(
+                f"Custo diário estimado: ração de hoje ({custo.racao_kg_dia:,.0f} kg × R$ {custo.preco_racao_rs_kg:,.2f}/kg) "
+                f"+ custos fixos médios (R$ {custo.fixos_rs_dia:,.2f}/dia) = R$ {custo_diario_total:,.2f}."
+            )
+        else:
+            premissas.append(
+                f"Custo diário estimado pela média dos custos lançados: R$ {custo_diario_total:,.2f} "
+                f"em {max(dias_cultivo, 1)} dias de cultivo."
+            )
     if len(biometrias) < 2:
         premissas.append("Apenas uma biometria: ganho de peso projetado é zero.")
 

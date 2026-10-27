@@ -1,5 +1,9 @@
 """Simulação ΔV de despesca com dados reais do ciclo."""
 
+from datetime import date
+
+import pytest
+
 
 def _ciclo_com_biometrias(client, gestor, novo_ciclo, pesos=(9.0, 11.0)):
     ciclo = novo_ciclo(data_povoamento="2026-08-01")
@@ -76,3 +80,37 @@ def test_peso_projetado_fora_da_tabela_usa_preco_atual(client, gestor, novo_cicl
     body = client.post(f"{url}/simular-despesca/", json={"dias_horizonte": 15}, headers=gestor).json()
     assert body["preco_futuro_rs_kg"] == body["preco_atual_rs_kg"]
     assert any("Sem faixa de preço" in p for p in body["premissas"])
+
+
+# ── Custo diário padrão: ração de hoje × preço da ração + custos fixos ──
+
+def test_custo_diario_marginal_calculado_a_mao():
+    from src.services.decision_engine import estimar_custo_diario
+    # Ração: R$ 29.000 em 5.000 kg = R$ 5,80/kg; fixos R$ 15.000 em 100 dias = R$ 150/dia
+    c = estimar_custo_diario(29_000, 5_000, 15_000, 100, racao_diaria_hoje_kg=150)
+    assert c.marginal and c.preco_racao_rs_kg == pytest.approx(5.8) and c.fixos_rs_dia == pytest.approx(150)
+    assert c.total_rs == pytest.approx(150 * 5.8 + 150)  # R$ 1.020 por dia
+
+
+def test_custo_diario_sem_kg_de_racao_cai_na_media_do_ciclo():
+    from src.services.decision_engine import estimar_custo_diario
+    c = estimar_custo_diario(29_000, 0, 15_000, 100, racao_diaria_hoje_kg=150)
+    assert not c.marginal and c.total_rs == pytest.approx(440)  # (29.000 + 15.000) ÷ 100
+    assert estimar_custo_diario(0, 0, 0, 100, None) is None
+
+
+def test_simulacao_usa_a_racao_de_hoje_no_custo_diario(client, gestor, novo_ciclo):
+    ciclo, url = _ciclo_com_biometrias(client, gestor, novo_ciclo)  # último peso: 11,0 g (taxa 3,74%)
+    r = client.post(f"{url}/manejos-alimentares/", json={"data_registro": "2026-09-20", "quantidade_racao_kg": 500,
+                                                         "sobra_bandeja_nivel": "SEM_SOBRA"}, headers=gestor)
+    assert r.status_code == 201, r.text
+    _lancar_racao(client, gestor, url, valor=2_900.0)  # R$ 5,80 por kg dos 500 kg lançados
+    r = client.post(f"{url}/custos/", json={"data_lancamento": "2026-09-10", "categoria": "ENERGIA_ELETRICA",
+                                            "descricao": "Energia", "valor_rs": 4_350}, headers=gestor)
+    assert r.status_code == 201, r.text
+
+    s = client.post(f"{url}/simular-despesca/", json={"dias_horizonte": 7}, headers=gestor).json()
+    dias = (date.today() - date(2026, 8, 1)).days
+    racao_hoje = s["biomassa_atual_kg"] * 0.0374
+    assert s["custo_diario_rs"] == pytest.approx(racao_hoje * 5.8 + 4_350 / dias, abs=0.1)
+    assert any("ração de hoje" in p for p in s["premissas"])

@@ -301,3 +301,36 @@ def estimar_mortalidade_diaria(taxa_sobrev_pct: float, dias_cultivo: int) -> flo
     if dias_cultivo <= 0:
         return 0.0
     return (100.0 - taxa_sobrev_pct) / dias_cultivo
+
+
+@dataclass
+class CustoDiarioEstimado:
+    total_rs: float
+    racao_kg_dia: float | None      # ração de hoje; None quando o custo vem da média do ciclo
+    preco_racao_rs_kg: float | None
+    fixos_rs_dia: float | None
+    marginal: bool                  # True: ração de hoje × preço + fixos; False: média do ciclo
+
+
+def estimar_custo_diario(
+    custo_racao_total: float,
+    racao_total_kg: float,
+    custos_fixos_total: float,
+    dias_cultivo: int,
+    racao_diaria_hoje_kg: float | None,
+) -> CustoDiarioEstimado | None:
+    """Custo diário de manter o viveiro: ração de hoje × preço médio da ração + custos fixos por dia.
+
+    O preço da ração é o custo de ração lançado dividido pelos kg lançados nos manejos. Sem esses
+    dados cai na média dos custos do ciclo, que subestima o fim da safra (a ração cresce com o
+    peso). Retorna None se não há custo lançado para estimar.
+    """
+    dias = max(dias_cultivo, 1)
+    if custo_racao_total > 0 and racao_total_kg > 0 and racao_diaria_hoje_kg is not None:
+        preco = custo_racao_total / racao_total_kg
+        fixos = custos_fixos_total / dias
+        return CustoDiarioEstimado(racao_diaria_hoje_kg * preco + fixos, racao_diaria_hoje_kg, preco, fixos, True)
+    total = (custo_racao_total + custos_fixos_total) / dias
+    if total <= 0:
+        return None
+    return CustoDiarioEstimado(total, None, None, None, False)
