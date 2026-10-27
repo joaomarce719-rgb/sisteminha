@@ -3,7 +3,7 @@
 import uuid
 from datetime import date
 
-from sqlalchemy import Date, Float, String
+from sqlalchemy import Date, Float, Integer, String
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy import ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
@@ -37,9 +37,12 @@ class ManejoAlimentar(AuditMixin, Base):
         SAEnum(StatusAlimentar, name="status_alimentar", create_constraint=True),
         nullable=True,
     )
+    # Sobrevivência estimada do ciclo após este registro (consumo × tabela, mortos e fuzzy)
     taxa_sobrevivencia_estimada_fuzzy: Mapped[float | None] = mapped_column(
         Float, nullable=True
     )
+    # Camarões mortos encontrados pelo raçoador neste trato
+    camaroes_mortos: Mapped[int | None] = mapped_column(Integer, nullable=True)
     observacoes: Mapped[str | None] = mapped_column(
         String(500), nullable=True
     )

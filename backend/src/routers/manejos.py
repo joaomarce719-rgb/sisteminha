@@ -1,5 +1,7 @@
 """SAD Carcinicultura — Rotas de Manejo Alimentar (RF-04)."""
 
+from dataclasses import asdict
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -16,27 +18,31 @@ from src.services.audit import registrar_auditoria, snapshot
 from src.models.ciclo_produtivo import CicloProdutivo
 from src.models.enums import RoleUsuario, StatusAlimentar, StatusCiclo
 from src.models.manejo_alimentar import ManejoAlimentar
-from src.models.tabela_alimentar import TabelaAlimentar
 from src.schemas.manejo_alimentar import (
     ManejoAlimentarCreate,
     ManejoAlimentarResponse,
     RecomendacaoAlimentarResponse,
 )
+from src.services.alimentacao import pontos_alimentares
 from src.services.auth_service import has_role
 from src.services.decision_engine import (
     calcular_biomassa_kg,
     calcular_populacao_atual,
     calcular_racao_diaria,
     taxa_alimentar,
-    taxa_alimentar_clifford,
     calcular_ganho_diario,
     calcular_ganho_semanal,
 )
 from src.services.regras_ciclo import validar_data_no_ciclo
-from src.services.fuzzy_engine import (
-    ajuste_no_periodo,
-    atualizar_taxa_sobrevivencia,
-    inferir_ajuste_sobrevivencia,
+from src.services.fuzzy_engine import inferir_ajuste_sobrevivencia
+from src.services.sobrevivencia import (
+    agrupar_por_dia,
+    confrontar_vivos,
+    nova_sobrevivencia,
+    ordenar,
+    peso_na_data,
+    sobrevivencia_implicita_pct,
+    sobrevivencia_vigente,
 )
 
 router = APIRouter(
@@ -44,27 +50,6 @@ router = APIRouter(
     tags=["Manejo Alimentar"],
     dependencies=[Depends(verificar_ciclo_da_organizacao)],
 )
-
-
-def _obter_pontos_alimentares(ciclo: CicloProdutivo, db: Session) -> list[tuple[float, float]] | None:
-    """Extrai pontos (peso_g, taxa_pct) da tabela do ciclo ou da tabela padrão."""
-    if ciclo.tabela_alimentar and ciclo.tabela_alimentar.faixas:
-        return [(float(f["peso_g"]), float(f["taxa_pct"])) for f in ciclo.tabela_alimentar.faixas]
-    org_id = ciclo.viveiro.organizacao_id
-    padrao = db.scalar(
-        select(TabelaAlimentar)
-        .where(
-            TabelaAlimentar.is_padrao.is_(True),
-            TabelaAlimentar.ativo.is_(True),
-            (TabelaAlimentar.organizacao_id == org_id) | TabelaAlimentar.organizacao_id.is_(None),
-        )
-        # A padrão da organização tem precedência sobre a referência global
-        .order_by(TabelaAlimentar.organizacao_id.is_(None))
-        .limit(1)
-    )
-    if padrao and padrao.faixas:
-        return [(float(f["peso_g"]), float(f["taxa_pct"])) for f in padrao.faixas]
-    return None
 
 
 @router.post("", response_model=ManejoAlimentarResponse, status_code=201)
@@ -89,57 +74,27 @@ def registrar_manejo(
     biometrias = sorted(ciclo.biometrias, key=lambda b: b.data_medicao)
     peso_medio = biometrias[-1].peso_medio_g if biometrias else 1.0
 
-    # Taxa de sobrevivência mais recente
-    manejos_anteriores = sorted(ciclo.manejos_alimentares, key=lambda m: m.data_registro)
-    taxa_sobrev_anterior = 100.0
-    for m in manejos_anteriores:
-        if m.taxa_sobrevivencia_estimada_fuzzy is not None:
-            taxa_sobrev_anterior = m.taxa_sobrevivencia_estimada_fuzzy
+    # O confronto com a tabela é diário: os tratos da data se somam e partem da sobrevivência do dia anterior
+    registros_dia = [m for m in ciclo.manejos_alimentares if m.data_registro == payload.data_registro]
+    anteriores = ordenar(m for m in ciclo.manejos_alimentares if m.data_registro < payload.data_registro)
+    taxa_sobrev_anterior = sobrevivencia_vigente(anteriores)
+    pos_larvas = ciclo.quantidade_pos_larvas
 
     # Calcular biomassa estimada
-    pop_atual = calcular_populacao_atual(ciclo.quantidade_pos_larvas, taxa_sobrev_anterior)
+    pop_atual = calcular_populacao_atual(pos_larvas, taxa_sobrev_anterior)
     biomassa = calcular_biomassa_kg(pop_atual, peso_medio)
 
-    # Taxa alimentar e consumo esperado (Clifford ou tabela calibrada)
-    pontos_calibracao = _obter_pontos_alimentares(ciclo, db)
-    taxa_clifford = taxa_alimentar(peso_medio, pontos_calibracao)
+    mortos_dia = sum(m.camaroes_mortos or 0 for m in registros_dia) + (payload.camaroes_mortos or 0)
+    if mortos_dia > pop_atual:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Os camarões mortos do dia ({mortos_dia:,}) superam a população estimada ({pop_atual:,}).".replace(",", "."),
+        )
+
+    # Ração diária esperada pela tabela alimentar (do ciclo, padrão da organização ou Clifford)
+    pontos_calibracao = pontos_alimentares(ciclo, db)
     racao_esperada = calcular_racao_diaria(biomassa, peso_medio, pontos_calibracao)
     taxa_alimentar_pct = (payload.quantidade_racao_kg / biomassa * 100) if biomassa > 0 else 0
-
-    # Delta consumo para fuzzy
-    delta_consumo = payload.quantidade_racao_kg / racao_esperada if racao_esperada > 0 else 1.0
-
-    # Ganho semanal recente (None = ainda sem duas biometrias)
-    ganho_semanal = None
-    if len(biometrias) >= 2:
-        dias = (biometrias[-1].data_medicao - biometrias[-2].data_medicao).days
-        if dias > 0:
-            gd = calcular_ganho_diario(biometrias[-2].peso_medio_g, biometrias[-1].peso_medio_g, dias)
-            ganho_semanal = calcular_ganho_semanal(gd)
-
-    # ── Inferência Fuzzy (RN-05) ──────────────────
-    ajuste = inferir_ajuste_sobrevivencia(
-        delta_consumo=delta_consumo,
-        nivel_sobra=payload.sobra_bandeja_nivel,
-        ganho_semanal_g=ganho_semanal,
-    )
-    # O ΔS fuzzy é semanal: aplica a fração correspondente ao intervalo desde o
-    # registro anterior (vários tratos no mesmo dia não acumulam ajuste)
-    data_anterior = manejos_anteriores[-1].data_registro if manejos_anteriores else ciclo.data_povoamento
-    dias_periodo = (payload.data_registro - data_anterior).days
-    if not manejos_anteriores:
-        dias_periodo = max(dias_periodo, 1)
-    nova_taxa_sobrev = atualizar_taxa_sobrevivencia(
-        taxa_sobrev_anterior, ajuste_no_periodo(ajuste, dias_periodo)
-    )
-
-    # Status alimentar
-    if delta_consumo < 0.7:
-        status_alimentar = StatusAlimentar.SUB_ARRAC_SUSPEITO
-    elif delta_consumo > 1.3:
-        status_alimentar = StatusAlimentar.SUPER_ARRAC_SUSPEITO
-    else:
-        status_alimentar = StatusAlimentar.NORMAL
 
     import uuid
     manejo = ManejoAlimentar(
@@ -149,10 +104,60 @@ def registrar_manejo(
         quantidade_racao_kg=payload.quantidade_racao_kg,
         taxa_alimentar_calculada_pct=round(taxa_alimentar_pct, 2),
         sobra_bandeja_nivel=payload.sobra_bandeja_nivel,
-        status_alimentar_ajustado=status_alimentar,
-        taxa_sobrevivencia_estimada_fuzzy=nova_taxa_sobrev,
+        camaroes_mortos=payload.camaroes_mortos,
         observacoes=payload.observacoes,
     )
+    dias = agrupar_por_dia([*ciclo.manejos_alimentares, manejo])
+    dia = next(d for d in dias if d.data == payload.data_registro)
+
+    # Delta consumo para fuzzy: ração do dia (todos os tratos) ÷ ração da tabela
+    delta_consumo = dia.racao_kg / racao_esperada if racao_esperada > 0 else 1.0
+
+    # Ganho semanal recente (None = ainda sem duas biometrias)
+    ganho_semanal = None
+    if len(biometrias) >= 2:
+        dias_bio = (biometrias[-1].data_medicao - biometrias[-2].data_medicao).days
+        if dias_bio > 0:
+            gd = calcular_ganho_diario(biometrias[-2].peso_medio_g, biometrias[-1].peso_medio_g, dias_bio)
+            ganho_semanal = calcular_ganho_semanal(gd)
+
+    # ── Inferência Fuzzy (RN-05) ──────────────────
+    ajuste = inferir_ajuste_sobrevivencia(
+        delta_consumo=delta_consumo,
+        nivel_sobra=dia.pior_sobra,
+        ganho_semanal_g=ganho_semanal,
+    )
+
+    # ── Sobrevivência: mortos contados, consumo × tabela e fuzzy ──
+    data_anterior = anteriores[-1].data_registro if anteriores else ciclo.data_povoamento
+    dias_periodo = (payload.data_registro - data_anterior).days
+    if not anteriores:
+        dias_periodo = max(dias_periodo, 1)
+
+    implicita = sobrevivencia_implicita_pct(
+        dias,
+        pos_larvas,
+        lambda data: peso_na_data(biometrias, data),
+        lambda peso: taxa_alimentar(peso, pontos_calibracao),
+        payload.data_registro,
+    )
+    nova_taxa_sobrev = nova_sobrevivencia(
+        taxa_sobrev_anterior, dias_periodo, mortos_dia / pos_larvas * 100, ajuste, implicita
+    )
+
+    # Status alimentar do dia
+    if delta_consumo < 0.7:
+        status_alimentar = StatusAlimentar.SUB_ARRAC_SUSPEITO
+    elif delta_consumo > 1.3:
+        status_alimentar = StatusAlimentar.SUPER_ARRAC_SUSPEITO
+    else:
+        status_alimentar = StatusAlimentar.NORMAL
+
+    manejo.status_alimentar_ajustado = status_alimentar
+    manejo.taxa_sobrevivencia_estimada_fuzzy = nova_taxa_sobrev
+    for anterior_do_dia in registros_dia:  # o diagnóstico é do dia, não do trato
+        anterior_do_dia.status_alimentar_ajustado = status_alimentar
+        anterior_do_dia.taxa_sobrevivencia_estimada_fuzzy = nova_taxa_sobrev
     db.add(manejo)
     db.flush()
     db.refresh(manejo)
@@ -191,15 +196,12 @@ def recomendacao_alimentar(
     biometrias = sorted(ciclo.biometrias, key=lambda b: b.data_medicao)
     peso_medio = biometrias[-1].peso_medio_g if biometrias else 1.0
 
-    manejos = sorted(ciclo.manejos_alimentares, key=lambda m: m.data_registro)
-    taxa_sobrev = 100.0
-    for m in manejos:
-        if m.taxa_sobrevivencia_estimada_fuzzy is not None:
-            taxa_sobrev = m.taxa_sobrevivencia_estimada_fuzzy
+    manejos = ordenar(ciclo.manejos_alimentares)
+    taxa_sobrev = sobrevivencia_vigente(manejos)
 
     pop_atual = calcular_populacao_atual(ciclo.quantidade_pos_larvas, taxa_sobrev)
     biomassa = calcular_biomassa_kg(pop_atual, peso_medio)
-    pontos_calibracao = _obter_pontos_alimentares(ciclo, db)
+    pontos_calibracao = pontos_alimentares(ciclo, db)
     taxa_clifford_pct = taxa_alimentar(peso_medio, pontos_calibracao)
     racao_sugerida = calcular_racao_diaria(biomassa, peso_medio, pontos_calibracao)
 
@@ -216,11 +218,34 @@ def recomendacao_alimentar(
         elif ultimas_sobras[-1] == "SEM_SOBRA":
             ajuste_texto = "✅ Consumo limpo — manter ou avaliar incremento leve."
 
+    # Confronto de hoje: ração lançada (todos os tratos) contra a ração da tabela
+    hoje = date.today()
+    registros_hoje = [m for m in manejos if m.data_registro == hoje]
+    taxa_inicio_dia = sobrevivencia_vigente(m for m in manejos if m.data_registro < hoje)
+    biomassa_inicio_dia = calcular_biomassa_kg(
+        calcular_populacao_atual(ciclo.quantidade_pos_larvas, taxa_inicio_dia), peso_medio
+    )
+    racao_tabela_dia = calcular_racao_diaria(biomassa_inicio_dia, peso_medio, pontos_calibracao)
+    racao_hoje = sum(m.quantidade_racao_kg for m in registros_hoje)
+
     return RecomendacaoAlimentarResponse(
         racao_diaria_sugerida_kg=round(racao_sugerida, 2),
         taxa_clifford_pct=round(taxa_clifford_pct, 2),
         biomassa_estimada_kg=round(biomassa, 2),
         ajuste_sugerido=ajuste_texto,
+        racao_tabela_dia_kg=round(racao_tabela_dia, 2),
+        racao_lancada_hoje_kg=round(racao_hoje, 2),
+        consumo_vs_tabela_pct=round(racao_hoje / racao_tabela_dia * 100, 1) if registros_hoje and racao_tabela_dia > 0 else None,
+        status_alimentar=registros_hoje[-1].status_alimentar_ajustado if registros_hoje else None,
+        confronto_vivos=asdict(
+            confrontar_vivos(
+                manejos,
+                ciclo.quantidade_pos_larvas,
+                lambda data: peso_na_data(biometrias, data),
+                lambda peso: taxa_alimentar(peso, pontos_calibracao),
+                hoje,
+            )
+        ),
     )
 
 

@@ -1,5 +1,6 @@
 """SAD Carcinicultura — Rotas de Ciclos Produtivos (RF-02, RF-09)."""
 
+from dataclasses import asdict
 from datetime import date
 from uuid import UUID
 
@@ -23,7 +24,9 @@ from src.models.viveiro import Viveiro
 from src.schemas.ciclo import CicloCreate, CicloEncerrar, CicloResponse, MetricasAtuaisResponse
 from src.services.auth_service import get_current_user, has_role
 from src.services import decision_engine as de
+from src.services.alimentacao import pontos_alimentares
 from src.services.precos import tabela_vigente
+from src.services.sobrevivencia import confrontar_vivos, ordenar, peso_na_data, sobrevivencia_vigente
 from src.services.regras_ciclo import ciclo_aberto_do_viveiro
 
 router = APIRouter(prefix="/api/v1/ciclos", tags=["Ciclos Produtivos"])
@@ -291,12 +294,18 @@ def metricas_atuais(
         peso_medio = None
         entradas_faltantes.append("biometria")
 
-    # Sobrevivência fuzzy mais recente
-    manejos = sorted(ciclo.manejos_alimentares, key=lambda m: m.data_registro)
-    taxa_sobrev = 100.0
-    for m in manejos:
-        if m.taxa_sobrevivencia_estimada_fuzzy is not None:
-            taxa_sobrev = m.taxa_sobrevivencia_estimada_fuzzy
+    # Sobrevivência estimada mais recente (mortos contados, consumo × tabela e fuzzy)
+    manejos = ordenar(ciclo.manejos_alimentares)
+    taxa_sobrev = sobrevivencia_vigente(manejos)
+
+    pontos = pontos_alimentares(ciclo, db)
+    confronto = confrontar_vivos(
+        manejos,
+        ciclo.quantidade_pos_larvas,
+        lambda data: peso_na_data(biometrias, data),
+        lambda peso: de.taxa_alimentar(peso, pontos),
+        hoje,
+    )
 
     # População e biomassa
     pop_atual = de.calcular_populacao_atual(ciclo.quantidade_pos_larvas, taxa_sobrev)
@@ -346,6 +355,7 @@ def metricas_atuais(
         alerta_hiperdensidade=alerta_hiper,
         populacao_inicial=ciclo.quantidade_pos_larvas,
         taxa_sobrevivencia_fuzzy_pct=taxa_sobrev,
+        confronto_vivos=asdict(confronto),
         populacao_estimada=pop_atual,
         peso_medio_atual_g=round(peso_medio, 2) if peso_medio is not None else None,
         biomassa_atual_kg=round(biomassa_atual, 2) if biomassa_atual is not None else None,

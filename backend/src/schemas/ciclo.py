@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, model_validator
 
 from src.models.enums import StatusCiclo
+from src.schemas.manejo_alimentar import ConfrontoVivosResponse
 
 
 class CicloCreate(BaseModel):
@@ -92,6 +93,8 @@ class MetricasAtuaisResponse(BaseModel):
     # População e biomassa
     populacao_inicial: int
     taxa_sobrevivencia_fuzzy_pct: float
+    # Vivos pela contagem de mortos x vivos pela alimentação
+    confronto_vivos: ConfrontoVivosResponse | None = None
     populacao_estimada: int
     peso_medio_atual_g: float | None = None
     biomassa_atual_kg: float | None = None

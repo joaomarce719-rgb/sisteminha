@@ -26,6 +26,7 @@ from src.schemas.simulacao import (
 )
 from src.services.auth_service import has_role
 from src.services.precos import tabela_vigente
+from src.services.sobrevivencia import sobrevivencia_vigente
 
 from src.services.decision_engine import (
     buscar_preco_por_gramatura,
@@ -86,12 +87,8 @@ def _executar_simulacao(
         if dias_entre > 0:
             ganho_diario = calcular_ganho_diario(b1.peso_medio_g, b2.peso_medio_g, dias_entre)
 
-    # Sobrevivência fuzzy
-    manejos = sorted(ciclo.manejos_alimentares, key=lambda m: m.data_registro)
-    taxa_sobrev = 100.0
-    for m in manejos:
-        if m.taxa_sobrevivencia_estimada_fuzzy is not None:
-            taxa_sobrev = m.taxa_sobrevivencia_estimada_fuzzy
+    # Sobrevivência estimada (mortos contados, consumo × tabela e fuzzy)
+    taxa_sobrev = sobrevivencia_vigente(ciclo.manejos_alimentares)
 
     pop_atual = calcular_populacao_atual(ciclo.quantidade_pos_larvas, taxa_sobrev)
     biomassa_atual = calcular_biomassa_kg(pop_atual, peso_atual)
