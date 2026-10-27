@@ -35,6 +35,7 @@ import {
   tabelasAlimentaresApi,
 } from "@/lib/api";
 import { mensagemErro } from "@/lib/utils";
+import { resumoConfronto } from "@/lib/confronto";
 import type {
   Viveiro,
   CicloProdutivo,
@@ -1025,9 +1026,9 @@ export default function ViveiroDetalhePage() {
                       accent="emerald"
                     />
                     <MetricCard
-                      title="Sobrevivência Fuzzy"
+                      title="Sobrevivência Estimada"
                       value={`${metricas.taxa_sobrevivencia_fuzzy_pct.toFixed(1)}%`}
-                      subtitle="Ajustada por manejo e dias"
+                      subtitle={metricas.confronto_vivos ? resumoConfronto(metricas.confronto_vivos) : "Ajustada por manejo e dias"}
                       icon={Activity}
                       accent={metricas.taxa_sobrevivencia_fuzzy_pct < 75 ? "red" : "emerald"}
                     />
