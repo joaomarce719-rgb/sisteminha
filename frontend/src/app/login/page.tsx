@@ -386,6 +386,7 @@ export default function LoginPage() {
                   name="nome_completo"
                   type="text"
                   value={regNome}
+                  maxLength={120}
                   onChange={(e) => setRegNome(e.target.value)}
                   placeholder="Ex: Dr. Roberto Alencar"
                   className="mt-1"
@@ -402,6 +403,7 @@ export default function LoginPage() {
                   name="email"
                   type="email"
                   value={regEmail}
+                  maxLength={120}
                   onChange={(e) => setRegEmail(e.target.value)}
                   placeholder="roberto@fazenda.com"
                   className="mt-1"
@@ -418,6 +420,7 @@ export default function LoginPage() {
                   name="codigo_organizacao"
                   type="text"
                   value={regCodigoOrg}
+                  maxLength={30}
                   onChange={(e) => setRegCodigoOrg(e.target.value)}
                   placeholder="Informado pelo gestor da fazenda"
                   className="mt-1"
@@ -433,6 +436,7 @@ export default function LoginPage() {
                   name="telefone"
                   type="tel"
                   value={regTelefone}
+                  maxLength={20}
                   onChange={(e) => setRegTelefone(e.target.value)}
                   placeholder="(88) 99999-0000"
                   className="mt-1"

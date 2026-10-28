@@ -167,6 +167,7 @@ function CriarFazendaDialog({
           <Input
             id="org_fazenda"
             value={form.organizacao_nome}
+            maxLength={120}
             onChange={(e) => setForm({ ...form, organizacao_nome: e.target.value })}
             placeholder="Ex: Grupo Aquacultura do Ceará"
             className="mt-1 bg-slate-900 border-slate-700 text-white placeholder:text-slate-500"
@@ -346,6 +347,7 @@ function CriarGestorDialog({
           <Input
             id="tel_gestor"
             value={form.telefone_emergencia}
+            maxLength={20}
             onChange={(e) => setForm({ ...form, telefone_emergencia: e.target.value })}
             placeholder="Ex: (88) 99876-5432"
             className="mt-1 bg-slate-900 border-slate-700 text-white placeholder:text-slate-500"

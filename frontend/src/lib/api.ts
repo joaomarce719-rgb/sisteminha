@@ -143,6 +143,59 @@ export function isSuperadmin(user: StoredUser | null = getStoredUser()): boolean
   return Boolean(user?.is_superadmin);
 }
 
+// ── Mensagens de erro da API ──────────────────────────
+// Erros de validação do FastAPI (422) chegam como lista em `detail`; sem isso a
+// tela mostrava "[object Object]".
+interface ErroDeValidacao {
+  loc?: (string | number)[];
+  msg?: string;
+  type?: string;
+  ctx?: Record<string, unknown>;
+}
+
+const NOMES_DOS_CAMPOS: Record<string, string> = {
+  nome: "Nome",
+  nome_completo: "Nome",
+  email: "E-mail",
+  senha: "Senha",
+  telefone_emergencia: "Telefone",
+  identificador: "Código",
+  organizacao_nome: "Nome da organização",
+  localizacao: "Localização",
+  descricao: "Descrição",
+  moeda: "Moeda",
+  identificacao: "Identificação",
+  observacoes: "Observações",
+  laboratorio_origem: "Laboratório de origem",
+};
+
+function textoDoErro(erro: ErroDeValidacao): string {
+  const campo = erro.loc?.[erro.loc.length - 1];
+  const nome = typeof campo === "string" ? (NOMES_DOS_CAMPOS[campo] ?? campo) : "Campo";
+  const ctx = erro.ctx ?? {};
+  switch (erro.type) {
+    case "string_too_long":
+    case "too_long":
+      return `${nome}: no máximo ${ctx.max_length} caracteres`;
+    case "string_too_short":
+    case "too_short":
+      return `${nome}: no mínimo ${ctx.min_length} caracteres`;
+    case "missing":
+      return `${nome}: campo obrigatório`;
+    default:
+      return `${nome}: ${erro.msg ?? "valor inválido"}`;
+  }
+}
+
+/** Texto do `detail` de uma resposta de erro, seja mensagem simples ou lista de validação. */
+export function mensagemDaApi(detail: unknown, padrao: string): string {
+  if (typeof detail === "string" && detail) return detail;
+  if (Array.isArray(detail) && detail.length > 0) {
+    return detail.map((e) => textoDoErro(e as ErroDeValidacao)).join("; ");
+  }
+  return padrao;
+}
+
 // ── Fetch Wrapper ─────────────────────────────────────
 async function apiFetch<T>(
   path: string,
@@ -170,7 +223,7 @@ async function apiFetch<T>(
       window.location.assign(new URL("/login", window.location.origin));
     }
     const body = await res.json().catch(() => ({ detail: "Credenciais inválidas" }));
-    throw new Error(body.detail || "Sessão expirada");
+    throw new Error(mensagemDaApi(body.detail, "Sessão expirada"));
   }
 
   if (!res.ok) {
@@ -181,7 +234,7 @@ async function apiFetch<T>(
           ? `Erro interno do servidor (código ${res.status}). Tente novamente ou avise o suporte.`
           : `Erro ${res.status}`,
     }));
-    throw new Error(body.detail || `Erro ${res.status}`);
+    throw new Error(mensagemDaApi(body.detail, `Erro ${res.status}`));
   }
 
   // 204 No Content (ex.: exclusões) não tem corpo JSON
