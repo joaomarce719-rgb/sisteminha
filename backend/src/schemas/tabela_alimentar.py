@@ -25,7 +25,7 @@ class TabelaAlimentarUpdate(BaseModel):
     """Payload para atualização ou inativação."""
 
     nome: str | None = Field(None, min_length=2, max_length=120)
-    descricao: str | None = None
+    descricao: str | None = Field(None, max_length=255)
     is_padrao: bool | None = None
     ativo: bool | None = None
     faixas: list[FaixaAlimentarItem] | None = Field(None, min_length=2)

@@ -14,8 +14,8 @@ class OrganizacaoCreate(BaseModel):
 
 class OrganizacaoUpdate(BaseModel):
     nome: str | None = Field(None, min_length=2, max_length=120)
-    identificador: str | None = None
-    moeda: str | None = None
+    identificador: str | None = Field(None, max_length=30)
+    moeda: str | None = Field(None, max_length=3)
     status_ativo: bool | None = None
 
 

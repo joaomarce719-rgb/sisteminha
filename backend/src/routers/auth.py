@@ -144,12 +144,22 @@ def registrar_usuario(
     senha = data.get("senha") or data.get("password")
     nome = data.get("nome_completo") or data.get("name") or data.get("username") or "Usuário"
     telefone = data.get("telefone_emergencia") or data.get("phone")
+    if telefone is not None:
+        telefone = str(telefone).strip() or None
 
     if not email or not senha:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Email e senha são obrigatórios.",
         )
+
+    # Mesmos limites das colunas: o Postgres recusa texto maior (erro 500), o SQLite não
+    for rotulo, valor, limite in (("O nome", nome, 120), ("O e-mail", email, 120), ("O telefone", telefone, 20)):
+        if valor and len(valor) > limite:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"{rotulo} deve ter no máximo {limite} caracteres.",
+            )
 
     if len(senha) < 6:
         raise HTTPException(

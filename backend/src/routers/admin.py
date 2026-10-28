@@ -28,8 +28,8 @@ class FazendaAdminCreate(BaseModel):
     nome: str = Field(..., min_length=2, max_length=120)
     localizacao: str | None = Field(None, max_length=255)
     area_total_ha: float | None = Field(None, gt=0)
-    organizacao_nome: str | None = None
-    identificador: str | None = None
+    organizacao_nome: str | None = Field(None, max_length=120)
+    identificador: str | None = Field(None, max_length=30)
 
 
 class FazendaAdminResponse(BaseModel):
@@ -67,7 +67,7 @@ class GestorAdminCreate(BaseModel):
     nome_completo: str = Field(..., min_length=2, max_length=120)
     email: str = Field(..., min_length=5, max_length=120)
     senha: str = Field(..., min_length=6, max_length=128)
-    telefone_emergencia: str | None = None
+    telefone_emergencia: str | None = Field(None, max_length=20)
     organizacao_id: UUID | None = None
     nome_fazenda: str | None = None
 
@@ -89,7 +89,7 @@ class OperadorCreate(BaseModel):
     email: str = Field(..., min_length=5, max_length=120)
     senha: str = Field(..., min_length=6, max_length=128)
     papel: RoleUsuario = RoleUsuario.CAMPO
-    telefone_emergencia: str | None = None
+    telefone_emergencia: str | None = Field(None, max_length=20)
 
 
 # ── 1. Métricas Globais do Sistema ────────────────────────────
