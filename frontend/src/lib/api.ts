@@ -32,23 +32,75 @@ type Payload = Record<string, unknown>;
 
 const API_BASE = "/api/v1";
 
-// ── Token Management ──────────────────────────────────
-export function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("sad_token");
-}
-
-export function setToken(token: string): void {
-  localStorage.setItem("sad_token", token);
-}
+// ── Sessão por aba ────────────────────────────────────
+// Cada aba guarda a própria sessão no sessionStorage (mantido ao recarregar a aba);
+// o localStorage guarda o último login, herdado pelas abas que ainda não têm sessão
+// (aba nova, navegador reaberto). Entrar com outro usuário numa aba não troca o
+// usuário das outras, e sair numa aba não desconecta as outras.
+const CHAVE_TOKEN = "sad_token";
+const CHAVE_USUARIO = "sad_user";
+const CHAVE_SAIU = "sad_sessao_encerrada"; // a aba saiu: não herda o último login
 
 // Mesma validade do JWT (JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 480)
 const SESSAO_SEGUNDOS = 8 * 60 * 60;
 
+const noNavegador = () => typeof window !== "undefined";
+
+function lerSessao(chave: string): string | null {
+  const daAba = sessionStorage.getItem(chave);
+  if (daAba !== null) return daAba;
+  return sessionStorage.getItem(CHAVE_SAIU) ? null : localStorage.getItem(chave);
+}
+
+/** Copia o último login para esta aba, que a partir daí não muda com logins de outras abas. */
+function fixarSessaoNaAba(): void {
+  if (sessionStorage.getItem(CHAVE_TOKEN) !== null || sessionStorage.getItem(CHAVE_SAIU)) return;
+  const token = localStorage.getItem(CHAVE_TOKEN);
+  const usuario = localStorage.getItem(CHAVE_USUARIO);
+  if (token && usuario) {
+    sessionStorage.setItem(CHAVE_TOKEN, token);
+    sessionStorage.setItem(CHAVE_USUARIO, usuario);
+  }
+}
+
+// Lido pelo src/proxy.ts para redirecionar antes de renderizar
+function gravarCookiePapel(papel: string | null): void {
+  document.cookie = papel
+    ? `sad_papel=${encodeURIComponent(papel)}; path=/; max-age=${SESSAO_SEGUNDOS}; samesite=lax`
+    : "sad_papel=; path=/; max-age=0; samesite=lax";
+}
+
+/** O cookie é um só por navegador: cada aba o regrava com o seu perfil ao ficar ativa. */
+function sincronizarCookieDaAba(): void {
+  gravarCookiePapel(getStoredUser()?.role ?? null);
+}
+
+export function getToken(): string | null {
+  if (!noNavegador()) return null;
+  const token = lerSessao(CHAVE_TOKEN);
+  // A primeira requisição fixa na aba o login que ela herdou
+  if (token !== null) fixarSessaoNaAba();
+  return token;
+}
+
+export function setToken(token: string): void {
+  sessionStorage.removeItem(CHAVE_SAIU);
+  sessionStorage.setItem(CHAVE_TOKEN, token);
+  localStorage.setItem(CHAVE_TOKEN, token);
+}
+
 export function clearToken(): void {
-  localStorage.removeItem("sad_token");
-  localStorage.removeItem("sad_user");
-  document.cookie = "sad_papel=; path=/; max-age=0; samesite=lax";
+  const token = sessionStorage.getItem(CHAVE_TOKEN) ?? lerSessao(CHAVE_TOKEN);
+  sessionStorage.removeItem(CHAVE_TOKEN);
+  sessionStorage.removeItem(CHAVE_USUARIO);
+  sessionStorage.setItem(CHAVE_SAIU, "1");
+  // O último login só é apagado se for o desta aba; a aba que continua logada
+  // regrava o cookie quando voltar a ficar ativa
+  if (localStorage.getItem(CHAVE_TOKEN) === token) {
+    localStorage.removeItem(CHAVE_TOKEN);
+    localStorage.removeItem(CHAVE_USUARIO);
+  }
+  gravarCookiePapel(null);
 }
 
 export interface StoredUser {
@@ -58,16 +110,32 @@ export interface StoredUser {
   is_superadmin?: boolean;
 }
 
+/** Usuário desta aba como texto (estável para o useSyncExternalStore de lib/sessao.ts). */
+export function lerUsuarioDaAba(): string | null {
+  return noNavegador() ? lerSessao(CHAVE_USUARIO) : null;
+}
+
 export function getStoredUser(): StoredUser | null {
-  if (typeof window === "undefined") return null;
-  const raw = localStorage.getItem("sad_user");
+  const raw = lerUsuarioDaAba();
   return raw ? JSON.parse(raw) : null;
 }
 
 export function setStoredUser(user: StoredUser): void {
-  localStorage.setItem("sad_user", JSON.stringify(user));
-  // Lido pelo src/proxy.ts para redirecionar antes de renderizar
-  document.cookie = `sad_papel=${encodeURIComponent(user.role)}; path=/; max-age=${SESSAO_SEGUNDOS}; samesite=lax`;
+  const bruto = JSON.stringify(user);
+  sessionStorage.removeItem(CHAVE_SAIU);
+  sessionStorage.setItem(CHAVE_USUARIO, bruto);
+  localStorage.setItem(CHAVE_USUARIO, bruto);
+  gravarCookiePapel(user.role);
+}
+
+if (noNavegador()) {
+  fixarSessaoNaAba();
+  sincronizarCookieDaAba();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") sincronizarCookieDaAba();
+  });
+  window.addEventListener("focus", sincronizarCookieDaAba);
+  window.addEventListener("pageshow", sincronizarCookieDaAba);
 }
 
 /** Indicador apenas de navegação; a autorização real é feita pelo backend (403). */
