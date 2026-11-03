@@ -129,3 +129,27 @@ def test_admin_exige_organizacao_existente(client, admin):
     assert client.post("/api/v1/admin/fazendas", json=fazenda, headers=admin).status_code == 422
     r = client.post("/api/v1/admin/fazendas", json={**fazenda, "organizacao_id": inexistente}, headers=admin)
     assert r.status_code == 404
+
+
+def test_login_bloqueia_apos_falhas_por_email(client, monkeypatch):
+    from src.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "login_max_falhas_email", 3)
+    monkeypatch.setattr(get_settings(), "login_max_falhas_ip", 1000)
+    email = f"{unico('forca')}@x.com"
+    for _ in range(3):
+        assert client.post("/api/v1/auth/login", json={"email": email, "senha": "errada1"}).status_code == 401
+    r = client.post("/api/v1/auth/login", json={"email": email, "senha": "errada1"})
+    assert r.status_code == 429 and r.headers["Retry-After"] == "900"
+    outro = client.post("/api/v1/auth/login", json={"email": f"{unico('outro')}@x.com", "senha": "errada1"})
+    assert outro.status_code == 401
+
+
+def test_login_bloqueia_apos_falhas_por_ip(client, monkeypatch):
+    from src.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "login_max_falhas_email", 1000)
+    corpo = {"email": f"{unico('ip')}@x.com", "senha": "errada1"}
+    assert client.post("/api/v1/auth/login", json=corpo).status_code == 401  # grava 1 falha deste IP
+    monkeypatch.setattr(get_settings(), "login_max_falhas_ip", 1)
+    assert client.post("/api/v1/auth/login", json=corpo).status_code == 429

@@ -1,11 +1,13 @@
 import json
 import urllib.parse
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.config import get_settings
 from src.database import get_db
+from src.models.auditoria import LogAuditoria
 from src.services.audit import registrar_auditoria, snapshot
 from src.models.organizacao import Organizacao
 from src.models.usuario import Usuario
@@ -74,6 +76,19 @@ def _registrar_falha_login(
     db.commit()
 
 
+def _falhas_demais(db: Session, email: str, ip: str | None) -> bool:
+    """Excedeu o limite de falhas recentes? O e-mail é a defesa principal (o IP pode chegar forjado)."""
+    cfg = get_settings()
+    falhas = select(func.count()).select_from(LogAuditoria).where(
+        LogAuditoria.acao == "LOGIN_FALHA",
+        LogAuditoria.created_at >= datetime.now(timezone.utc) - timedelta(minutes=cfg.login_janela_minutos),
+    )
+    por_email = falhas.where(LogAuditoria.dados_novos["email"].as_string() == email)
+    if (db.scalar(por_email) or 0) >= cfg.login_max_falhas_email:
+        return True
+    return ip is not None and (db.scalar(falhas.where(LogAuditoria.ip_origem == ip)) or 0) >= cfg.login_max_falhas_ip
+
+
 async def dados_da_requisicao(request: Request) -> dict:
     """Lê o corpo (JSON ou formulário) de forma assíncrona para handlers síncronos."""
     return await parse_request_data(request)
@@ -97,10 +112,18 @@ def login(
             detail="Email/username e senha/password são obrigatórios.",
         )
 
+    ip = request.client.host if request.client else None
+    # Antes de gravar a falha: tentativas bloqueadas não renovam a janela
+    if _falhas_demais(db, email, ip):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Muitas tentativas de login. Tente novamente em {get_settings().login_janela_minutos} minutos.",
+            headers={"Retry-After": str(get_settings().login_janela_minutos * 60)},
+        )
+
     result = db.execute(select(Usuario).where(func.lower(Usuario.email) == email))
     user = result.scalar_one_or_none()
 
-    ip = request.client.host if request.client else None
     if user is None or not verify_password(senha, user.senha_hash):
         _registrar_falha_login(db, email, ip, user)
         raise HTTPException(
