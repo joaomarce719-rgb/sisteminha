@@ -50,22 +50,35 @@ function fmtDate(d: string) {
   }
 }
 
+// Organizações conhecidas (uma entrada por organizacao_id), tiradas das fazendas já cadastradas
+function organizacoesDe(fazendas: FazendaAdmin[]): { id: string; nome: string }[] {
+  const mapa = new Map<string, string>();
+  for (const f of fazendas) {
+    if (f.organizacao_id) mapa.set(f.organizacao_id, f.organizacao_nome || "Sem nome");
+  }
+  return [...mapa].map(([id, nome]) => ({ id, nome }));
+}
+
 // ── Modal Criar Fazenda (Superadmin) ─────────────────
 function CriarFazendaDialog({
   open,
   onClose,
   onCreated,
+  fazendas,
 }: {
   open: boolean;
   onClose: () => void;
   onCreated: () => void;
+  fazendas: FazendaAdmin[];
 }) {
   const [form, setForm] = useState({
     nome: "",
     localizacao: "Russas, Vale do Jaguaribe - CE",
     area_total_ha: "",
+    organizacao_id: "", // vazio = criar organização nova
     organizacao_nome: "",
   });
+  const organizacoes = organizacoesDe(fazendas);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -78,7 +91,8 @@ function CriarFazendaDialog({
         nome: form.nome.trim(),
         localizacao: form.localizacao.trim() || null,
         area_total_ha: form.area_total_ha ? parseFloat(form.area_total_ha) : null,
-        organizacao_nome: form.organizacao_nome.trim() || undefined,
+        organizacao_id: form.organizacao_id || undefined,
+        organizacao_nome: form.organizacao_id ? undefined : form.organizacao_nome.trim() || undefined,
       });
       toast.success(
         "Fazenda adicionada com sucesso!",
@@ -90,6 +104,7 @@ function CriarFazendaDialog({
         nome: "",
         localizacao: "Russas, Vale do Jaguaribe - CE",
         area_total_ha: "",
+        organizacao_id: "",
         organizacao_nome: "",
       });
     } catch (err) {
@@ -162,16 +177,32 @@ function CriarFazendaDialog({
 
         <div>
           <Label htmlFor="org_fazenda" className="text-xs font-semibold text-slate-300">
-            Grupo Produtor / Empresa Responsável
+            Grupo Produtor / Empresa Responsável *
           </Label>
-          <Input
-            id="org_fazenda"
-            value={form.organizacao_nome}
-            maxLength={120}
-            onChange={(e) => setForm({ ...form, organizacao_nome: e.target.value })}
-            placeholder="Ex: Grupo Aquacultura do Ceará"
-            className="mt-1 bg-slate-900 border-slate-700 text-white placeholder:text-slate-500"
-          />
+          <select
+            id="org_fazenda_select"
+            value={form.organizacao_id}
+            onChange={(e) => setForm({ ...form, organizacao_id: e.target.value })}
+            className="w-full mt-1 px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-700 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+          >
+            <option value="">Nova organização…</option>
+            {organizacoes.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.nome}
+              </option>
+            ))}
+          </select>
+          {!form.organizacao_id && (
+            <Input
+              id="org_fazenda"
+              value={form.organizacao_nome}
+              maxLength={120}
+              required
+              onChange={(e) => setForm({ ...form, organizacao_nome: e.target.value })}
+              placeholder="Ex: Grupo Aquacultura do Ceará"
+              className="mt-2 bg-slate-900 border-slate-700 text-white placeholder:text-slate-500"
+            />
+          )}
         </div>
 
         <div className="pt-2 flex gap-3">
@@ -218,8 +249,9 @@ function CriarGestorDialog({
     email: "",
     senha: "",
     telefone_emergencia: "",
-    nome_fazenda: fazendas[0]?.nome || "",
+    organizacao_id: organizacoesDe(fazendas)[0]?.id || "",
   });
+  const organizacoes = organizacoesDe(fazendas);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -233,11 +265,13 @@ function CriarGestorDialog({
         email: form.email.trim(),
         senha: form.senha,
         telefone_emergencia: form.telefone_emergencia.trim() || null,
-        nome_fazenda: form.nome_fazenda || undefined,
+        organizacao_id: form.organizacao_id,
       });
       toast.success(
         "Gestor cadastrado com sucesso!",
-        `${form.nome_completo} agora é Gestor Administrativo da fazenda ${form.nome_fazenda || "padrão"}.`
+        `${form.nome_completo} agora é Gestor Administrativo de ${
+          organizacoes.find((o) => o.id === form.organizacao_id)?.nome ?? "a organização"
+        }.`
       );
       onCreated();
       onClose();
@@ -246,7 +280,7 @@ function CriarGestorDialog({
         email: "",
         senha: "",
         telefone_emergencia: "",
-        nome_fazenda: fazendas[0]?.nome || "",
+        organizacao_id: organizacoes[0]?.id || "",
       });
     } catch (err) {
       const msg = mensagemErro(err, "Erro ao cadastrar gestor administrativo");
@@ -320,20 +354,21 @@ function CriarGestorDialog({
 
         <div>
           <Label htmlFor="fazenda_select" className="text-xs font-semibold text-slate-300">
-            Fazenda / Propriedade Responsável *
+            Organização / Fazenda Responsável *
           </Label>
           <select
             id="fazenda_select"
-            value={form.nome_fazenda}
-            onChange={(e) => setForm({ ...form, nome_fazenda: e.target.value })}
+            required
+            value={form.organizacao_id}
+            onChange={(e) => setForm({ ...form, organizacao_id: e.target.value })}
             className="w-full mt-1 px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-700 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
           >
-            {fazendas.length === 0 ? (
-              <option value="">Nenhuma fazenda cadastrada</option>
+            {organizacoes.length === 0 ? (
+              <option value="">Nenhuma organização cadastrada</option>
             ) : (
-              fazendas.map((f) => (
-                <option key={f.id} value={f.nome}>
-                  {f.nome} — {f.localizacao || "Vale do Jaguaribe"}
+              organizacoes.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.nome}
                 </option>
               ))
             )}
@@ -831,6 +866,7 @@ export default function AdminPage() {
         open={showFazendaModal}
         onClose={() => setShowFazendaModal(false)}
         onCreated={carregarDados}
+        fazendas={fazendas}
       />
 
       <CriarGestorDialog

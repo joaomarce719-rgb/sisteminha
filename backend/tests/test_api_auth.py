@@ -117,3 +117,15 @@ def test_autocadastro_em_producao_nunca_vira_gestor(client, monkeypatch):
     r = client.post("/api/v1/auth/register", json={"email": email, "senha": "senha123"})
     assert r.status_code == 201
     assert r.json()["papel"] == "CAMPO" and r.json()["ativo"] is False
+
+
+def test_admin_exige_organizacao_existente(client, admin):
+    inexistente = "00000000-0000-0000-0000-000000000000"
+    gestor = {"nome_completo": "Gestor X", "email": f"{unico('gx')}@x.com", "senha": "abc12345"}
+    assert client.post("/api/v1/admin/gestores", json=gestor, headers=admin).status_code == 422
+    r = client.post("/api/v1/admin/gestores", json={**gestor, "organizacao_id": inexistente}, headers=admin)
+    assert r.status_code == 404
+    fazenda = {"nome": "Fazenda X"}
+    assert client.post("/api/v1/admin/fazendas", json=fazenda, headers=admin).status_code == 422
+    r = client.post("/api/v1/admin/fazendas", json={**fazenda, "organizacao_id": inexistente}, headers=admin)
+    assert r.status_code == 404

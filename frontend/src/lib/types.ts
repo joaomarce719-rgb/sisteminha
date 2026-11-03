@@ -277,6 +277,7 @@ export interface FazendaAdmin {
   area_total_ha: number | null;
   status_ativo: boolean;
   total_viveiros: number;
+  organizacao_id: string | null;
   organizacao_nome: string | null;
   created_at: string;
 }
