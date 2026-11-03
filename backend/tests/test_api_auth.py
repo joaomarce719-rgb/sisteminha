@@ -107,3 +107,13 @@ def test_criar_usuario_exige_senha(client, gestor):
         headers=gestor,
     )
     assert r.status_code == 422
+
+
+def test_autocadastro_em_producao_nunca_vira_gestor(client, monkeypatch):
+    from src.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "app_debug", False)
+    email = f"{unico('prod')}@teste.com"
+    r = client.post("/api/v1/auth/register", json={"email": email, "senha": "senha123"})
+    assert r.status_code == 201
+    assert r.json()["papel"] == "CAMPO" and r.json()["ativo"] is False

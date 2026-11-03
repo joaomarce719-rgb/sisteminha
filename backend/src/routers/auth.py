@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from src.config import get_settings
 from src.database import get_db
 from src.services.audit import registrar_auditoria, snapshot
 from src.models.organizacao import Organizacao
@@ -176,7 +177,11 @@ def registrar_usuario(
             detail="Não foi possível concluir o cadastro com este e-mail.",
         )
 
-    primeiro_usuario = db.execute(select(Usuario.id).limit(1)).scalar_one_or_none() is None
+    # Só em desenvolvimento o 1º cadastro vira GESTOR (há corrida entre dois cadastros simultâneos);
+    # em produção o 1º superadmin nasce por `python -m src.criar_superadmin`.
+    primeiro_usuario = get_settings().app_debug and (
+        db.execute(select(Usuario.id).limit(1)).scalar_one_or_none() is None
+    )
 
     # Código (identificador) da organização: vincula o cadastro para aprovação do gestor dela
     organizacao_id = None
