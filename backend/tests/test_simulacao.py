@@ -74,6 +74,16 @@ def test_comparativo_nao_grava_historico(client, gestor, novo_ciclo):
     assert len(depois) == len(antes)
 
 
+def test_comparativo_varre_dia_a_dia_e_acha_o_melhor_dia(client, gestor, novo_ciclo):
+    _, url = _ciclo_com_biometrias(client, gestor, novo_ciclo)
+    r = client.get(f"{url}/simular-despesca/comparativo?custo_diario_rs=1", headers=gestor)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    dia = body["melhor_dia"]
+    assert dia is not None and 1 <= dia["dias_horizonte"] <= 30 and dia["delta_v_rs"] > 0
+    assert all(dia["delta_v_rs"] >= s["delta_v_rs"] for s in body["simulacoes"])
+
+
 def test_peso_projetado_fora_da_tabela_usa_preco_atual(client, gestor, novo_ciclo):
     _, url = _ciclo_com_biometrias(client, gestor, novo_ciclo, pesos=(17.0, 19.5))
     _lancar_racao(client, gestor, url)

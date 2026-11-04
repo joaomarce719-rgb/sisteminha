@@ -316,3 +316,83 @@ def test_excluir_faixa_fica_na_auditoria(client, gestor_sem_precos):
     assert client.delete(f"/api/v1/precos-mercado/{faixa['id']}", headers=gestor_sem_precos).status_code == 204
     itens = client.get("/api/v1/auditoria/?entidade=TabelaPrecoMercado&acao=EXCLUIR", headers=gestor_sem_precos).json()["items"]
     assert any(i["registro_id"] == faixa["id"] for i in itens)
+
+
+def _tabela_13_15():
+    """Tabela de 13 de 10 a 20 g e de 15 de 21 g em diante, preço de 10 g mais R$ 1,00 por grama."""
+    f1 = {**_faixa(10, 20, 13.0), "incremento_por_g": 1.0}
+    f2 = {**_faixa(21, 30, 15.0), "incremento_por_g": 1.0}
+    return [f1, f2]
+
+
+def test_preco_por_tabela_com_salto_na_troca_de_faixa():
+    tabela = _tabela_13_15()
+    assert buscar(10, tabela) == 13.0
+    assert buscar(20, tabela) == 23.0   # 13 + (20 - 10)
+    assert buscar(21, tabela) == 26.0   # 15 + (21 - 10): salto de R$ 3,00 com 1 g a mais
+
+
+def test_regra_de_arredondamento_do_peso():
+    tabela = _tabela_13_15()
+    assert buscar(12.7, tabela, "PARA_BAIXO") == 15.0    # conta 12 g
+    assert buscar(12.7, tabela, "PARA_CIMA") == 16.0     # conta 13 g
+    assert buscar(12.7, tabela, "PROPORCIONAL") == 15.7
+    assert buscar(20.2, tabela, "PARA_BAIXO") == 23.0     # fica na tabela de 13
+    assert buscar(20.2, tabela, "PARA_CIMA") == 26.0      # 21 g já cai na tabela de 15
+    assert buscar(20.5, tabela) is None                   # sem regra a faixa não cobre 20 a 21 g
+
+
+def test_ruido_de_ponto_flutuante_nao_muda_o_grama():
+    tabela = _tabela_13_15()
+    assert buscar(19.9999999999, tabela, "PARA_BAIXO") == 23.0   # é 20 g, não 19
+    assert buscar(20.0000000001, tabela, "PARA_CIMA") == 23.0    # é 20 g, não 21
+
+
+def test_faixa_abaixo_de_10_g_com_preco_fixo():
+    refugo = {**_faixa(0, 10, 9.0), "incremento_por_g": 0.0}
+    assert buscar(8.4, [refugo, *_tabela_13_15()], "PARA_BAIXO") == 9.0
+
+
+def test_api_regra_de_arredondamento_e_incremento(client, gestor):
+    org = client.get("/api/v1/organizacoes/", headers=gestor).json()[0]
+    assert org["regra_arredondamento"] == "PARA_BAIXO"
+    r = client.put(f"/api/v1/organizacoes/{org['id']}", json={"regra_arredondamento": "PARA_CIMA"}, headers=gestor)
+    assert r.status_code == 200 and r.json()["regra_arredondamento"] == "PARA_CIMA"
+    invalida = client.put(f"/api/v1/organizacoes/{org['id']}", json={"regra_arredondamento": "ARREDONDA"}, headers=gestor)
+    assert invalida.status_code == 422
+    client.put(f"/api/v1/organizacoes/{org['id']}", json={"regra_arredondamento": "PARA_BAIXO"}, headers=gestor)
+
+
+def test_api_faixa_aceita_incremento_por_grama(client, gestor):
+    r = client.post("/api/v1/precos-mercado/", json={
+        "faixa_gramatura_min": 400, "faixa_gramatura_max": 410, "preco_por_kg": 13.0,
+        "incremento_por_g": 1.0, "vigencia_inicio": "2026-01-01"}, headers=gestor)
+    assert r.status_code == 201 and r.json()["incremento_por_g"] == 1.0
+    novo = client.put(f"/api/v1/precos-mercado/{r.json()['id']}", json={"incremento_por_g": 0}, headers=gestor)
+    assert novo.json()["incremento_por_g"] == 0
+    assert client.post("/api/v1/precos-mercado/", json={
+        "faixa_gramatura_min": 420, "faixa_gramatura_max": 430, "preco_por_kg": 13.0,
+        "incremento_por_g": -1, "vigencia_inicio": "2026-01-01"}, headers=gestor).status_code == 422
+    client.delete(f"/api/v1/precos-mercado/{r.json()['id']}", headers=gestor)
+
+
+def test_melhor_dia_acha_o_salto_que_os_horizontes_fixos_nao_veem(client, gestor_sem_precos):
+    """Salto de preço em 12 g no dia 12: 7 e 10 dias não o veem; no dia 15 já pagou 3 dias de custo a mais."""
+    from tests.conftest import unico
+    h = gestor_sem_precos
+    assert _criar_faixa(client, h, 8, 12, preco=10.0).status_code == 201
+    assert _criar_faixa(client, h, 12, 40, preco=40.0).status_code == 201
+    v = client.post("/api/v1/viveiros/", json={"identificacao": unico("VIV"), "area_util_m2": 10_000.0}, headers=h)
+    assert v.status_code == 201, v.text
+    c = client.post("/api/v1/ciclos/", json={"viveiro_id": v.json()["id"], "data_povoamento": "2026-08-01",
+                                             "quantidade_pos_larvas": 300_000, "custo_aquisicao_pl": 3_000.0}, headers=h)
+    assert c.status_code == 201, c.text
+    url = f"/api/v1/ciclos/{c.json()['id']}"
+    _biometria(client, h, url, "2026-09-03", 10.0)
+    _biometria(client, h, url, "2026-09-15", 11.0)   # ganho 1/12 g/dia: 12 g exatos no dia 12
+    body = client.get(f"{url}/simular-despesca/comparativo?custo_diario_rs=3000", headers=h).json()
+    assert body["melhor_dia"]["dias_horizonte"] == 12
+    assert body["melhor_dia"]["preco_futuro_rs_kg"] == 40.0
+    por_h = {s["dias_horizonte"]: s for s in body["simulacoes"]}
+    assert por_h[7]["preco_futuro_rs_kg"] == por_h[10]["preco_futuro_rs_kg"] == 10.0
+    assert body["melhor_dia"]["delta_v_rs"] > por_h[15]["delta_v_rs"]

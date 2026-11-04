@@ -26,11 +26,12 @@ from src.schemas.simulacao import (
 )
 from src.services.alimentacao import pontos_alimentares
 from src.services.auth_service import has_role
-from src.services.precos import tabela_vigente
+from src.services.precos import regra_da_organizacao, tabela_vigente
 from src.services.sobrevivencia import sobrevivencia_vigente
 
 from src.services.decision_engine import (
     buscar_preco_por_gramatura,
+    peso_para_preco,
     calcular_biomassa_kg,
     calcular_ganho_diario,
     calcular_populacao_atual,
@@ -46,6 +47,8 @@ router = APIRouter(
     dependencies=[Depends(verificar_ciclo_da_organizacao)],
 )
 
+
+DIAS_VARREDURA = 30
 
 AVISO_APOIO_DECISAO = (
     "Resultado de apoio à decisão: não substitui a avaliação técnica do gestor (RN-012)."
@@ -104,8 +107,9 @@ def _executar_simulacao(
 
     # Preço de mercado
     tabela = tabela_vigente(db, ciclo.viveiro.organizacao_id, hoje)
+    regra = regra_da_organizacao(db, ciclo.viveiro.organizacao_id)
 
-    preco_atual = buscar_preco_por_gramatura(peso_atual, tabela)
+    preco_atual = buscar_preco_por_gramatura(peso_atual, tabela, regra)
     if preco_atual is None:
         raise HTTPException(
             status_code=400,
@@ -121,13 +125,20 @@ def _executar_simulacao(
     if preco_futuro is not None:
         premissas.append(f"Preço futuro informado pelo usuário: R$ {preco_futuro:,.2f}/kg.")
     else:
-        preco_futuro = buscar_preco_por_gramatura(peso_projetado, tabela)
+        preco_futuro = buscar_preco_por_gramatura(peso_projetado, tabela, regra)
         if preco_futuro is None:
             preco_futuro = preco_atual
             premissas.append(
                 f"Sem faixa de preço para {peso_projetado:.1f} g; usado o preço atual "
                 f"(R$ {preco_atual:,.2f}/kg)."
             )
+
+    if regra != "PROPORCIONAL":
+        premissas.append(
+            f"Peso arredondado {'para baixo' if regra == 'PARA_BAIXO' else 'para cima'} (acordo com o comprador): "
+            f"{peso_atual:.1f} g conta como {peso_para_preco(peso_atual, regra):g} g e "
+            f"{peso_projetado:.1f} g como {peso_para_preco(peso_projetado, regra):g} g."
+        )
 
     # Custo diário: informado pelo usuário ou média dos custos lançados (exceto PLs)
     if custo_diario_customizado is not None:
@@ -253,20 +264,25 @@ def comparativo_despesca(
     _user=Depends(has_role([RoleUsuario.GESTOR])),
 ):
     """Compara os horizontes de 7, 10 e 15 dias (consulta: não grava no histórico)."""
-    simulacoes = []
-    for h in (7, 10, 15):
-        sim = _executar_simulacao(
-            ciclo_id, h, None, db, custo_diario_customizado=custo_diario_rs, persistir=False
+    # shortcut: refaz a consulta ao banco por dia (30x), aceitável p/ um ciclo; cachear se pesar
+    por_dia = {
+        d: _executar_simulacao(
+            ciclo_id, d, None, db, custo_diario_customizado=custo_diario_rs, persistir=False
         )
-        simulacoes.append(sim)
+        for d in range(1, DIAS_VARREDURA + 1)
+    }
+    simulacoes = [por_dia[h] for h in (7, 10, 15)]
 
-    # Melhor cenário = maior ΔV positivo
+    # Melhor cenário = maior ΔV positivo; empate fica com o dia mais cedo
     positivos = [s for s in simulacoes if s.delta_v_rs > 0]
     melhor = max(positivos, key=lambda s: s.delta_v_rs) if positivos else None
+    dias_positivos = [s for s in por_dia.values() if s.delta_v_rs > 0]
+    melhor_dia = max(dias_positivos, key=lambda s: s.delta_v_rs) if dias_positivos else None
 
     return SimulacaoComparativaResponse(
         simulacoes=simulacoes,
         melhor_cenario=melhor,
+        melhor_dia=melhor_dia,
     )
 
 

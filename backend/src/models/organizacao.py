@@ -16,6 +16,10 @@ class Organizacao(AuditMixin, Base):
     identificador: Mapped[str | None] = mapped_column(String(30), unique=True, nullable=True)  # CNPJ ou código
     moeda: Mapped[str] = mapped_column(String(3), nullable=False, default="BRL")
     status_ativo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Acordo de gramatura com o comprador: PARA_BAIXO, PARA_CIMA ou PROPORCIONAL (texto, não enum nativo)
+    regra_arredondamento: Mapped[str] = mapped_column(
+        String(12), nullable=False, default="PARA_BAIXO", server_default="PARA_BAIXO"
+    )
 
     # Relacionamentos
     propriedades = relationship("Propriedade", back_populates="organizacao")

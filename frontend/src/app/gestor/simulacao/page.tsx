@@ -300,6 +300,14 @@ export default function SimulacaoPage() {
                 </div>
               </div>
 
+              {result.melhor_dia && (
+                <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">
+                  <strong>Melhor dia de despesca: daqui a {result.melhor_dia.dias_horizonte} dias</strong> (varredura de
+                  1 a 30 dias), ganho de {fmtMoney(result.melhor_dia.delta_v_rs)} sobre despescar hoje, peso projetado{" "}
+                  {result.melhor_dia.peso_medio_projetado_g.toFixed(1)} g.
+                </div>
+              )}
+
               {/* ── Cards dos Cenários Comparativos ── */}
               <div>
                 <h3 className="text-base font-bold text-slate-900 mb-3 flex items-center gap-2">

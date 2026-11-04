@@ -166,6 +166,7 @@ export interface SimulacaoResponse {
 export interface SimulacaoComparativa {
   simulacoes: SimulacaoResponse[];
   melhor_cenario: SimulacaoResponse | null;
+  melhor_dia: SimulacaoResponse | null;
 }
 
 // ── Ronda Noturna ─────────────────────────────────────
@@ -232,6 +233,7 @@ export interface PrecoMercado {
   faixa_gramatura_min: number;
   faixa_gramatura_max: number;
   preco_por_kg: number;
+  incremento_por_g: number;
   vigencia_inicio: string;
   vigencia_fim: string | null;
   created_at: string;
@@ -307,12 +309,15 @@ export interface GestorAdmin {
   created_at: string;
 }
 
+export type RegraArredondamento = "PARA_BAIXO" | "PARA_CIMA" | "PROPORCIONAL";
+
 export interface Organizacao {
   id: string;
   nome: string;
   identificador: string | null;
   moeda: string;
   status_ativo: boolean;
+  regra_arredondamento: RegraArredondamento;
   created_at: string;
 }
 

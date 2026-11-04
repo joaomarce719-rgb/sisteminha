@@ -95,4 +95,6 @@ class SimulacaoComparativaResponse(BaseModel):
     """Comparativo para os 3 horizontes (7, 10, 15 dias)."""
     simulacoes: list[SimulacaoResponse]
     melhor_cenario: SimulacaoResponse | None
+    # Varredura dia a dia (1 a 30): o dia de maior ΔV positivo, mesmo fora de 7/10/15
+    melhor_dia: SimulacaoResponse | None = None
 

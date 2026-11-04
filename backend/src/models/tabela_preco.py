@@ -25,5 +25,7 @@ class TabelaPrecoMercado(AuditMixin, Base):
     faixa_gramatura_min: Mapped[float] = mapped_column(Float, nullable=False)
     faixa_gramatura_max: Mapped[float] = mapped_column(Float, nullable=False)
     preco_por_kg: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    # R$/kg somados a cada grama acima de 10 g (preco_por_kg é o preço de 10 g); 0 = preço fixo na faixa
+    incremento_por_g: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False, default=0, server_default="0")
     vigencia_inicio: Mapped[date] = mapped_column(Date, nullable=False)
     vigencia_fim: Mapped[date | None] = mapped_column(Date, nullable=True)

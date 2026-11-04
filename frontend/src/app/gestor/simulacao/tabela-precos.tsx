@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Check, CheckCircle2, Loader2, Pencil, Plus, Tag, Trash2, X } from "lucide-react";
-import { precosApi } from "@/lib/api";
+import { organizacoesApi, precosApi } from "@/lib/api";
 import { mensagemErro } from "@/lib/utils";
-import type { PrecoMercado } from "@/lib/types";
+import type { Organizacao, PrecoMercado, RegraArredondamento } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,15 +23,33 @@ const fmtMoney = (v: number) =>
 const fmtPeso = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 const fmtData = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("pt-BR");
 
-const formVazio = () => ({ min: "", max: "", preco: "", inicio: hoje(), fim: "" });
+const formVazio = () => ({ min: "", max: "", preco: "", incremento: "1", inicio: hoje(), fim: "" });
+
+const REGRAS: { valor: RegraArredondamento; rotulo: string }[] = [
+  { valor: "PARA_BAIXO", rotulo: "Para baixo (12,7 g conta 12 g)" },
+  { valor: "PARA_CIMA", rotulo: "Para cima (12,1 g conta 13 g)" },
+  { valor: "PROPORCIONAL", rotulo: "Exato, sem arredondar" },
+];
+
+// Mesma regra do servidor (decision_engine.peso_para_preco): 6 casas antes do floor/ceil
+function pesoParaPreco(peso: number, regra: RegraArredondamento): number {
+  const p = Math.round(peso * 1e6) / 1e6;
+  return regra === "PARA_BAIXO" ? Math.floor(p) : regra === "PARA_CIMA" ? Math.ceil(p) : p;
+}
+
+// Preço da tabela: preço de 10 g mais o incremento por grama acima de 10 g
+const precoDaFaixa = (p: PrecoMercado, peso: number) =>
+  Math.round((p.preco_por_kg + p.incremento_por_g * (peso - 10)) * 100) / 100;
 
 function validar(f: ReturnType<typeof formVazio>): string | null {
   const min = parseFloat(f.min);
   const max = parseFloat(f.max);
   const preco = parseFloat(f.preco);
-  if (Number.isNaN(min) || Number.isNaN(max) || Number.isNaN(preco)) {
-    return "Preencha o peso mínimo, o peso máximo e o preço.";
+  const incremento = parseFloat(f.incremento);
+  if (Number.isNaN(min) || Number.isNaN(max) || Number.isNaN(preco) || Number.isNaN(incremento)) {
+    return "Preencha o peso mínimo, o peso máximo, o preço e o incremento por grama.";
   }
+  if (incremento < 0) return "O incremento por grama não pode ser negativo.";
   if (min < 0) return "O peso mínimo não pode ser negativo.";
   if (max <= min) return "O peso máximo deve ser maior que o mínimo.";
   if (preco <= 0) return "O preço deve ser maior que zero.";
@@ -55,6 +73,9 @@ export default function TabelaPrecosCard({ pesoAtualG, onAlterado }: Props) {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [precoEditado, setPrecoEditado] = useState("");
   const [ocupadoId, setOcupadoId] = useState<string | null>(null);
+  const [incrementoEditado, setIncrementoEditado] = useState("");
+  const [org, setOrg] = useState<Organizacao | null>(null);
+  const regra: RegraArredondamento = org?.regra_arredondamento ?? "PARA_BAIXO";
 
   const recarregar = useCallback(async () => {
     try {
@@ -68,8 +89,11 @@ export default function TabelaPrecosCard({ pesoAtualG, onAlterado }: Props) {
     let ativo = true;
     async function carregar() {
       try {
-        const todas = await precosApi.listar(false);
-        if (ativo) setPrecos(todas);
+        const [todas, orgs] = await Promise.all([precosApi.listar(false), organizacoesApi.listar()]);
+        if (ativo) {
+          setPrecos(todas);
+          setOrg(orgs[0] ?? null);
+        }
       } catch (err) {
         toast.error("Não foi possível carregar a tabela de preços", mensagemErro(err, "Tente novamente"));
       } finally {
@@ -93,13 +117,26 @@ export default function TabelaPrecosCard({ pesoAtualG, onAlterado }: Props) {
   );
   const vigentes = precos.filter((p) => situacao(p) === "vigente");
 
-  // Mesma regra do servidor: na divisa entre duas faixas vale a de cima
+  const pesoPreco = pesoAtualG == null ? null : pesoParaPreco(pesoAtualG, regra);
+
+  // Mesma regra do servidor: peso arredondado pelo acordo; na divisa entre duas faixas vale a de cima
   const faixaDoPeso =
-    pesoAtualG == null
+    pesoPreco == null
       ? undefined
       : vigentes
-          .filter((p) => p.faixa_gramatura_min <= pesoAtualG && pesoAtualG <= p.faixa_gramatura_max)
+          .filter((p) => p.faixa_gramatura_min <= pesoPreco && pesoPreco <= p.faixa_gramatura_max)
           .sort((a, b) => b.faixa_gramatura_min - a.faixa_gramatura_min)[0];
+
+  const trocarRegra = async (nova: RegraArredondamento) => {
+    if (!org) return;
+    try {
+      setOrg(await organizacoesApi.atualizar(org.id, { regra_arredondamento: nova }));
+      toast.success("Regra de arredondamento atualizada", REGRAS.find((r) => r.valor === nova)?.rotulo ?? nova);
+      onAlterado?.();
+    } catch (err) {
+      toast.error("Não foi possível salvar a regra", mensagemErro(err, "Tente novamente"));
+    }
+  };
 
   const preencherComPesoAtual = () => {
     if (pesoAtualG == null) return;
@@ -127,6 +164,7 @@ export default function TabelaPrecosCard({ pesoAtualG, onAlterado }: Props) {
         faixa_gramatura_min: parseFloat(form.min),
         faixa_gramatura_max: parseFloat(form.max),
         preco_por_kg: parseFloat(form.preco),
+        incremento_por_g: parseFloat(form.incremento),
         vigencia_inicio: form.inicio,
         vigencia_fim: form.fim || null,
       });
@@ -146,13 +184,18 @@ export default function TabelaPrecosCard({ pesoAtualG, onAlterado }: Props) {
 
   const salvarPreco = async (p: PrecoMercado) => {
     const novo = parseFloat(precoEditado);
+    const novoIncremento = parseFloat(incrementoEditado);
     if (Number.isNaN(novo) || novo <= 0) {
       toast.error("Preço inválido", "Informe um valor maior que zero.");
       return;
     }
+    if (Number.isNaN(novoIncremento) || novoIncremento < 0) {
+      toast.error("Incremento inválido", "Informe zero ou um valor positivo.");
+      return;
+    }
     setOcupadoId(p.id);
     try {
-      await precosApi.atualizar(p.id, { preco_por_kg: novo });
+      await precosApi.atualizar(p.id, { preco_por_kg: novo, incremento_por_g: novoIncremento });
       toast.success("Preço atualizado!", `${fmtPeso(p.faixa_gramatura_min)} g a ${fmtPeso(p.faixa_gramatura_max)} g: ${fmtMoney(novo)}/kg`);
       setEditandoId(null);
       await recarregar();
@@ -194,9 +237,26 @@ export default function TabelaPrecosCard({ pesoAtualG, onAlterado }: Props) {
           <Badge variant="secondary">{vigentes.length} {vigentes.length === 1 ? "faixa vigente" : "faixas vigentes"}</Badge>
         </div>
         <p className="text-xs text-slate-500 mt-1">
-          Preço do kg pelo peso do camarão. A simulação usa a faixa do peso atual do lote (despescar hoje) e a do peso
-          projetado (esperar). Na divisa entre duas faixas vale a de cima.
+          O preço informado é o do camarão de 10 g (a tabela); cada grama acima soma o incremento por grama. Use
+          incremento 0 para preço fixo na faixa (por exemplo, abaixo de 10 g). A simulação usa a faixa do peso atual do
+          lote (despescar hoje) e a do peso projetado (esperar). Na divisa entre duas faixas vale a de cima.
         </p>
+        <div className="mt-2">
+          <Label htmlFor="regra-arredondamento">Arredondamento do peso (acordo com o comprador)</Label>
+          <select
+            id="regra-arredondamento"
+            value={regra}
+            disabled={!org}
+            onChange={(e) => trocarRegra(e.target.value as RegraArredondamento)}
+            className="w-full sm:w-72 mt-1.5 px-3 py-2 text-sm rounded-xl bg-white border border-slate-200 focus:outline-none focus:ring-1 focus:ring-sky-500"
+          >
+            {REGRAS.map((r) => (
+              <option key={r.valor} value={r.valor}>
+                {r.rotulo}
+              </option>
+            ))}
+          </select>
+        </div>
       </CardHeader>
 
       <CardContent className="space-y-4">
@@ -208,8 +268,9 @@ export default function TabelaPrecosCard({ pesoAtualG, onAlterado }: Props) {
         ) : faixaDoPeso ? (
           <div className="flex items-center gap-2 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
             <CheckCircle2 className="w-4 h-4 shrink-0" />
-            Peso atual do lote: <strong>{fmtPeso(pesoAtualG)} g</strong>. Faixa aplicada:{" "}
-            <strong>{fmtMoney(faixaDoPeso.preco_por_kg)}/kg</strong>.
+            Peso atual do lote: <strong>{fmtPeso(pesoAtualG)} g</strong>
+            {pesoPreco !== pesoAtualG && <> (conta como {fmtPeso(pesoPreco ?? pesoAtualG)} g)</>}. Preço aplicado:{" "}
+            <strong>{fmtMoney(precoDaFaixa(faixaDoPeso, pesoPreco ?? pesoAtualG))}/kg</strong>.
           </div>
         ) : (
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-amber-900 bg-amber-50 border border-amber-300 rounded-xl px-3 py-2.5">
@@ -264,6 +325,7 @@ export default function TabelaPrecosCard({ pesoAtualG, onAlterado }: Props) {
 
                   <div className="tabular-nums">
                     {editando ? (
+                      <>
                       <Input
                         type="number"
                         step="any"
@@ -274,9 +336,22 @@ export default function TabelaPrecosCard({ pesoAtualG, onAlterado }: Props) {
                         aria-label="Novo preço por kg"
                         autoFocus
                       />
+                      <Input
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={incrementoEditado}
+                        onChange={(e) => setIncrementoEditado(e.target.value)}
+                        className="h-8 w-28 mt-1"
+                        aria-label="Novo incremento por grama"
+                      />
+                      </>
                     ) : (
                       <span className="font-extrabold text-sky-700">
-                        {fmtMoney(p.preco_por_kg)} <span className="text-xs font-semibold text-slate-400">/ kg</span>
+                        {fmtMoney(p.preco_por_kg)} <span className="text-xs font-semibold text-slate-400">/ kg (10 g)</span>
+                        <span className="block text-xs font-semibold text-slate-500">
+                          {p.incremento_por_g > 0 ? `+ ${fmtMoney(p.incremento_por_g)} por grama` : "preço fixo na faixa"}
+                        </span>
                       </span>
                     )}
                   </div>
@@ -305,6 +380,7 @@ export default function TabelaPrecosCard({ pesoAtualG, onAlterado }: Props) {
                           onClick={() => {
                             setEditandoId(p.id);
                             setPrecoEditado(String(p.preco_por_kg));
+                            setIncrementoEditado(String(p.incremento_por_g));
                           }}
                           className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100"
                           aria-label="Editar preço"
@@ -326,7 +402,7 @@ export default function TabelaPrecosCard({ pesoAtualG, onAlterado }: Props) {
         {/* ── Nova faixa ── */}
         <form onSubmit={adicionar} className="rounded-xl bg-slate-50 border border-slate-200 p-4 space-y-3">
           <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Adicionar faixa de preço</h4>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-6 gap-3">
             <div>
               <Label htmlFor="preco-min">Peso mínimo (g)</Label>
               <Input id="preco-min" type="number" step="any" min="0" inputMode="decimal" value={form.min} onChange={campo("min")} placeholder="Ex: 12" className="mt-1.5" />
@@ -336,8 +412,12 @@ export default function TabelaPrecosCard({ pesoAtualG, onAlterado }: Props) {
               <Input id="preco-max" type="number" step="any" min="0" inputMode="decimal" value={form.max} onChange={campo("max")} placeholder="Ex: 14" className="mt-1.5" />
             </div>
             <div>
-              <Label htmlFor="preco-valor">Preço (R$/kg)</Label>
-              <Input id="preco-valor" type="number" step="any" min="0" inputMode="decimal" value={form.preco} onChange={campo("preco")} placeholder="Ex: 24.50" className="mt-1.5" />
+              <Label htmlFor="preco-valor">Tabela: preço de 10 g (R$/kg)</Label>
+              <Input id="preco-valor" type="number" step="any" min="0" inputMode="decimal" value={form.preco} onChange={campo("preco")} placeholder="Ex: 13" className="mt-1.5" />
+            </div>
+            <div>
+              <Label htmlFor="preco-incremento">Incremento (R$/g)</Label>
+              <Input id="preco-incremento" type="number" step="any" min="0" inputMode="decimal" value={form.incremento} onChange={campo("incremento")} placeholder="Ex: 1" className="mt-1.5" />
             </div>
             <div>
               <Label htmlFor="preco-inicio">Vigência desde</Label>
