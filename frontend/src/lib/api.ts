@@ -421,6 +421,11 @@ export const adminApi = {
     apiFetch<FazendaAdmin>("/admin/fazendas", { method: "POST", body: JSON.stringify(data) }),
   alternarStatusFazenda: (id: string) =>
     apiFetch<FazendaAdmin>(`/admin/fazendas/${id}/status`, { method: "PUT" }),
+  gerarNovoCodigo: (organizacaoId: string) =>
+    apiFetch<{ organizacao_id: string; codigo_organizacao: string }>(
+      `/admin/organizacoes/${organizacaoId}/novo-codigo`,
+      { method: "POST" }
+    ),
   // Gestores Administrativos (Exclusivo Superadmin)
   listarGestores: () => apiFetch<GestorAdmin[]>("/admin/gestores"),
   criarGestor: (data: Payload) =>

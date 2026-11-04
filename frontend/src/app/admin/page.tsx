@@ -62,7 +62,7 @@ function organizacoesDe(fazendas: FazendaAdmin[]): { id: string; nome: string }[
 // ── Modal Criar Fazenda (Superadmin) ─────────────────
 function CriarFazendaDialog({
   open,
-  onClose,
+  onClose: fechar,
   onCreated,
   fazendas,
 }: {
@@ -79,15 +79,20 @@ function CriarFazendaDialog({
     organizacao_nome: "",
   });
   const organizacoes = organizacoesDe(fazendas);
+  const onClose = () => {
+    setCodigo(null);
+    fechar();
+  };
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [codigo, setCodigo] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      await adminApi.criarFazenda({
+      const criada = await adminApi.criarFazenda({
         nome: form.nome.trim(),
         localizacao: form.localizacao.trim() || null,
         area_total_ha: form.area_total_ha ? parseFloat(form.area_total_ha) : null,
@@ -99,7 +104,6 @@ function CriarFazendaDialog({
         `${form.nome} está aprovada e ativa para cultivo.`
       );
       onCreated();
-      onClose();
       setForm({
         nome: "",
         localizacao: "Russas, Vale do Jaguaribe - CE",
@@ -107,6 +111,8 @@ function CriarFazendaDialog({
         organizacao_id: "",
         organizacao_nome: "",
       });
+      if (criada.codigo_organizacao) setCodigo(criada.codigo_organizacao);
+      else onClose();
     } catch (err) {
       const msg = mensagemErro(err, "Erro ao adicionar fazenda");
       setError(msg);
@@ -130,6 +136,19 @@ function CriarFazendaDialog({
         </div>
       )}
 
+      {codigo ? (
+        <div className="space-y-4 text-slate-200">
+          <p className="text-xs text-slate-300">
+            Repasse este código ao gestor. Os funcionários o informam no cadastro para pedir acesso a esta organização.
+          </p>
+          <div className="rounded-xl bg-slate-900 border border-slate-700 p-4 text-center font-mono text-2xl tracking-widest text-white select-all">
+            {codigo}
+          </div>
+          <Button type="button" onClick={onClose} className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold">
+            Concluir
+          </Button>
+        </div>
+      ) : (
       <form onSubmit={handleSubmit} className="space-y-4 text-slate-200">
         <div>
           <Label htmlFor="nome_fazenda" className="text-xs font-semibold text-slate-300">
@@ -228,6 +247,7 @@ function CriarFazendaDialog({
           </Button>
         </div>
       </form>
+      )}
     </Dialog>
   );
 }
@@ -430,6 +450,7 @@ export default function AdminPage() {
 
   // Ações
   const [togglingFazenda, setTogglingFazenda] = useState<string | null>(null);
+  const [gerandoCodigo, setGerandoCodigo] = useState<string | null>(null);
   const [togglingGestor, setTogglingGestor] = useState<string | null>(null);
   const [resetting, setResetting] = useState<string | null>(null);
   const [busca, setBusca] = useState<string>("");
@@ -471,6 +492,21 @@ export default function AdminPage() {
       toast.error("Erro ao alterar status da fazenda", mensagemErro(err, "Tente novamente"));
     } finally {
       setTogglingFazenda(null);
+    }
+  };
+
+  const handleNovoCodigo = async (fazenda: FazendaAdmin) => {
+    if (!fazenda.organizacao_id) return;
+    if (!window.confirm(`Gerar novo código para ${fazenda.organizacao_nome}? O código atual deixa de valer para novos cadastros.`)) return;
+    setGerandoCodigo(fazenda.id);
+    try {
+      const res = await adminApi.gerarNovoCodigo(fazenda.organizacao_id);
+      toast.success("Novo código gerado", `${fazenda.organizacao_nome}: ${res.codigo_organizacao}`, 30000);
+      carregarDados();
+    } catch (err) {
+      toast.error("Erro ao gerar novo código", mensagemErro(err, "Tente novamente"));
+    } finally {
+      setGerandoCodigo(null);
     }
   };
 
@@ -711,6 +747,27 @@ export default function AdminPage() {
                           </div>
                         </div>
                       </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 rounded-xl bg-slate-950/60 border border-slate-800 px-3 py-2 mb-3">
+                      <div>
+                        <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                          Código de cadastro
+                        </div>
+                        <div className="font-mono text-sm font-bold text-white tracking-widest select-all">
+                          {f.codigo_organizacao || "sem código"}
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleNovoCodigo(f)}
+                        disabled={gerandoCodigo === f.id || !f.organizacao_id}
+                        className="border-slate-700 text-slate-300 hover:bg-slate-800 text-xs"
+                      >
+                        {gerandoCodigo === f.id ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
+                        Gerar novo código
+                      </Button>
                     </div>
 
                     <div className="flex items-center justify-between text-xs text-slate-500 pt-2">

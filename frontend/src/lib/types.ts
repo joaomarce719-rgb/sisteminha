@@ -281,6 +281,7 @@ export interface FazendaAdmin {
   total_viveiros: number;
   organizacao_id: string | null;
   organizacao_nome: string | null;
+  codigo_organizacao: string | null;
   created_at: string;
 }
 

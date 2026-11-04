@@ -48,6 +48,7 @@ class FazendaAdminResponse(BaseModel):
     status_ativo: bool
     total_viveiros: int
     organizacao_nome: str | None = None
+    codigo_organizacao: str | None = None  # código que os funcionários usam no cadastro
     created_at: datetime
 
 
@@ -157,6 +158,7 @@ def listar_fazendas_admin(
                 status_ativo=p.status_ativo,
                 total_viveiros=total_v,
                 organizacao_nome=org_nome,
+                codigo_organizacao=p.organizacao.identificador if p.organizacao else None,
                 created_at=p.created_at,
             )
         )
@@ -178,7 +180,7 @@ def criar_fazenda_admin(
     else:
         org = Organizacao(
             nome=payload.organizacao_nome,
-            identificador=payload.identificador,
+            identificador=payload.identificador or secrets.token_hex(4).upper(),
             status_ativo=True,
         )
         db.add(org)
@@ -205,8 +207,29 @@ def criar_fazenda_admin(
         status_ativo=nova_fazenda.status_ativo,
         total_viveiros=0,
         organizacao_nome=org.nome,
+        codigo_organizacao=org.identificador,
         created_at=nova_fazenda.created_at,
     )
+
+
+@router.post("/organizacoes/{org_id}/novo-codigo")
+def gerar_novo_codigo_organizacao(
+    org_id: UUID,
+    db: Session = Depends(get_db),
+    _user=Depends(require_superadmin),
+):
+    """Troca o código de cadastro da organização; o anterior deixa de valer para novos cadastros."""
+    org = db.get(Organizacao, org_id)
+    if org is None:
+        raise HTTPException(status_code=404, detail="Organização não encontrada.")
+    anterior = org.identificador
+    org.identificador = secrets.token_hex(4).upper()
+    db.flush()
+    registrar_auditoria(
+        db, "NOVO_CODIGO", "Organizacao", org.id, _user,
+        dados_anteriores={"identificador": anterior}, dados_novos={"identificador": org.identificador},
+    )
+    return {"organizacao_id": org.id, "codigo_organizacao": org.identificador}
 
 
 @router.put("/fazendas/{fazenda_id}/status", response_model=FazendaAdminResponse)
