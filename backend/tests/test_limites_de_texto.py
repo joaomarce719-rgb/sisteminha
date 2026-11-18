@@ -22,6 +22,7 @@ MODELOS = {m.class_.__name__: m.class_ for m in Base.registry.mappers}
 ALVOS = {
     "CicloCreate": ["CicloProdutivo"],
     "CustoCreate": ["CustoOperacional"],
+    "CompraCreate": ["CompraInsumo"],
     "PrecoCreate": ["TabelaPrecoMercado"],
     "PrecoUpdate": ["TabelaPrecoMercado"],
     "FazendaAdminCreate": ["Propriedade"],

@@ -24,6 +24,7 @@ from src.routers import (
     biometrias,
     ciclos,
     custos,
+    insumos,
     manejos,
     organizacoes,
     precos,
@@ -81,6 +82,7 @@ app.include_router(manejos.router)
 app.include_router(manejos.global_router)
 app.include_router(custos.router)
 app.include_router(custos.global_router)
+app.include_router(insumos.router)
 app.include_router(precos.router)
 app.include_router(simulacao.router)
 app.include_router(simulacao.global_router)

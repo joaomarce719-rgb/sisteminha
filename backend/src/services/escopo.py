@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from src.database import get_db
 from src.models.ciclo_produtivo import CicloProdutivo
+from src.models.insumo import Insumo
 from src.models.usuario import Usuario
 from src.models.viveiro import Viveiro
 from src.services.auth_service import get_current_user
@@ -39,6 +40,13 @@ def ciclo_da_organizacao(db: Session, ciclo_id: UUID, user: Usuario) -> CicloPro
     if not ciclo or ciclo.viveiro.organizacao_id != org_do_usuario(user):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ciclo não encontrado.")
     return ciclo
+
+
+def insumo_da_organizacao(db: Session, insumo_id: UUID, user: Usuario) -> Insumo:
+    insumo = db.get(Insumo, insumo_id)
+    if not insumo or insumo.organizacao_id != org_do_usuario(user):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Insumo não encontrado.")
+    return insumo
 
 
 def ids_ciclos_da_organizacao(user: Usuario) -> Select:
