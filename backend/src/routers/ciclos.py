@@ -28,6 +28,7 @@ from src.services import decision_engine as de
 from src.services.alimentacao import pontos_alimentares
 from src.services.precos import regra_da_organizacao, tabela_vigente
 from src.services.sobrevivencia import confrontar_vivos, ordenar, peso_na_data, sobrevivencia_vigente
+from src.services import populacao as pv
 from src.services.insumos import reprocessar_insumo
 from src.services.regras_ciclo import ciclo_aberto_do_viveiro
 
@@ -300,6 +301,7 @@ def metricas_atuais(
     manejos = ordenar(ciclo.manejos_alimentares)
     taxa_sobrev = sobrevivencia_vigente(manejos)
 
+    vendas = getattr(ciclo, "vendas", [])  # relação criada na Tarefa 9
     pontos = pontos_alimentares(ciclo, db)
     confronto = confrontar_vivos(
         manejos,
@@ -307,10 +309,12 @@ def metricas_atuais(
         lambda data: peso_na_data(biometrias, data),
         lambda peso: de.taxa_alimentar(peso, pontos),
         hoje,
+        vendidos_ate=lambda data: pv.animais_vendidos_ate(vendas, data),
     )
 
-    # População e biomassa
-    pop_atual = de.calcular_populacao_atual(ciclo.quantidade_pos_larvas, taxa_sobrev)
+    # População (descontados os animais vendidos) e biomassa
+    pop_atual = pv.populacao_vigente(ciclo.quantidade_pos_larvas, taxa_sobrev, vendas)
+    densidade_atual = de.calcular_densidade(pop_atual, viveiro.area_util_m2)
     biomassa_atual = de.calcular_biomassa_kg(pop_atual, peso_medio) if peso_medio is not None else None
     # Biomassa inicial = biomassa no povoamento (PLs × peso da PL); sem o peso, considerada desprezível
     biomassa_inicial = de.calcular_biomassa_kg(ciclo.quantidade_pos_larvas, ciclo.peso_medio_pl_g or 0.0)
@@ -322,7 +326,7 @@ def metricas_atuais(
     fca = None
     class_fca = None
     if biomassa_atual is not None:
-        fca = de.calcular_fca(racao_total, biomassa_atual, biomassa_inicial)
+        fca = de.calcular_fca(racao_total, biomassa_atual, biomassa_inicial, pv.biomassa_vendida_kg(vendas))
         class_fca = de.classificar_fca(fca)
 
     # Clifford
@@ -347,7 +351,9 @@ def metricas_atuais(
     if preco_kg is None:
         entradas_faltantes.append("preco_mercado")
 
-    metricas = de.calcular_metricas_economicas(custos_vals, biomassa_atual, preco_kg)
+    receita_realizada = pv.receita_realizada_rs(vendas)
+    # lucro_operacional = lucro estimado se despescar hoje, já com a receita das vendas
+    metricas = de.calcular_metricas_economicas(custos_vals, biomassa_atual, preco_kg, receita_realizada)
 
     # Restringir dados financeiros conforme perfil
     user = _user
@@ -358,6 +364,7 @@ def metricas_atuais(
         viveiro_identificacao=viveiro.identificacao,
         dias_cultivo=dias_cultivo,
         densidade_estocagem=round(densidade, 2),
+        densidade_atual=round(densidade_atual, 2),
         alerta_hiperdensidade=alerta_hiper,
         populacao_inicial=ciclo.quantidade_pos_larvas,
         taxa_sobrevivencia_fuzzy_pct=taxa_sobrev,
@@ -375,6 +382,8 @@ def metricas_atuais(
         lucro_operacional_rs=round(metricas.lucro_operacional, 2) if (metricas.lucro_operacional is not None and mostrar_financeiro) else None,
         margem_operacional_pct=round(metricas.margem_operacional_pct, 2) if (metricas.margem_operacional_pct is not None and mostrar_financeiro) else None,
         preco_venda_atual_rs_kg=preco_kg if mostrar_financeiro else None,
+        receita_realizada_rs=round(receita_realizada, 2) if mostrar_financeiro else None,
+        lucro_realizado_rs=round(receita_realizada - metricas.custo_operacional_total, 2) if mostrar_financeiro else None,
         entradas_faltantes=entradas_faltantes,
     )
 

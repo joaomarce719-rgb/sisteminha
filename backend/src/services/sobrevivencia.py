@@ -91,11 +91,13 @@ def sobrevivencia_implicita_pct(
     peso_na_data: Callable[[date], float | None],
     taxa_pct: Callable[[float], float],
     ate: date,
+    vendidos_ate: Callable[[date], int] = lambda d: 0,
 ) -> float | None:
     """Sobrevivência que o consumo dos últimos dias indica, ou None se há poucos dias para estimar.
 
-    Biomassa implícita = ração efetiva do dia ÷ taxa da tabela; dividida pela biomassa de
-    povoamento sem perdas (PLs × peso médio da biometria) dá a sobrevivência do dia.
+    Biomassa implícita = ração efetiva do dia ÷ taxa da tabela; dividida pelo peso médio da
+    biometria dá os animais que comem. Somados aos animais já vendidos até o dia e divididos
+    pelas PLs, dão a sobrevivência natural do dia (o desbaste não conta como mortalidade).
     """
     inicio = ate - timedelta(days=JANELA_DIAS - 1)
     valores = []
@@ -106,7 +108,8 @@ def sobrevivencia_implicita_pct(
         if peso is None or peso <= 0:
             continue
         biomassa_implicita_kg = d.racao_efetiva_kg / (taxa_pct(peso) / 100.0)
-        valores.append(min(100.0, biomassa_implicita_kg / (pos_larvas * peso / 1000.0) * 100.0))
+        animais = biomassa_implicita_kg * 1000.0 / peso + vendidos_ate(d.data)
+        valores.append(min(100.0, animais / pos_larvas * 100.0))
     if len(valores) < MIN_DIAS_COM_REGISTRO:
         return None
     return sum(valores) / len(valores)
@@ -146,6 +149,7 @@ def confrontar_vivos(
     peso_na_data_fn: Callable[[date], float | None],
     taxa_pct: Callable[[float], float],
     ate: date,
+    vendidos_ate: Callable[[date], int] = lambda d: 0,
 ) -> ConfrontoVivos:
     """Confere se os vivos que a contagem de mortos permite batem com os que a ração indica.
 
@@ -159,7 +163,9 @@ def confrontar_vivos(
     registros = ordenar(manejos)
     mortos = sum(m.camaroes_mortos or 0 for m in registros)
     por_mortos = max(0.0, (pos_larvas - mortos) / pos_larvas * 100.0)
-    por_consumo = sobrevivencia_implicita_pct(agrupar_por_dia(registros), pos_larvas, peso_na_data_fn, taxa_pct, ate)
+    por_consumo = sobrevivencia_implicita_pct(
+        agrupar_por_dia(registros), pos_larvas, peso_na_data_fn, taxa_pct, ate, vendidos_ate
+    )
     if por_consumo is None:
         situacao = "SEM_DADOS"
     elif abs(por_consumo - por_mortos) <= TOLERANCIA_CONFRONTO_PP:

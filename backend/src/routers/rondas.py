@@ -29,7 +29,8 @@ from src.services.alert_engine import (
     verificar_aeracao_noturna,
     verificar_energia_e_aeradores,
 )
-from src.services.decision_engine import calcular_biomassa_kg, calcular_populacao_atual
+from src.services.decision_engine import calcular_biomassa_kg
+from src.services.populacao import populacao_vigente
 from src.services.auth_service import get_current_user, has_role
 
 router = APIRouter(prefix="/api/v1/rondas-noturnas", tags=["Rondas Noturnas"])
@@ -162,7 +163,7 @@ def _biomassa_estimada_kg_ha(ciclo: CicloProdutivo) -> float:
     for m in sorted(ciclo.manejos_alimentares, key=lambda m: m.data_registro):
         if m.taxa_sobrevivencia_estimada_fuzzy is not None:
             sobrevivencia = m.taxa_sobrevivencia_estimada_fuzzy
-    populacao = calcular_populacao_atual(ciclo.quantidade_pos_larvas, sobrevivencia)
+    populacao = populacao_vigente(ciclo.quantidade_pos_larvas, sobrevivencia, getattr(ciclo, "vendas", []))
     biomassa = calcular_biomassa_kg(populacao, biometrias[-1].peso_medio_g)
     return biomassa / (ciclo.viveiro.area_util_m2 / 10_000)
 

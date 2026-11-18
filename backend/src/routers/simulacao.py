@@ -28,13 +28,13 @@ from src.services.alimentacao import pontos_alimentares
 from src.services.auth_service import has_role
 from src.services.precos import regra_da_organizacao, tabela_vigente
 from src.services.sobrevivencia import sobrevivencia_vigente
+from src.services.populacao import populacao_vigente, receita_realizada_rs
 
 from src.services.decision_engine import (
     buscar_preco_por_gramatura,
     peso_para_preco,
     calcular_biomassa_kg,
     calcular_ganho_diario,
-    calcular_populacao_atual,
     calcular_racao_diaria,
     estimar_custo_diario,
     estimar_mortalidade_diaria,
@@ -96,7 +96,9 @@ def _executar_simulacao(
     # Sobrevivência estimada (mortos contados, consumo × tabela e fuzzy)
     taxa_sobrev = sobrevivencia_vigente(ciclo.manejos_alimentares)
 
-    pop_atual = calcular_populacao_atual(ciclo.quantidade_pos_larvas, taxa_sobrev)
+    vendas = getattr(ciclo, "vendas", [])  # relação criada na Tarefa 9
+    pop_atual = populacao_vigente(ciclo.quantidade_pos_larvas, taxa_sobrev, vendas)
+    receita_realizada = receita_realizada_rs(vendas)
     biomassa_atual = calcular_biomassa_kg(pop_atual, peso_atual)
     mortalidade_diaria = estimar_mortalidade_diaria(taxa_sobrev, dias_cultivo)
 
@@ -191,9 +193,10 @@ def _executar_simulacao(
         preco_futuro_kg=preco_futuro,
         custo_diario_racao_energia=custo_diario_total,
         biomassa_atual_kg=biomassa_atual,
+        receita_realizada_rs=receita_realizada,
     )
 
-    lo_atual = (biomassa_atual * preco_atual) - co_total
+    lo_atual = (biomassa_atual * preco_atual) + receita_realizada - co_total
     simulacao_id = None
     if persistir:
         simulacao_id = _persistir(db, ciclo_id, dias_horizonte, resultado)

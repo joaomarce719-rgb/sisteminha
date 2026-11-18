@@ -88,6 +88,7 @@ class MetricasAtuaisResponse(BaseModel):
     viveiro_identificacao: str
     dias_cultivo: int
     densidade_estocagem: float
+    densidade_atual: float | None = None  # população atual (descontadas as vendas) ÷ área
     alerta_hiperdensidade: bool
 
     # População e biomassa
@@ -109,9 +110,11 @@ class MetricasAtuaisResponse(BaseModel):
     # Financeiro (None = indisponível ou sem permissão — RN-015)
     custo_operacional_total_rs: float | None = None
     receita_bruta_estimada_rs: float | None = None
-    lucro_operacional_rs: float | None = None
+    lucro_operacional_rs: float | None = None  # lucro estimado se despescar hoje, já com as vendas
     margem_operacional_pct: float | None = None
     preco_venda_atual_rs_kg: float | None = None
+    receita_realizada_rs: float | None = None  # soma das vendas já feitas
+    lucro_realizado_rs: float | None = None    # receita realizada − custo operacional total
 
     # Indicadores ausentes ou não calculáveis (RN-015)
     entradas_faltantes: list[str] = Field(default_factory=list)
