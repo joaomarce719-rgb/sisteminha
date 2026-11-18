@@ -146,10 +146,29 @@ def test_compra_com_data_passada_exige_retroativo(client, gestor, insumo):
     assert client.post(url, json={**base, "data_compra": AMANHA, "retroativo": True}, headers=gestor).status_code == 422
 
 
-@pytest.mark.parametrize("campo_invalido", [{"quantidade": 0}, {"valor_total_rs": 0}, {"quantidade": -1}])
-def test_compra_exige_quantidade_e_valor_positivos(client, gestor, insumo, campo_invalido):
+@pytest.mark.parametrize(
+    "campo_invalido",
+    [
+        {"quantidade": 0}, {"valor_total_rs": 0}, {"quantidade": -1},
+        # abaixo da escala da coluna o valor gravado viraria 0 (e o preço médio dividiria por zero)
+        {"quantidade": 0.00001}, {"valor_total_rs": 0.001},
+        # acima dos 10 dígitos inteiros da coluna (estoura no Postgres)
+        {"quantidade": 1e10}, {"valor_total_rs": 1e10},
+    ],
+)
+def test_compra_exige_quantidade_e_valor_positivos_e_dentro_da_coluna(client, gestor, insumo, campo_invalido):
+    base = f"/api/v1/insumos/{insumo['id']}/compras"
     payload = {"data_compra": HOJE, "quantidade": 10, "valor_total_rs": 30, **campo_invalido}
-    assert client.post(f"/api/v1/insumos/{insumo['id']}/compras", json=payload, headers=gestor).status_code == 422
+    assert client.post(base, json=payload, headers=gestor).status_code == 422
+    compra = _comprar(client, gestor, insumo["id"], 10, 30).json()
+    assert client.put(f"{base}/{compra['id']}", json=payload, headers=gestor).status_code == 422
+
+
+def test_compra_no_menor_valor_aceito_nao_derruba_a_lista(client, gestor, campo, insumo):
+    assert _comprar(client, gestor, insumo["id"], 0.0001, 0.01).status_code == 201
+    for headers in (gestor, campo):
+        assert client.get("/api/v1/insumos/", headers=headers).status_code == 200
+    assert _do_insumo(client, gestor, insumo["id"])["preco_medio_rs"] == 100
 
 
 def test_compra_atualiza_saldo_e_preco_medio_do_exemplo_da_cal(client, gestor, insumo):

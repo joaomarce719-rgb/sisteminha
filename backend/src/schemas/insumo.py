@@ -59,8 +59,10 @@ class CompraCreate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     data_compra: date
-    quantidade: float = Field(..., gt=0)
-    valor_total_rs: float = Field(..., gt=0)
+    # mínimo = escala da coluna (Numeric(14,4) / Numeric(12,2)): abaixo dele o valor gravado vira 0;
+    # máximo = 10 dígitos inteiros das colunas
+    quantidade: float = Field(..., ge=0.0001, le=9_999_999_999)
+    valor_total_rs: float = Field(..., ge=0.01, le=9_999_999_999)
     fornecedor: str | None = Field(None, max_length=120)
     observacao: str | None = Field(None, max_length=500)
     retroativo: bool = False
