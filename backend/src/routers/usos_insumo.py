@@ -75,6 +75,7 @@ def _resposta(db: Session, uso: ConsumoInsumo, user: Usuario) -> UsoInsumoRespon
         resposta.preco_unitario_rs = None if uso.preco_unitario_rs is None else float(uso.preco_unitario_rs)
         resposta.valor_rs = None if custo is None else float(custo.valor_rs)
         resposta.pendente_de_valor = uso.preco_unitario_rs is None
+        resposta.preco_corrigido_rs = None if uso.preco_corrigido_rs is None else float(uso.preco_corrigido_rs)
     return resposta
 
 

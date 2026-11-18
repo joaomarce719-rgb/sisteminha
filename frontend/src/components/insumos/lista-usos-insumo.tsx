@@ -80,6 +80,7 @@ export function ListaUsosInsumo({ usos, onEditar, onExcluir, excluindoId }: List
                 {fmtData(u.data_uso)} · {u.insumo_nome}
               </span>
               {u.pendente_de_valor && <Badge variant="destructive">pendente de valor</Badge>}
+              {u.preco_corrigido_rs != null && <Badge variant="secondary">preço fixo</Badge>}
               {u.retroativo && <Badge variant="warning">retroativo</Badge>}
               {u.recalculado_em && (
                 <Badge variant="info" title={`Recalculado em ${new Date(u.recalculado_em).toLocaleDateString("pt-BR")}`}>

@@ -267,6 +267,8 @@ export interface UsoInsumo {
   preco_unitario_rs: number | null;
   valor_rs: number | null;
   pendente_de_valor: boolean | null;
+  // Preço fixado pelo gestor (nota fiscal); null = vale o preço médio. O PUT precisa reenviá-lo para mantê-lo
+  preco_corrigido_rs: number | null;
   recalculado_em: string | null;
 }
 

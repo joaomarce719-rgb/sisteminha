@@ -39,7 +39,8 @@ export function UsoInsumoForm({ cicloId, fase, onSalvo, uso, gestor = false, onC
   // Uso de dias atrás editado hoje já é retroativo, mesmo que na época não fosse
   const [retroativo, setRetroativo] = useState(uso ? uso.retroativo || uso.data_uso < hojeLocal() : false);
   const [observacao, setObservacao] = useState(uso?.observacao ?? "");
-  const [precoCorrigido, setPrecoCorrigido] = useState("");
+  // Preço fixo que o uso já tem: a edição o mantém, e limpar o campo é que o remove
+  const [precoCorrigido, setPrecoCorrigido] = useState(uso?.preco_corrigido_rs != null ? String(uso.preco_corrigido_rs) : "");
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
@@ -77,7 +78,7 @@ export function UsoInsumoForm({ cicloId, fase, onSalvo, uso, gestor = false, onC
       observacao: observacao.trim() || null,
       // A caixa marcada com a data de hoje não é retroativa de fato
       retroativo: retroativo && data < hojeLocal(),
-      // Só o gestor corrige o preço; sem informar, vale o preço médio do insumo
+      // Só o gestor corrige o preço; o PUT regrava o campo, então vazio remove a correção e vale o preço médio
       preco_corrigido_rs: gestor && precoCorrigido !== "" ? parseFloat(precoCorrigido) : null,
     };
     try {
@@ -196,7 +197,7 @@ export function UsoInsumoForm({ cicloId, fase, onSalvo, uso, gestor = false, onC
           <p className="mt-1 text-xs text-slate-500">
             Use para acertar o preço pela nota fiscal; o reprocessamento mantém o valor. Em branco, vale o preço médio
             do insumo
-            {uso ? " (salvar sem informar desfaz uma correção anterior)." : "."}
+            {uso?.preco_corrigido_rs != null ? ": limpe o campo para remover a correção." : "."}
           </p>
         </div>
       )}

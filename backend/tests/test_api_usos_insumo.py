@@ -227,6 +227,45 @@ def test_preco_corrigido_pelo_gestor_e_preservado(client, gestor, insumo, ciclo)
     assert _usos(client, gestor, ciclo["id"])[uso["id"]]["pendente_de_valor"] is False
 
 
+def _corpo_do_uso(insumo, quantidade, **extra):
+    return {"insumo_id": insumo["id"], "data_uso": HOJE, "quantidade": quantidade, "fase": "CULTIVO", **extra}
+
+
+def test_resposta_traz_o_preco_corrigido_so_para_o_gestor(client, gestor, campo, vigia, insumo, ciclo):
+    _comprar(client, gestor, insumo["id"], 100, 300)
+    criado = _usar(client, gestor, ciclo["id"], insumo["id"], 50, preco_corrigido_rs=2.5).json()
+    sem_correcao = _usar(client, gestor, ciclo["id"], insumo["id"], 10).json()
+    assert (criado["preco_corrigido_rs"], sem_correcao["preco_corrigido_rs"]) == (2.5, None)
+    assert _usos(client, gestor, ciclo["id"])[criado["id"]]["preco_corrigido_rs"] == 2.5
+
+    # CAMPO e VIGIA nunca recebem valores, nem o preço corrigido de um uso que o gestor corrigiu
+    assert _usos(client, campo, ciclo["id"])[criado["id"]]["preco_corrigido_rs"] is None
+    assert _usar(client, vigia, ciclo["id"], insumo["id"], 5).json()["preco_corrigido_rs"] is None
+
+
+def test_editar_uso_reenviando_o_preco_corrigido_mantem_a_correcao(client, gestor, insumo, ciclo):
+    _comprar(client, gestor, insumo["id"], 100, 300)
+    uso = _usar(client, gestor, ciclo["id"], insumo["id"], 50, preco_corrigido_rs=2.5).json()
+    url = f"/api/v1/ciclos/{ciclo['id']}/usos-insumo/{uso['id']}"
+
+    # o formulário reenvia o preço corrigido que recebeu: a edição de quantidade não o perde
+    r = client.put(url, json=_corpo_do_uso(insumo, 20, preco_corrigido_rs=uso["preco_corrigido_rs"]), headers=gestor)
+    assert r.status_code == 200, r.text
+    assert (r.json()["preco_corrigido_rs"], r.json()["preco_unitario_rs"], r.json()["valor_rs"]) == (2.5, 2.5, 50.0)
+    assert [c["valor_rs"] for c in _custos_do_insumo(client, gestor, ciclo["id"], insumo)] == [50.0]
+
+
+def test_editar_uso_sem_preco_corrigido_remove_a_correcao(client, gestor, insumo, ciclo):
+    _comprar(client, gestor, insumo["id"], 100, 300)
+    uso = _usar(client, gestor, ciclo["id"], insumo["id"], 50, preco_corrigido_rs=2.5).json()
+    url = f"/api/v1/ciclos/{ciclo['id']}/usos-insumo/{uso['id']}"
+
+    r = client.put(url, json=_corpo_do_uso(insumo, 20, preco_corrigido_rs=None), headers=gestor)
+    assert r.status_code == 200, r.text
+    assert (r.json()["preco_corrigido_rs"], r.json()["preco_unitario_rs"], r.json()["valor_rs"]) == (None, 3.0, 60.0)
+    assert [c["valor_rs"] for c in _custos_do_insumo(client, gestor, ciclo["id"], insumo)] == [60.0]
+
+
 def test_ciclo_finalizado_registra_recalculado_em(client, gestor, campo, insumo, ciclo):
     compra = _comprar(client, gestor, insumo["id"], 100, 300)
     uso = _usar(client, gestor, ciclo["id"], insumo["id"], 50).json()

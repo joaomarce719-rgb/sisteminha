@@ -25,7 +25,7 @@ class UsoInsumoCreate(BaseModel):
 
 
 class UsoInsumoResponse(BaseModel):
-    """`preco_unitario_rs`, `valor_rs` e `pendente_de_valor` só para o GESTOR."""
+    """`preco_unitario_rs`, `valor_rs`, `pendente_de_valor` e `preco_corrigido_rs` só para o GESTOR."""
 
     id: UUID
     insumo_id: UUID
@@ -39,4 +39,6 @@ class UsoInsumoResponse(BaseModel):
     preco_unitario_rs: float | None = None
     valor_rs: float | None = None
     pendente_de_valor: bool | None = None
+    # preço fixado pelo gestor (nota fiscal); o PUT precisa reenviá-lo para mantê-lo
+    preco_corrigido_rs: float | None = None
     recalculado_em: datetime | None = None
