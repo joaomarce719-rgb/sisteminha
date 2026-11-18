@@ -19,6 +19,7 @@ from src.models.biometria import Biometria
 from src.models.ciclo_produtivo import CicloProdutivo
 from src.models.custo_operacional import CustoOperacional
 from src.models.enums import RoleUsuario, StatusCiclo
+from src.models.insumo import ConsumoInsumo
 from src.models.manejo_alimentar import ManejoAlimentar
 from src.models.viveiro import Viveiro
 from src.schemas.ciclo import CicloCreate, CicloEncerrar, CicloResponse, MetricasAtuaisResponse
@@ -27,6 +28,7 @@ from src.services import decision_engine as de
 from src.services.alimentacao import pontos_alimentares
 from src.services.precos import regra_da_organizacao, tabela_vigente
 from src.services.sobrevivencia import confrontar_vivos, ordenar, peso_na_data, sobrevivencia_vigente
+from src.services.insumos import reprocessar_insumo
 from src.services.regras_ciclo import ciclo_aberto_do_viveiro
 
 router = APIRouter(prefix="/api/v1/ciclos", tags=["Ciclos Produtivos"])
@@ -452,8 +454,14 @@ def deletar_ciclo(
     if not ciclo:
         raise HTTPException(status_code=404, detail="Ciclo não encontrado.")
     registrar_auditoria(db, "EXCLUIR", "CicloProdutivo", ciclo.id, _user, dados_anteriores=snapshot(ciclo))
+    # os usos somem por CASCADE; o preço médio dos insumos usados muda para os outros ciclos
+    insumos_usados = db.scalars(
+        select(ConsumoInsumo.insumo_id).where(ConsumoInsumo.ciclo_id == ciclo.id).distinct()
+    ).all()
     db.delete(ciclo)
     db.flush()
+    for insumo_id in insumos_usados:
+        reprocessar_insumo(db, insumo_id, _user)
     return {"detail": "Ciclo excluído com sucesso.", "id": str(ciclo_id)}
 
 

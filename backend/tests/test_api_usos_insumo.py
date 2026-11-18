@@ -338,3 +338,17 @@ def test_uso_de_outro_ciclo_da_404(client, gestor, insumo, ciclo, novo_ciclo):
     uso = _usar(client, gestor, outro["id"], insumo["id"], 1).json()
     url = f"/api/v1/ciclos/{ciclo['id']}/usos-insumo/{uso['id']}"
     assert client.delete(url, headers=gestor).status_code == 404
+
+
+def test_excluir_ciclo_reprocessa_o_insumo_dos_outros_ciclos(client, gestor, insumo, novo_ciclo):
+    dia = [(date.today() - timedelta(days=n)).isoformat() for n in (4, 3, 2, 1)]
+    ciclo_x, ciclo_y = novo_ciclo(), novo_ciclo()
+    _comprar(client, gestor, insumo["id"], 100, 300, data=dia[0])
+    assert _usar(client, gestor, ciclo_x["id"], insumo["id"], 90, data=dia[1], retroativo=True).status_code == 201
+    _comprar(client, gestor, insumo["id"], 100, 500, data=dia[2])
+    uso_y = _usar(client, gestor, ciclo_y["id"], insumo["id"], 50, data=dia[3], retroativo=True).json()
+    assert uso_y["valor_rs"] == 240.91  # pm = (10 x 3 + 500) / 110
+
+    assert client.delete(f"/api/v1/ciclos/{ciclo_x['id']}", headers=gestor).status_code == 200
+    assert _usos(client, gestor, ciclo_y["id"])[uso_y["id"]]["valor_rs"] == 200.0  # pm = (100 x 3 + 500) / 200
+    assert [c["valor_rs"] for c in _custos_do_insumo(client, gestor, ciclo_y["id"], insumo)] == [200.0]
