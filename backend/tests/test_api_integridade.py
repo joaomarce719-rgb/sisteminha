@@ -46,6 +46,9 @@ def test_um_ciclo_aberto_por_viveiro(client, gestor, novo_ciclo):
 
 def test_encerrar_ciclo_pausado(client, gestor, novo_ciclo):
     ciclo = novo_ciclo()
+    # o encerramento com payload cria a venda final com o peso da última biometria (ciclo pausado não aceita biometria)
+    client.post(f"/api/v1/ciclos/{ciclo['id']}/biometrias/",
+                json={"data_medicao": "2026-09-01", "quantidade_amostrada": 50, "peso_medio_g": 20}, headers=gestor)
     client.post(f"/api/v1/ciclos/{ciclo['id']}/pausar", headers=gestor)
     r = client.post(
         f"/api/v1/ciclos/{ciclo['id']}/encerrar",

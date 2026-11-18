@@ -5,6 +5,7 @@ from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import ValidationError
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
@@ -21,8 +22,11 @@ from src.models.custo_operacional import CustoOperacional
 from src.models.enums import RoleUsuario, StatusCiclo
 from src.models.insumo import ConsumoInsumo
 from src.models.manejo_alimentar import ManejoAlimentar
+from src.models.venda_ciclo import VendaCiclo
 from src.models.viveiro import Viveiro
+from src.routers.vendas import colunas_da_venda, sincronizar_totais_do_ciclo
 from src.schemas.ciclo import CicloCreate, CicloEncerrar, CicloResponse, MetricasAtuaisResponse
+from src.schemas.venda import VendaCreate
 from src.services.auth_service import get_current_user, has_role
 from src.services import decision_engine as de
 from src.services.alimentacao import pontos_alimentares
@@ -158,15 +162,69 @@ def encerrar_ciclo(
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
 ):
-    """Encerra o ciclo com dados da despesca real (RF-02)."""
+    """Encerra o ciclo: biomassa colhida e receita real passam a ser a soma das vendas (RF-02).
+
+    Biomassa e receita no corpo viram uma venda DESPESCA_FINAL com o peso médio da última biometria;
+    sem elas valem as vendas já lançadas, que precisam incluir ao menos uma despesca final.
+    """
     result = db.execute(select(CicloProdutivo).where(CicloProdutivo.id == ciclo_id))
     ciclo = result.scalar_one_or_none()
     if not ciclo:
         raise HTTPException(status_code=404, detail="Ciclo não encontrado.")
     if ciclo.status not in (StatusCiclo.ATIVO, StatusCiclo.PAUSADO):
         raise HTTPException(status_code=400, detail="Somente ciclos ATIVOS ou PAUSADOS podem ser encerrados.")
-    if payload.data_despesca_real < ciclo.data_povoamento:
+
+    peso_final_g = peso_na_data(ciclo.biometrias, date.max)  # a da última biometria
+    if peso_final_g is None:
+        raise HTTPException(status_code=422, detail="Registre ao menos uma biometria antes de encerrar o ciclo.")
+    pendentes = db.scalar(
+        select(func.count()).select_from(ConsumoInsumo).where(
+            ConsumoInsumo.ciclo_id == ciclo.id, ConsumoInsumo.preco_unitario_rs.is_(None)
+        )
+    )
+    if pendentes:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Há {pendentes} {'uso de insumo pendente' if pendentes == 1 else 'usos de insumo pendentes'} "
+            "de valor: registre a compra faltante ou corrija o preço do uso antes de encerrar.",
+        )
+
+    datas_finais = list(db.scalars(
+        select(VendaCiclo.data_venda).where(VendaCiclo.ciclo_id == ciclo.id, VendaCiclo.tipo == "DESPESCA_FINAL")
+    ))
+    data_venda_nova = payload.data_despesca_real or date.today()
+    if payload.biomassa_colhida_kg is not None:
+        datas_finais.append(data_venda_nova)
+    if not datas_finais:
+        raise HTTPException(
+            status_code=422,
+            detail="O encerramento exige ao menos uma venda de despesca final: "
+            "informe biomassa e receita ou lance a venda antes.",
+        )
+    data_despesca = payload.data_despesca_real or max(datas_finais)
+    if data_despesca < ciclo.data_povoamento:
         raise HTTPException(status_code=422, detail="A despesca não pode ser anterior ao povoamento.")
+
+    venda = None
+    if payload.biomassa_colhida_kg is not None:
+        try:
+            nova = VendaCreate(
+                data_venda=data_venda_nova,
+                tipo="DESPESCA_FINAL",
+                biomassa_kg=payload.biomassa_colhida_kg,
+                peso_medio_g=peso_final_g,
+                preco_kg=payload.receita_real_rs / payload.biomassa_colhida_kg,
+                retroativo=data_venda_nova < date.today(),
+            )
+        except ValidationError:
+            raise HTTPException(
+                status_code=422, detail="Biomassa, receita e peso médio resultam em valores fora dos limites da venda."
+            )
+        colunas = colunas_da_venda(db, ciclo, nova)
+        # a receita informada vale mais que o preço por kg arredondado a centavos
+        colunas["valor_total_rs"] = round(payload.receita_real_rs, 2)
+        venda = VendaCiclo(ciclo_id=ciclo.id, **colunas)
+        db.add(venda)
 
     dados_ant = {
         "status": ciclo.status.value,
@@ -176,11 +234,9 @@ def encerrar_ciclo(
     }
 
     ciclo.status = StatusCiclo.FINALIZADO
-    ciclo.data_despesca_real = payload.data_despesca_real
-    ciclo.biomassa_colhida_kg = payload.biomassa_colhida_kg
-    ciclo.receita_real_rs = payload.receita_real_rs
+    ciclo.data_despesca_real = data_despesca
     db.add(ciclo)
-    db.flush()
+    sincronizar_totais_do_ciclo(db, ciclo)
 
     registrar_auditoria(
         db=db,
@@ -194,6 +250,7 @@ def encerrar_ciclo(
             "data_despesca_real": str(ciclo.data_despesca_real),
             "biomassa_colhida_kg": ciclo.biomassa_colhida_kg,
             "receita_real_rs": float(ciclo.receita_real_rs),
+            "venda_despesca_final_id": str(venda.id) if venda else None,
         },
     )
 

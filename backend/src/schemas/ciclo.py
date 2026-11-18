@@ -28,9 +28,18 @@ class CicloCreate(BaseModel):
 
 
 class CicloEncerrar(BaseModel):
-    data_despesca_real: date
-    biomassa_colhida_kg: float = Field(..., gt=0)
-    receita_real_rs: float = Field(..., ge=0)
+    """Biomassa e receita vêm juntas (viram a venda da despesca final) ou nenhuma (valem as vendas lançadas)."""
+
+    data_despesca_real: date | None = None
+    # limites = escala e dígitos das colunas da venda (abaixo/acima o valor gravado muda ou estoura)
+    biomassa_colhida_kg: float | None = Field(None, ge=0.01, le=9_999_999_999)
+    receita_real_rs: float | None = Field(None, ge=0, le=9_999_999_999.99)
+
+    @model_validator(mode="after")
+    def biomassa_e_receita_juntas(self) -> "CicloEncerrar":
+        if (self.biomassa_colhida_kg is None) != (self.receita_real_rs is None):
+            raise ValueError("Informe a biomassa colhida e a receita real juntas, ou nenhuma das duas.")
+        return self
 
 
 class CicloResponse(BaseModel):

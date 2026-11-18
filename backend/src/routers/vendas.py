@@ -66,7 +66,7 @@ def _preco_da_tabela(db: Session, ciclo: CicloProdutivo, peso_medio_g: float) ->
     )
 
 
-def _colunas(db: Session, ciclo: CicloProdutivo, payload: VendaCreate) -> dict:
+def colunas_da_venda(db: Session, ciclo: CicloProdutivo, payload: VendaCreate) -> dict:
     """Valida datas, resolve o preço e deriva animais e valor total (arredondados como as colunas)."""
     exigir_retroativo_para_data_passada(payload.data_venda, payload.retroativo, "A data da venda")
     validar_data_no_ciclo(ciclo, payload.data_venda, "A data da venda")
@@ -111,7 +111,7 @@ def lancar_venda(
     """Lança uma venda; os animais vendidos saem da população do ciclo."""
     ciclo = obter_ciclo(db, ciclo_id)
     _validar_status(ciclo, payload.tipo)
-    venda = VendaCiclo(ciclo_id=ciclo_id, **_colunas(db, ciclo, payload))
+    venda = VendaCiclo(ciclo_id=ciclo_id, **colunas_da_venda(db, ciclo, payload))
     db.add(venda)
     db.flush()
     sincronizar_totais_do_ciclo(db, ciclo)
@@ -157,7 +157,7 @@ def corrigir_venda(
     venda = _venda_do_ciclo(db, ciclo_id, venda_id)
     ciclo = obter_ciclo(db, ciclo_id)
     _validar_status(ciclo, payload.tipo, venda.tipo)
-    colunas = _colunas(db, ciclo, payload)
+    colunas = colunas_da_venda(db, ciclo, payload)
     antes = snapshot(venda)
     for campo, valor in colunas.items():
         setattr(venda, campo, valor)

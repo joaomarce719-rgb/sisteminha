@@ -269,6 +269,8 @@ def test_editar_uso_sem_preco_corrigido_remove_a_correcao(client, gestor, insumo
 def test_ciclo_finalizado_registra_recalculado_em(client, gestor, campo, insumo, ciclo):
     compra = _comprar(client, gestor, insumo["id"], 100, 300)
     uso = _usar(client, gestor, ciclo["id"], insumo["id"], 50).json()
+    client.post(f"/api/v1/ciclos/{ciclo['id']}/biometrias/",
+                json={"data_medicao": "2026-09-01", "quantidade_amostrada": 50, "peso_medio_g": 20}, headers=gestor)
     r = client.post(f"/api/v1/ciclos/{ciclo['id']}/encerrar",
                     json={"data_despesca_real": HOJE, "biomassa_colhida_kg": 1000, "receita_real_rs": 20000},
                     headers=gestor)
