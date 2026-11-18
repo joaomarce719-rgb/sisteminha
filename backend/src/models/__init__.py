@@ -9,6 +9,7 @@ from src.models.auditoria import LogAuditoria
 from src.models.biometria import Biometria
 from src.models.ciclo_produtivo import CicloProdutivo
 from src.models.custo_operacional import CustoOperacional
+from src.models.insumo import CompraInsumo, ConsumoInsumo, Insumo
 from src.models.manejo_alimentar import ManejoAlimentar
 from src.models.monitoramento_aerador import MonitoramentoAerador
 from src.models.organizacao import Organizacao
@@ -24,7 +25,10 @@ __all__ = [
     "Alerta",
     "Biometria",
     "CicloProdutivo",
+    "CompraInsumo",
+    "ConsumoInsumo",
     "CustoOperacional",
+    "Insumo",
     "LogAuditoria",
     "ManejoAlimentar",
     "MonitoramentoAerador",
