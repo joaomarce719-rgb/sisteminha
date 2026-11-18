@@ -1,15 +1,21 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { LogOut, Moon } from "lucide-react";
+import { LogOut, Moon, Package } from "lucide-react";
 import { clearToken } from "@/lib/api";
 import { useSessao } from "@/lib/sessao";
 import { toast } from "@/components/ui/toast";
 
+const NAV_ITEMS = [
+  { href: "/vigia/ronda", label: "Ronda Noturna", icon: Moon },
+  { href: "/vigia/insumos", label: "Insumos", icon: Package },
+];
+
 export default function VigiaLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { montado, user: sessao } = useSessao();
   const user = sessao?.role === "VIGIA" || sessao?.role === "GESTOR" ? sessao : null;
 
@@ -62,6 +68,27 @@ export default function VigiaLayout({ children }: { children: React.ReactNode })
             </button>
           </div>
         </div>
+
+        {/* Abas de navegação, no mesmo padrão do layout do campo */}
+        <nav className="flex border-t border-slate-800 bg-[#0c1427]/80 backdrop-blur-sm">
+          {NAV_ITEMS.map((item) => {
+            const isActive = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-bold transition-all border-b-2 ${
+                  isActive
+                    ? "border-amber-400 text-amber-300 bg-white/5"
+                    : "border-transparent text-slate-400 hover:text-white"
+                }`}
+              >
+                <item.icon className="w-4 h-4" />
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
       </header>
 
       {/* Content */}

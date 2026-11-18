@@ -26,6 +26,7 @@ import {
   Download,
   Pause,
   Play,
+  Package,
 } from "lucide-react";
 import {
   viveirosApi,
@@ -52,6 +53,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MetricCard } from "@/components/ui/metric-card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { AbaInsumosCiclo } from "@/components/insumos/aba-insumos-ciclo";
 import { toast } from "@/components/ui/toast";
 
 function fmtDate(d: string) {
@@ -993,6 +995,10 @@ export default function ViveiroDetalhePage() {
                 <Utensils className="w-4 h-4 mr-2" />
                 Manejo & Ração ({manejos.length})
               </TabsTrigger>
+              <TabsTrigger value="insumos">
+                <Package className="w-4 h-4 mr-2" />
+                Insumos
+              </TabsTrigger>
             </TabsList>
 
             {/* ABA 1: MÉTRICAS */}
@@ -1267,6 +1273,11 @@ export default function ViveiroDetalhePage() {
                   </div>
                 )}
               </div>
+            </TabsContent>
+
+            {/* ABA 4: INSUMOS */}
+            <TabsContent value="insumos">
+              <AbaInsumosCiclo cicloId={cicloAtivo.id} onAlterado={loadData} />
             </TabsContent>
           </Tabs>
         </>
