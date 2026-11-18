@@ -4,10 +4,12 @@ import type {
   Alerta,
   Biometria,
   CicloProdutivo,
+  CompraInsumo,
   CustoOperacional,
   CustoResumo,
   FazendaAdmin,
   GestorAdmin,
+  Insumo,
   LogAuditoria,
   ManejoAlimentar,
   MetricasAtuais,
@@ -23,6 +25,7 @@ import type {
   StatusAlerta,
   TabelaAlimentar,
   TokenResponse,
+  UsoInsumo,
   Usuario,
   Viveiro,
 } from "./types";
@@ -348,6 +351,39 @@ export const custosApi = {
   resumo: (cicloId: string) => apiFetch<CustoResumo[]>(`/ciclos/${cicloId}/custos/resumo`),
   exportarCsv: (cicloId: string) =>
     downloadFile(`/ciclos/${cicloId}/custos/exportar-csv`, `custos_ciclo_${cicloId.slice(0, 8)}.csv`),
+};
+
+// ── Insumos e compras ──────────────────────────────────
+export const insumosApi = {
+  listar: () => apiFetch<Insumo[]>("/insumos/"),
+  criar: (data: Payload) => apiFetch<Insumo>("/insumos/", { method: "POST", body: JSON.stringify(data) }),
+  atualizar: (id: string, data: Payload) =>
+    apiFetch<Insumo>(`/insumos/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  compras: {
+    listar: (insumoId: string) => apiFetch<CompraInsumo[]>(`/insumos/${insumoId}/compras`),
+    criar: (insumoId: string, data: Payload) =>
+      apiFetch<CompraInsumo>(`/insumos/${insumoId}/compras`, { method: "POST", body: JSON.stringify(data) }),
+    // O PUT reenvia a compra inteira
+    atualizar: (insumoId: string, compraId: string, data: Payload) =>
+      apiFetch<CompraInsumo>(`/insumos/${insumoId}/compras/${compraId}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+    excluir: (insumoId: string, compraId: string) =>
+      apiFetch<void>(`/insumos/${insumoId}/compras/${compraId}`, { method: "DELETE" }),
+  },
+};
+
+// ── Uso de insumo no ciclo ─────────────────────────────
+export const usosInsumoApi = {
+  listar: (cicloId: string) => apiFetch<UsoInsumo[]>(`/ciclos/${cicloId}/usos-insumo/`),
+  criar: (cicloId: string, data: Payload) =>
+    apiFetch<UsoInsumo>(`/ciclos/${cicloId}/usos-insumo/`, { method: "POST", body: JSON.stringify(data) }),
+  // O PUT reenvia o uso inteiro
+  atualizar: (cicloId: string, usoId: string, data: Payload) =>
+    apiFetch<UsoInsumo>(`/ciclos/${cicloId}/usos-insumo/${usoId}`, { method: "PUT", body: JSON.stringify(data) }),
+  excluir: (cicloId: string, usoId: string) =>
+    apiFetch<void>(`/ciclos/${cicloId}/usos-insumo/${usoId}`, { method: "DELETE" }),
 };
 
 // ── Preços ─────────────────────────────────────────────

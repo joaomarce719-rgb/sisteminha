@@ -17,6 +17,7 @@ export interface ConfrontoVivos {
   situacao: SituacaoConfronto;
 }
 export type CategoriaCusto = "RACAO" | "ENERGIA_ELETRICA" | "MAO_DE_OBRA" | "POS_LARVAS" | "PROBIOTICOS_QUIMICOS" | "MANUTENCAO" | "OUTROS";
+export type FaseCusto = "PREPARO" | "CULTIVO" | "DESPESCA";
 export type RecomendacaoDespesca = "MANTER_CULTIVO" | "DESPESCA_IMEDIATA";
 export type ComportamentoCamarao = "NORMAL_FUNDO" | "FLOR_DAGUA_BOQUEANDO" | "NATACAO_AGITADA" | "ECDISE_MASSIVA" | "PRESENCA_BORDAS";
 export type StatusEnergia = "REDE_CONCESSIONARIA" | "GERADOR_DIESEL" | "SEM_ENERGIA_QUEDA";
@@ -225,6 +226,48 @@ export interface CustoResumo {
   categoria: CategoriaCusto;
   total_rs: number;
   qtd_lancamentos: number;
+}
+
+// ── Insumos ───────────────────────────────────────────
+// A API devolve null no que o papel não pode ver: saldo (VIGIA), preço médio e saldo negativo (CAMPO e VIGIA)
+export interface Insumo {
+  id: string;
+  nome: string;
+  unidade_uso: string;
+  categoria: CategoriaCusto;
+  ativo: boolean;
+  saldo: number | null;
+  preco_medio_rs: number | null;
+  saldo_negativo: boolean | null;
+}
+
+export interface CompraInsumo {
+  id: string;
+  insumo_id: string;
+  data_compra: string;
+  quantidade: number;
+  valor_total_rs: number;
+  fornecedor: string | null;
+  observacao: string | null;
+  retroativo: boolean;
+  created_at: string;
+}
+
+export interface UsoInsumo {
+  id: string;
+  insumo_id: string;
+  insumo_nome: string;
+  unidade_uso: string;
+  data_uso: string;
+  quantidade: number;
+  fase: FaseCusto;
+  retroativo: boolean;
+  observacao: string | null;
+  // Só o GESTOR recebe os campos de valor
+  preco_unitario_rs: number | null;
+  valor_rs: number | null;
+  pendente_de_valor: boolean | null;
+  recalculado_em: string | null;
 }
 
 // ── Preços ────────────────────────────────────────────
