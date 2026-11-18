@@ -15,7 +15,7 @@ class PropriedadeCreate(BaseModel):
 
 class PropriedadeUpdate(BaseModel):
     nome: str | None = Field(None, min_length=2, max_length=120)
-    localizacao: str | None = None
+    localizacao: str | None = Field(None, max_length=255)
     area_total_ha: float | None = Field(None, gt=0)
     status_ativo: bool | None = None
 

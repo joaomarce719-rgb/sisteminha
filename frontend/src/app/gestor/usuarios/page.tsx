@@ -14,7 +14,7 @@ import {
   Lock,
   Search,
 } from "lucide-react";
-import { adminApi } from "@/lib/api";
+import { adminApi, organizacoesApi } from "@/lib/api";
 import { mensagemErro } from "@/lib/utils";
 import type { Usuario } from "@/lib/types";
 import { Dialog } from "@/components/ui/dialog";
@@ -223,6 +223,7 @@ export default function OperadoresPage() {
   const [toggling, setToggling] = useState<string | null>(null);
   const [filtroRole, setFiltroRole] = useState<string>("TODOS");
   const [busca, setBusca] = useState<string>("");
+  const [codigoFazenda, setCodigoFazenda] = useState<string | null>(null);
 
   const loadUsers = async () => {
     try {
@@ -239,6 +240,12 @@ export default function OperadoresPage() {
     // Os setState do carregamento só ocorrem após o await (não são síncronos no efeito)
     (async () => {
       await loadUsers();
+      try {
+        const orgs = await organizacoesApi.listar();
+        if (orgs.length === 1) setCodigoFazenda(orgs[0].identificador);
+      } catch {
+        // o código é só informativo; a lista de usuários segue sem ele
+      }
     })();
   }, []);
 
@@ -327,6 +334,15 @@ export default function OperadoresPage() {
           Novo Colaborador
         </Button>
       </div>
+
+      {codigoFazenda && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div className="text-xs text-slate-500">
+            Código da fazenda: os funcionários o informam no cadastro para pedir acesso. Você aprova aqui em seguida.
+          </div>
+          <div className="font-mono text-lg font-bold tracking-widest text-slate-900 select-all">{codigoFazenda}</div>
+        </div>
+      )}
 
       {/* Métricas por Função Operacional */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

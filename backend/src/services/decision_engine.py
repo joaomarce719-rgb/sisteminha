@@ -9,6 +9,7 @@ Implementa todas as fórmulas zootécnicas e econômicas do SRS:
 - RN-07: Algoritmo preditivo Delta V (ΔV) para decisão de despesca
 """
 
+import math
 from dataclasses import dataclass
 from datetime import date
 
@@ -268,11 +269,30 @@ def calcular_ganho_semanal(ganho_diario_g: float) -> float:
     return ganho_diario_g * 7.0
 
 
+def peso_para_preco(peso_g: float, regra: str = "PROPORCIONAL") -> float:
+    """Peso usado na precificação, conforme o acordo com o comprador (grama inteiro ou exato).
+
+    O arredondamento a 6 casas antes do floor/ceil evita que ruído de ponto flutuante
+    (19,9999999 no lugar de 20) mude o grama.
+    """
+    peso = round(peso_g, 6)
+    if regra == "PARA_BAIXO":
+        return float(math.floor(peso))
+    if regra == "PARA_CIMA":
+        return float(math.ceil(peso))
+    return peso
+
+
 def buscar_preco_por_gramatura(
     peso_g: float,
     tabela: list[dict],
+    regra: str = "PROPORCIONAL",
 ) -> float | None:
     """Busca o preço R$/kg na tabela de mercado para uma dada gramatura.
+
+    O peso passa antes por `peso_para_preco(regra)`. Dentro da faixa o preço é
+    `preco_por_kg + incremento_por_g * (peso - 10)`: a tabela é o preço do camarão de 10 g e cada
+    grama acima soma o incremento (0 = preço fixo na faixa, como nas faixas antigas).
 
     Na borda entre duas faixas (ex.: 10 g em 8–10 e em 10–12) vale a de cima, pois a faixa
     começa no seu peso mínimo; na mesma faixa, vale a vigência mais recente. O resultado não
@@ -281,16 +301,18 @@ def buscar_preco_por_gramatura(
     Args:
         peso_g: Peso médio do camarão em gramas.
         tabela: Lista de dicts com keys: faixa_gramatura_min, faixa_gramatura_max, preco_por_kg
-            e, opcionalmente, vigencia_inicio.
+            e, opcionalmente, incremento_por_g e vigencia_inicio.
+        regra: PARA_BAIXO, PARA_CIMA ou PROPORCIONAL (padrão: peso exato).
 
     Returns:
         Preço R$/kg ou None se não encontrado.
     """
-    candidatas = [f for f in tabela if f["faixa_gramatura_min"] <= peso_g <= f["faixa_gramatura_max"]]
+    peso = peso_para_preco(peso_g, regra)
+    candidatas = [f for f in tabela if f["faixa_gramatura_min"] <= peso <= f["faixa_gramatura_max"]]
     if not candidatas:
         return None
     escolhida = max(candidatas, key=lambda f: (f["faixa_gramatura_min"], f.get("vigencia_inicio") or date.min))
-    return float(escolhida["preco_por_kg"])
+    return round(float(escolhida["preco_por_kg"]) + float(escolhida.get("incremento_por_g") or 0) * (peso - 10.0), 2)
 
 
 def estimar_mortalidade_diaria(taxa_sobrev_pct: float, dias_cultivo: int) -> float:

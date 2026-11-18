@@ -5,7 +5,7 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -28,18 +28,27 @@ class FazendaAdminCreate(BaseModel):
     nome: str = Field(..., min_length=2, max_length=120)
     localizacao: str | None = Field(None, max_length=255)
     area_total_ha: float | None = Field(None, gt=0)
-    organizacao_nome: str | None = None
-    identificador: str | None = None
+    organizacao_id: UUID | None = None  # fazenda numa organização existente
+    organizacao_nome: str | None = Field(None, max_length=120)  # ou cria uma organização nova
+    identificador: str | None = Field(None, max_length=30)
+
+    @model_validator(mode="after")
+    def _uma_organizacao(self):
+        if bool(self.organizacao_id) == bool(self.organizacao_nome):
+            raise ValueError("Informe organizacao_id ou organizacao_nome (só um).")
+        return self
 
 
 class FazendaAdminResponse(BaseModel):
     id: UUID
+    organizacao_id: UUID | None = None
     nome: str
     localizacao: str | None = None
     area_total_ha: float | None = None
     status_ativo: bool
     total_viveiros: int
     organizacao_nome: str | None = None
+    codigo_organizacao: str | None = None  # código que os funcionários usam no cadastro
     created_at: datetime
 
 
@@ -67,9 +76,8 @@ class GestorAdminCreate(BaseModel):
     nome_completo: str = Field(..., min_length=2, max_length=120)
     email: str = Field(..., min_length=5, max_length=120)
     senha: str = Field(..., min_length=6, max_length=128)
-    telefone_emergencia: str | None = None
-    organizacao_id: UUID | None = None
-    nome_fazenda: str | None = None
+    telefone_emergencia: str | None = Field(None, max_length=20)
+    organizacao_id: UUID
 
 
 class GestorAdminResponse(BaseModel):
@@ -89,7 +97,7 @@ class OperadorCreate(BaseModel):
     email: str = Field(..., min_length=5, max_length=120)
     senha: str = Field(..., min_length=6, max_length=128)
     papel: RoleUsuario = RoleUsuario.CAMPO
-    telefone_emergencia: str | None = None
+    telefone_emergencia: str | None = Field(None, max_length=20)
 
 
 # ── 1. Métricas Globais do Sistema ────────────────────────────
@@ -143,12 +151,14 @@ def listar_fazendas_admin(
         resultado.append(
             FazendaAdminResponse(
                 id=p.id,
+                organizacao_id=p.organizacao_id,
                 nome=p.nome,
                 localizacao=p.localizacao,
                 area_total_ha=p.area_total_ha,
                 status_ativo=p.status_ativo,
                 total_viveiros=total_v,
                 organizacao_nome=org_nome,
+                codigo_organizacao=p.organizacao.identificador if p.organizacao else None,
                 created_at=p.created_at,
             )
         )
@@ -163,12 +173,14 @@ def criar_fazenda_admin(
 ):
     """Cadastra ou aprova uma nova fazenda/propriedade na plataforma."""
     # Obter ou criar organização associada
-    org = db.scalars(select(Organizacao)).first()
-    if not org or payload.organizacao_nome:
-        nome_org = payload.organizacao_nome or f"Grupo {payload.nome}"
+    if payload.organizacao_id:
+        org = db.get(Organizacao, payload.organizacao_id)
+        if org is None:
+            raise HTTPException(status_code=404, detail="Organização não encontrada.")
+    else:
         org = Organizacao(
-            nome=nome_org,
-            identificador=payload.identificador,
+            nome=payload.organizacao_nome,
+            identificador=payload.identificador or secrets.token_hex(4).upper(),
             status_ativo=True,
         )
         db.add(org)
@@ -188,14 +200,36 @@ def criar_fazenda_admin(
 
     return FazendaAdminResponse(
         id=nova_fazenda.id,
+        organizacao_id=org.id,
         nome=nova_fazenda.nome,
         localizacao=nova_fazenda.localizacao,
         area_total_ha=nova_fazenda.area_total_ha,
         status_ativo=nova_fazenda.status_ativo,
         total_viveiros=0,
         organizacao_nome=org.nome,
+        codigo_organizacao=org.identificador,
         created_at=nova_fazenda.created_at,
     )
+
+
+@router.post("/organizacoes/{org_id}/novo-codigo")
+def gerar_novo_codigo_organizacao(
+    org_id: UUID,
+    db: Session = Depends(get_db),
+    _user=Depends(require_superadmin),
+):
+    """Troca o código de cadastro da organização; o anterior deixa de valer para novos cadastros."""
+    org = db.get(Organizacao, org_id)
+    if org is None:
+        raise HTTPException(status_code=404, detail="Organização não encontrada.")
+    anterior = org.identificador
+    org.identificador = secrets.token_hex(4).upper()
+    db.flush()
+    registrar_auditoria(
+        db, "NOVO_CODIGO", "Organizacao", org.id, _user,
+        dados_anteriores={"identificador": anterior}, dados_novos={"identificador": org.identificador},
+    )
+    return {"organizacao_id": org.id, "codigo_organizacao": org.identificador}
 
 
 @router.put("/fazendas/{fazenda_id}/status", response_model=FazendaAdminResponse)
@@ -410,23 +444,10 @@ def criar_gestor_admin(
             detail="Email já cadastrado.",
         )
 
-    org_id = payload.organizacao_id
-    org_nome = None
-    if org_id:
-        org = db.get(Organizacao, org_id)
-        if org:
-            org_nome = org.nome
-    elif payload.nome_fazenda:
-        prop = db.scalars(select(Propriedade).where(Propriedade.nome == payload.nome_fazenda)).first()
-        if prop:
-            org_id = prop.organizacao_id
-            org_nome = prop.nome
-
-    if not org_id:
-        primeira_org = db.scalars(select(Organizacao)).first()
-        if primeira_org:
-            org_id = primeira_org.id
-            org_nome = primeira_org.nome
+    org = db.get(Organizacao, payload.organizacao_id)
+    if org is None:
+        raise HTTPException(status_code=404, detail="Organização não encontrada.")
+    org_id, org_nome = org.id, org.nome
 
     user = Usuario(
         nome_completo=payload.nome_completo,

@@ -25,7 +25,7 @@ from src.schemas.ciclo import CicloCreate, CicloEncerrar, CicloResponse, Metrica
 from src.services.auth_service import get_current_user, has_role
 from src.services import decision_engine as de
 from src.services.alimentacao import pontos_alimentares
-from src.services.precos import tabela_vigente
+from src.services.precos import regra_da_organizacao, tabela_vigente
 from src.services.sobrevivencia import confrontar_vivos, ordenar, peso_na_data, sobrevivencia_vigente
 from src.services.regras_ciclo import ciclo_aberto_do_viveiro
 
@@ -337,7 +337,11 @@ def metricas_atuais(
     # Preço de mercado vigente
     preco_kg = None
     if peso_medio is not None:
-        preco_kg = de.buscar_preco_por_gramatura(peso_medio, tabela_vigente(db, viveiro.organizacao_id, hoje))
+        preco_kg = de.buscar_preco_por_gramatura(
+            peso_medio,
+            tabela_vigente(db, viveiro.organizacao_id, hoje),
+            regra_da_organizacao(db, viveiro.organizacao_id),
+        )
     if preco_kg is None:
         entradas_faltantes.append("preco_mercado")
 

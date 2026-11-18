@@ -6,7 +6,13 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from src.models.organizacao import Organizacao
 from src.models.tabela_preco import TabelaPrecoMercado
+
+
+def regra_da_organizacao(db: Session, organizacao_id: UUID) -> str:
+    """Regra de arredondamento do peso acordada com o comprador (PARA_BAIXO, PARA_CIMA ou PROPORCIONAL)."""
+    return db.scalar(select(Organizacao.regra_arredondamento).where(Organizacao.id == organizacao_id)) or "PARA_BAIXO"
 
 
 def tabela_vigente(db: Session, organizacao_id: UUID, hoje: date) -> list[dict]:
@@ -23,6 +29,7 @@ def tabela_vigente(db: Session, organizacao_id: UUID, hoje: date) -> list[dict]:
             "faixa_gramatura_min": f.faixa_gramatura_min,
             "faixa_gramatura_max": f.faixa_gramatura_max,
             "preco_por_kg": float(f.preco_por_kg),
+            "incremento_por_g": float(f.incremento_por_g),
             "vigencia_inicio": f.vigencia_inicio,
         }
         for f in faixas

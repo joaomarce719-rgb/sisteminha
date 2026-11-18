@@ -47,7 +47,7 @@ class TokenPayload(BaseModel):
 # ── Usuário CRUD ─────────────────────────────────────
 class UsuarioCreate(BaseModel):
     nome_completo: str = Field(default="Usuário", min_length=1, max_length=120)
-    email: EmailStr
+    email: EmailStr = Field(..., max_length=120)
     senha: str = Field(default="", min_length=1, max_length=128)
     password: str | None = None
     papel: RoleUsuario = RoleUsuario.GESTOR

@@ -50,48 +50,69 @@ function fmtDate(d: string) {
   }
 }
 
+// Organizações conhecidas (uma entrada por organizacao_id), tiradas das fazendas já cadastradas
+function organizacoesDe(fazendas: FazendaAdmin[]): { id: string; nome: string }[] {
+  const mapa = new Map<string, string>();
+  for (const f of fazendas) {
+    if (f.organizacao_id) mapa.set(f.organizacao_id, f.organizacao_nome || "Sem nome");
+  }
+  return [...mapa].map(([id, nome]) => ({ id, nome }));
+}
+
 // ── Modal Criar Fazenda (Superadmin) ─────────────────
 function CriarFazendaDialog({
   open,
-  onClose,
+  onClose: fechar,
   onCreated,
+  fazendas,
 }: {
   open: boolean;
   onClose: () => void;
   onCreated: () => void;
+  fazendas: FazendaAdmin[];
 }) {
   const [form, setForm] = useState({
     nome: "",
     localizacao: "Russas, Vale do Jaguaribe - CE",
     area_total_ha: "",
+    organizacao_id: "", // vazio = criar organização nova
     organizacao_nome: "",
   });
+  const organizacoes = organizacoesDe(fazendas);
+  const onClose = () => {
+    setCodigo(null);
+    fechar();
+  };
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [codigo, setCodigo] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      await adminApi.criarFazenda({
+      const criada = await adminApi.criarFazenda({
         nome: form.nome.trim(),
         localizacao: form.localizacao.trim() || null,
         area_total_ha: form.area_total_ha ? parseFloat(form.area_total_ha) : null,
-        organizacao_nome: form.organizacao_nome.trim() || undefined,
+        organizacao_id: form.organizacao_id || undefined,
+        organizacao_nome: form.organizacao_id ? undefined : form.organizacao_nome.trim() || undefined,
       });
       toast.success(
         "Fazenda adicionada com sucesso!",
         `${form.nome} está aprovada e ativa para cultivo.`
       );
       onCreated();
-      onClose();
       setForm({
         nome: "",
         localizacao: "Russas, Vale do Jaguaribe - CE",
         area_total_ha: "",
+        organizacao_id: "",
         organizacao_nome: "",
       });
+      if (criada.codigo_organizacao) setCodigo(criada.codigo_organizacao);
+      else onClose();
     } catch (err) {
       const msg = mensagemErro(err, "Erro ao adicionar fazenda");
       setError(msg);
@@ -115,6 +136,19 @@ function CriarFazendaDialog({
         </div>
       )}
 
+      {codigo ? (
+        <div className="space-y-4 text-slate-200">
+          <p className="text-xs text-slate-300">
+            Repasse este código ao gestor. Os funcionários o informam no cadastro para pedir acesso a esta organização.
+          </p>
+          <div className="rounded-xl bg-slate-900 border border-slate-700 p-4 text-center font-mono text-2xl tracking-widest text-white select-all">
+            {codigo}
+          </div>
+          <Button type="button" onClick={onClose} className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold">
+            Concluir
+          </Button>
+        </div>
+      ) : (
       <form onSubmit={handleSubmit} className="space-y-4 text-slate-200">
         <div>
           <Label htmlFor="nome_fazenda" className="text-xs font-semibold text-slate-300">
@@ -162,15 +196,32 @@ function CriarFazendaDialog({
 
         <div>
           <Label htmlFor="org_fazenda" className="text-xs font-semibold text-slate-300">
-            Grupo Produtor / Empresa Responsável
+            Grupo Produtor / Empresa Responsável *
           </Label>
-          <Input
-            id="org_fazenda"
-            value={form.organizacao_nome}
-            onChange={(e) => setForm({ ...form, organizacao_nome: e.target.value })}
-            placeholder="Ex: Grupo Aquacultura do Ceará"
-            className="mt-1 bg-slate-900 border-slate-700 text-white placeholder:text-slate-500"
-          />
+          <select
+            id="org_fazenda_select"
+            value={form.organizacao_id}
+            onChange={(e) => setForm({ ...form, organizacao_id: e.target.value })}
+            className="w-full mt-1 px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-700 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+          >
+            <option value="">Nova organização…</option>
+            {organizacoes.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.nome}
+              </option>
+            ))}
+          </select>
+          {!form.organizacao_id && (
+            <Input
+              id="org_fazenda"
+              value={form.organizacao_nome}
+              maxLength={120}
+              required
+              onChange={(e) => setForm({ ...form, organizacao_nome: e.target.value })}
+              placeholder="Ex: Grupo Aquacultura do Ceará"
+              className="mt-2 bg-slate-900 border-slate-700 text-white placeholder:text-slate-500"
+            />
+          )}
         </div>
 
         <div className="pt-2 flex gap-3">
@@ -196,6 +247,7 @@ function CriarFazendaDialog({
           </Button>
         </div>
       </form>
+      )}
     </Dialog>
   );
 }
@@ -217,8 +269,9 @@ function CriarGestorDialog({
     email: "",
     senha: "",
     telefone_emergencia: "",
-    nome_fazenda: fazendas[0]?.nome || "",
+    organizacao_id: organizacoesDe(fazendas)[0]?.id || "",
   });
+  const organizacoes = organizacoesDe(fazendas);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -232,11 +285,13 @@ function CriarGestorDialog({
         email: form.email.trim(),
         senha: form.senha,
         telefone_emergencia: form.telefone_emergencia.trim() || null,
-        nome_fazenda: form.nome_fazenda || undefined,
+        organizacao_id: form.organizacao_id,
       });
       toast.success(
         "Gestor cadastrado com sucesso!",
-        `${form.nome_completo} agora é Gestor Administrativo da fazenda ${form.nome_fazenda || "padrão"}.`
+        `${form.nome_completo} agora é Gestor Administrativo de ${
+          organizacoes.find((o) => o.id === form.organizacao_id)?.nome ?? "a organização"
+        }.`
       );
       onCreated();
       onClose();
@@ -245,7 +300,7 @@ function CriarGestorDialog({
         email: "",
         senha: "",
         telefone_emergencia: "",
-        nome_fazenda: fazendas[0]?.nome || "",
+        organizacao_id: organizacoes[0]?.id || "",
       });
     } catch (err) {
       const msg = mensagemErro(err, "Erro ao cadastrar gestor administrativo");
@@ -319,20 +374,21 @@ function CriarGestorDialog({
 
         <div>
           <Label htmlFor="fazenda_select" className="text-xs font-semibold text-slate-300">
-            Fazenda / Propriedade Responsável *
+            Organização / Fazenda Responsável *
           </Label>
           <select
             id="fazenda_select"
-            value={form.nome_fazenda}
-            onChange={(e) => setForm({ ...form, nome_fazenda: e.target.value })}
+            required
+            value={form.organizacao_id}
+            onChange={(e) => setForm({ ...form, organizacao_id: e.target.value })}
             className="w-full mt-1 px-3 py-2 text-xs rounded-xl bg-slate-900 border border-slate-700 text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
           >
-            {fazendas.length === 0 ? (
-              <option value="">Nenhuma fazenda cadastrada</option>
+            {organizacoes.length === 0 ? (
+              <option value="">Nenhuma organização cadastrada</option>
             ) : (
-              fazendas.map((f) => (
-                <option key={f.id} value={f.nome}>
-                  {f.nome} — {f.localizacao || "Vale do Jaguaribe"}
+              organizacoes.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.nome}
                 </option>
               ))
             )}
@@ -346,6 +402,7 @@ function CriarGestorDialog({
           <Input
             id="tel_gestor"
             value={form.telefone_emergencia}
+            maxLength={20}
             onChange={(e) => setForm({ ...form, telefone_emergencia: e.target.value })}
             placeholder="Ex: (88) 99876-5432"
             className="mt-1 bg-slate-900 border-slate-700 text-white placeholder:text-slate-500"
@@ -393,6 +450,7 @@ export default function AdminPage() {
 
   // Ações
   const [togglingFazenda, setTogglingFazenda] = useState<string | null>(null);
+  const [gerandoCodigo, setGerandoCodigo] = useState<string | null>(null);
   const [togglingGestor, setTogglingGestor] = useState<string | null>(null);
   const [resetting, setResetting] = useState<string | null>(null);
   const [busca, setBusca] = useState<string>("");
@@ -434,6 +492,21 @@ export default function AdminPage() {
       toast.error("Erro ao alterar status da fazenda", mensagemErro(err, "Tente novamente"));
     } finally {
       setTogglingFazenda(null);
+    }
+  };
+
+  const handleNovoCodigo = async (fazenda: FazendaAdmin) => {
+    if (!fazenda.organizacao_id) return;
+    if (!window.confirm(`Gerar novo código para ${fazenda.organizacao_nome}? O código atual deixa de valer para novos cadastros.`)) return;
+    setGerandoCodigo(fazenda.id);
+    try {
+      const res = await adminApi.gerarNovoCodigo(fazenda.organizacao_id);
+      toast.success("Novo código gerado", `${fazenda.organizacao_nome}: ${res.codigo_organizacao}`, 30000);
+      carregarDados();
+    } catch (err) {
+      toast.error("Erro ao gerar novo código", mensagemErro(err, "Tente novamente"));
+    } finally {
+      setGerandoCodigo(null);
     }
   };
 
@@ -676,6 +749,27 @@ export default function AdminPage() {
                       </div>
                     </div>
 
+                    <div className="flex items-center justify-between gap-3 rounded-xl bg-slate-950/60 border border-slate-800 px-3 py-2 mb-3">
+                      <div>
+                        <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                          Código de cadastro
+                        </div>
+                        <div className="font-mono text-sm font-bold text-white tracking-widest select-all">
+                          {f.codigo_organizacao || "sem código"}
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleNovoCodigo(f)}
+                        disabled={gerandoCodigo === f.id || !f.organizacao_id}
+                        className="border-slate-700 text-slate-300 hover:bg-slate-800 text-xs"
+                      >
+                        {gerandoCodigo === f.id ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
+                        Gerar novo código
+                      </Button>
+                    </div>
+
                     <div className="flex items-center justify-between text-xs text-slate-500 pt-2">
                       <span>Organização: {f.organizacao_nome || "Fazenda Principal"}</span>
                       <span>Homologada em {fmtDate(f.created_at)}</span>
@@ -829,6 +923,7 @@ export default function AdminPage() {
         open={showFazendaModal}
         onClose={() => setShowFazendaModal(false)}
         onCreated={carregarDados}
+        fazendas={fazendas}
       />
 
       <CriarGestorDialog

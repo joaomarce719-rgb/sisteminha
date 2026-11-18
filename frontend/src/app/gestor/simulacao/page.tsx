@@ -30,6 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/toast";
+import TabelaPrecosCard from "./tabela-precos";
 
 function fmtMoney(v: number) {
   return `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -49,6 +50,9 @@ export default function SimulacaoPage() {
   const [custoDiario, setCustoDiario] = useState("");
   const [customResult, setCustomResult] = useState<SimulacaoResponse | null>(null);
   const [customLoading, setCustomLoading] = useState(false);
+  const [pesoInfo, setPesoInfo] = useState<{ cicloId: string; peso: number | null } | null>(null);
+  // Só vale o peso do ciclo selecionado: ao trocar de ciclo o valor antigo não aparece
+  const pesoAtual = pesoInfo?.cicloId === selectedCiclo ? pesoInfo.peso : null;
 
   useEffect(() => {
     async function load() {
@@ -67,6 +71,19 @@ export default function SimulacaoPage() {
     }
     load();
   }, []);
+
+  // Peso atual do lote: define qual faixa da tabela de preços se aplica
+  useEffect(() => {
+    if (!selectedCiclo) return;
+    let atual = true;
+    ciclosApi
+      .metricas(selectedCiclo)
+      .then((m) => atual && setPesoInfo({ cicloId: selectedCiclo, peso: m.peso_medio_atual_g }))
+      .catch(() => atual && setPesoInfo({ cicloId: selectedCiclo, peso: null }));
+    return () => {
+      atual = false;
+    };
+  }, [selectedCiclo]);
 
   const getViveiroName = (vId: string) =>
     viveiros.find((v) => v.id === vId)?.identificacao || "—";
@@ -204,6 +221,15 @@ export default function SimulacaoPage() {
             </CardContent>
           </Card>
 
+          {/* ── Tabela de preços: a simulação depende dela para calcular a receita ── */}
+          <TabelaPrecosCard
+            pesoAtualG={pesoAtual}
+            onAlterado={() => {
+              setResult(null);
+              setCustomResult(null);
+            }}
+          />
+
           {/* ── Card de Decisão Executiva em Destaque ── */}
           {result && melhorCenario && (
             <div className="space-y-6">
@@ -273,6 +299,14 @@ export default function SimulacaoPage() {
                   </div>
                 </div>
               </div>
+
+              {result.melhor_dia && (
+                <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">
+                  <strong>Melhor dia de despesca: daqui a {result.melhor_dia.dias_horizonte} dias</strong> (varredura de
+                  1 a 30 dias), ganho de {fmtMoney(result.melhor_dia.delta_v_rs)} sobre despescar hoje, peso projetado{" "}
+                  {result.melhor_dia.peso_medio_projetado_g.toFixed(1)} g.
+                </div>
+              )}
 
               {/* ── Cards dos Cenários Comparativos ── */}
               <div>
@@ -434,9 +468,10 @@ export default function SimulacaoPage() {
                     min="0"
                     value={customPreco}
                     onChange={(e) => setCustomPreco(e.target.value)}
-                    placeholder="Usar tabela padrão"
+                    placeholder="Usar tabela de preços"
                     className="mt-1.5"
                   />
+                  <p className="mt-1 text-[11px] text-slate-400">Preço esperado ao despescar depois do horizonte.</p>
                 </div>
 
                 <div className="w-full sm:w-56">
@@ -447,9 +482,10 @@ export default function SimulacaoPage() {
                     min="0"
                     value={custoDiario}
                     onChange={(e) => setCustoDiario(e.target.value)}
-                    placeholder="Média dos custos lançados"
+                    placeholder="Ração de hoje + custos fixos"
                     className="mt-1.5"
                   />
+                  <p className="mt-1 text-[11px] text-slate-400">Vazio: o sistema estima pelos custos lançados.</p>
                 </div>
 
                 <Button

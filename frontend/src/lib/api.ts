@@ -32,23 +32,75 @@ type Payload = Record<string, unknown>;
 
 const API_BASE = "/api/v1";
 
-// ── Token Management ──────────────────────────────────
-export function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("sad_token");
-}
-
-export function setToken(token: string): void {
-  localStorage.setItem("sad_token", token);
-}
+// ── Sessão por aba ────────────────────────────────────
+// Cada aba guarda a própria sessão no sessionStorage (mantido ao recarregar a aba);
+// o localStorage guarda o último login, herdado pelas abas que ainda não têm sessão
+// (aba nova, navegador reaberto). Entrar com outro usuário numa aba não troca o
+// usuário das outras, e sair numa aba não desconecta as outras.
+const CHAVE_TOKEN = "sad_token";
+const CHAVE_USUARIO = "sad_user";
+const CHAVE_SAIU = "sad_sessao_encerrada"; // a aba saiu: não herda o último login
 
 // Mesma validade do JWT (JWT_ACCESS_TOKEN_EXPIRE_MINUTES = 480)
 const SESSAO_SEGUNDOS = 8 * 60 * 60;
 
+const noNavegador = () => typeof window !== "undefined";
+
+function lerSessao(chave: string): string | null {
+  const daAba = sessionStorage.getItem(chave);
+  if (daAba !== null) return daAba;
+  return sessionStorage.getItem(CHAVE_SAIU) ? null : localStorage.getItem(chave);
+}
+
+/** Copia o último login para esta aba, que a partir daí não muda com logins de outras abas. */
+function fixarSessaoNaAba(): void {
+  if (sessionStorage.getItem(CHAVE_TOKEN) !== null || sessionStorage.getItem(CHAVE_SAIU)) return;
+  const token = localStorage.getItem(CHAVE_TOKEN);
+  const usuario = localStorage.getItem(CHAVE_USUARIO);
+  if (token && usuario) {
+    sessionStorage.setItem(CHAVE_TOKEN, token);
+    sessionStorage.setItem(CHAVE_USUARIO, usuario);
+  }
+}
+
+// Lido pelo src/proxy.ts para redirecionar antes de renderizar
+function gravarCookiePapel(papel: string | null): void {
+  document.cookie = papel
+    ? `sad_papel=${encodeURIComponent(papel)}; path=/; max-age=${SESSAO_SEGUNDOS}; samesite=lax`
+    : "sad_papel=; path=/; max-age=0; samesite=lax";
+}
+
+/** O cookie é um só por navegador: cada aba o regrava com o seu perfil ao ficar ativa. */
+function sincronizarCookieDaAba(): void {
+  gravarCookiePapel(getStoredUser()?.role ?? null);
+}
+
+export function getToken(): string | null {
+  if (!noNavegador()) return null;
+  const token = lerSessao(CHAVE_TOKEN);
+  // A primeira requisição fixa na aba o login que ela herdou
+  if (token !== null) fixarSessaoNaAba();
+  return token;
+}
+
+export function setToken(token: string): void {
+  sessionStorage.removeItem(CHAVE_SAIU);
+  sessionStorage.setItem(CHAVE_TOKEN, token);
+  localStorage.setItem(CHAVE_TOKEN, token);
+}
+
 export function clearToken(): void {
-  localStorage.removeItem("sad_token");
-  localStorage.removeItem("sad_user");
-  document.cookie = "sad_papel=; path=/; max-age=0; samesite=lax";
+  const token = sessionStorage.getItem(CHAVE_TOKEN) ?? lerSessao(CHAVE_TOKEN);
+  sessionStorage.removeItem(CHAVE_TOKEN);
+  sessionStorage.removeItem(CHAVE_USUARIO);
+  sessionStorage.setItem(CHAVE_SAIU, "1");
+  // O último login só é apagado se for o desta aba; a aba que continua logada
+  // regrava o cookie quando voltar a ficar ativa
+  if (localStorage.getItem(CHAVE_TOKEN) === token) {
+    localStorage.removeItem(CHAVE_TOKEN);
+    localStorage.removeItem(CHAVE_USUARIO);
+  }
+  gravarCookiePapel(null);
 }
 
 export interface StoredUser {
@@ -58,21 +110,90 @@ export interface StoredUser {
   is_superadmin?: boolean;
 }
 
+/** Usuário desta aba como texto (estável para o useSyncExternalStore de lib/sessao.ts). */
+export function lerUsuarioDaAba(): string | null {
+  return noNavegador() ? lerSessao(CHAVE_USUARIO) : null;
+}
+
 export function getStoredUser(): StoredUser | null {
-  if (typeof window === "undefined") return null;
-  const raw = localStorage.getItem("sad_user");
+  const raw = lerUsuarioDaAba();
   return raw ? JSON.parse(raw) : null;
 }
 
 export function setStoredUser(user: StoredUser): void {
-  localStorage.setItem("sad_user", JSON.stringify(user));
-  // Lido pelo src/proxy.ts para redirecionar antes de renderizar
-  document.cookie = `sad_papel=${encodeURIComponent(user.role)}; path=/; max-age=${SESSAO_SEGUNDOS}; samesite=lax`;
+  const bruto = JSON.stringify(user);
+  sessionStorage.removeItem(CHAVE_SAIU);
+  sessionStorage.setItem(CHAVE_USUARIO, bruto);
+  localStorage.setItem(CHAVE_USUARIO, bruto);
+  gravarCookiePapel(user.role);
+}
+
+if (noNavegador()) {
+  fixarSessaoNaAba();
+  sincronizarCookieDaAba();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") sincronizarCookieDaAba();
+  });
+  window.addEventListener("focus", sincronizarCookieDaAba);
+  window.addEventListener("pageshow", sincronizarCookieDaAba);
 }
 
 /** Indicador apenas de navegação; a autorização real é feita pelo backend (403). */
 export function isSuperadmin(user: StoredUser | null = getStoredUser()): boolean {
   return Boolean(user?.is_superadmin);
+}
+
+// ── Mensagens de erro da API ──────────────────────────
+// Erros de validação do FastAPI (422) chegam como lista em `detail`; sem isso a
+// tela mostrava "[object Object]".
+interface ErroDeValidacao {
+  loc?: (string | number)[];
+  msg?: string;
+  type?: string;
+  ctx?: Record<string, unknown>;
+}
+
+const NOMES_DOS_CAMPOS: Record<string, string> = {
+  nome: "Nome",
+  nome_completo: "Nome",
+  email: "E-mail",
+  senha: "Senha",
+  telefone_emergencia: "Telefone",
+  identificador: "Código",
+  organizacao_nome: "Nome da organização",
+  localizacao: "Localização",
+  descricao: "Descrição",
+  moeda: "Moeda",
+  identificacao: "Identificação",
+  observacoes: "Observações",
+  laboratorio_origem: "Laboratório de origem",
+};
+
+function textoDoErro(erro: ErroDeValidacao): string {
+  const campo = erro.loc?.[erro.loc.length - 1];
+  const nome = typeof campo === "string" ? (NOMES_DOS_CAMPOS[campo] ?? campo) : "Campo";
+  const ctx = erro.ctx ?? {};
+  switch (erro.type) {
+    case "string_too_long":
+    case "too_long":
+      return `${nome}: no máximo ${ctx.max_length} caracteres`;
+    case "string_too_short":
+    case "too_short":
+      return `${nome}: no mínimo ${ctx.min_length} caracteres`;
+    case "missing":
+      return `${nome}: campo obrigatório`;
+    default:
+      return `${nome}: ${erro.msg ?? "valor inválido"}`;
+  }
+}
+
+/** Texto do `detail` de uma resposta de erro, seja mensagem simples ou lista de validação. */
+export function mensagemDaApi(detail: unknown, padrao: string): string {
+  if (typeof detail === "string" && detail) return detail;
+  if (Array.isArray(detail) && detail.length > 0) {
+    return detail.map((e) => textoDoErro(e as ErroDeValidacao)).join("; ");
+  }
+  return padrao;
 }
 
 // ── Fetch Wrapper ─────────────────────────────────────
@@ -102,12 +223,18 @@ async function apiFetch<T>(
       window.location.assign(new URL("/login", window.location.origin));
     }
     const body = await res.json().catch(() => ({ detail: "Credenciais inválidas" }));
-    throw new Error(body.detail || "Sessão expirada");
+    throw new Error(mensagemDaApi(body.detail, "Sessão expirada"));
   }
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ detail: "Erro desconhecido" }));
-    throw new Error(body.detail || `Erro ${res.status}`);
+    // Resposta sem JSON (ex.: erro 500 do servidor): o código ajuda a localizar o problema
+    const body = await res.json().catch(() => ({
+      detail:
+        res.status >= 500
+          ? `Erro interno do servidor (código ${res.status}). Tente novamente ou avise o suporte.`
+          : `Erro ${res.status}`,
+    }));
+    throw new Error(mensagemDaApi(body.detail, `Erro ${res.status}`));
   }
 
   // 204 No Content (ex.: exclusões) não tem corpo JSON
@@ -225,9 +352,13 @@ export const custosApi = {
 
 // ── Preços ─────────────────────────────────────────────
 export const precosApi = {
-  listar: () => apiFetch<PrecoMercado[]>("/precos-mercado/"),
+  listar: (apenasVigentes = true) =>
+    apiFetch<PrecoMercado[]>(`/precos-mercado/?vigentes=${apenasVigentes}`),
   criar: (data: Payload) =>
     apiFetch<PrecoMercado>("/precos-mercado/", { method: "POST", body: JSON.stringify(data) }),
+  atualizar: (id: string, data: Payload) =>
+    apiFetch<PrecoMercado>(`/precos-mercado/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  excluir: (id: string) => apiFetch<void>(`/precos-mercado/${id}`, { method: "DELETE" }),
 };
 
 // ── Simulação ──────────────────────────────────────────
@@ -290,6 +421,11 @@ export const adminApi = {
     apiFetch<FazendaAdmin>("/admin/fazendas", { method: "POST", body: JSON.stringify(data) }),
   alternarStatusFazenda: (id: string) =>
     apiFetch<FazendaAdmin>(`/admin/fazendas/${id}/status`, { method: "PUT" }),
+  gerarNovoCodigo: (organizacaoId: string) =>
+    apiFetch<{ organizacao_id: string; codigo_organizacao: string }>(
+      `/admin/organizacoes/${organizacaoId}/novo-codigo`,
+      { method: "POST" }
+    ),
   // Gestores Administrativos (Exclusivo Superadmin)
   listarGestores: () => apiFetch<GestorAdmin[]>("/admin/gestores"),
   criarGestor: (data: Payload) =>

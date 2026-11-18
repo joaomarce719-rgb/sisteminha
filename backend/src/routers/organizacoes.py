@@ -94,12 +94,15 @@ def atualizar_organizacao(
 ):
     """Atualiza a própria organização (GESTOR) ou qualquer uma (superadmin)."""
     org = _organizacao_acessivel(db, org_id, user)
+    if payload.identificador is not None and not is_superadmin(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Só a Administração Central altera o código da organização.")
 
     dados_ant = {
         "nome": org.nome,
         "identificador": org.identificador,
         "moeda": org.moeda,
         "status_ativo": org.status_ativo,
+        "regra_arredondamento": org.regra_arredondamento,
     }
 
     if payload.nome is not None:
@@ -110,6 +113,8 @@ def atualizar_organizacao(
         org.moeda = payload.moeda
     if payload.status_ativo is not None:
         org.status_ativo = payload.status_ativo
+    if payload.regra_arredondamento is not None:
+        org.regra_arredondamento = payload.regra_arredondamento
 
     registrar_auditoria(
         db=db,
@@ -123,6 +128,7 @@ def atualizar_organizacao(
             "identificador": org.identificador,
             "moeda": org.moeda,
             "status_ativo": org.status_ativo,
+            "regra_arredondamento": org.regra_arredondamento,
         },
     )
     db.commit()

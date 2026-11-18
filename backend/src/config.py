@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     db_echo: bool = False
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
+    # ── Limite de tentativas de login (falhas LOGIN_FALHA na auditoria, janela deslizante) ──
+    login_janela_minutos: int = 15
+    login_max_falhas_email: int = 10
+    # Alto de propósito: sem proxy configurado (FORWARDED_ALLOW_IPS) todos chegam com o mesmo IP
+    login_max_falhas_ip: int = 30
+
     # ── Governança ───────────────────────────────────
     # E-mails (separados por vírgula) com acesso ao painel de Administração Central.
     superadmin_emails: str = ""

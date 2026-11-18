@@ -4,7 +4,9 @@ import type { NextRequest } from "next/server";
 /**
  * Checagem otimista de navegação: redireciona antes de renderizar a página.
  * A autorização real é feita pela API (401/403); o cookie `sad_papel` só
- * indica o perfil da sessão e é gravado no login (ver `setStoredUser`).
+ * indica o perfil da sessão. Como cada aba pode ter um login diferente e o
+ * cookie é um só por navegador, cada aba o regrava com o seu perfil quando
+ * fica ativa (ver lib/api.ts); os layouts conferem o perfil de novo na tela.
  */
 const AREAS: Record<string, string[]> = {
   "/gestor": ["GESTOR"],

@@ -107,3 +107,79 @@ def test_criar_usuario_exige_senha(client, gestor):
         headers=gestor,
     )
     assert r.status_code == 422
+
+
+def test_autocadastro_em_producao_nunca_vira_gestor(client, monkeypatch):
+    from src.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "app_debug", False)
+    email = f"{unico('prod')}@teste.com"
+    r = client.post("/api/v1/auth/register", json={"email": email, "senha": "senha123"})
+    assert r.status_code == 201
+    assert r.json()["papel"] == "CAMPO" and r.json()["ativo"] is False
+
+
+def test_admin_exige_organizacao_existente(client, admin):
+    inexistente = "00000000-0000-0000-0000-000000000000"
+    gestor = {"nome_completo": "Gestor X", "email": f"{unico('gx')}@x.com", "senha": "abc12345"}
+    assert client.post("/api/v1/admin/gestores", json=gestor, headers=admin).status_code == 422
+    r = client.post("/api/v1/admin/gestores", json={**gestor, "organizacao_id": inexistente}, headers=admin)
+    assert r.status_code == 404
+    fazenda = {"nome": "Fazenda X"}
+    assert client.post("/api/v1/admin/fazendas", json=fazenda, headers=admin).status_code == 422
+    r = client.post("/api/v1/admin/fazendas", json={**fazenda, "organizacao_id": inexistente}, headers=admin)
+    assert r.status_code == 404
+
+
+def test_login_bloqueia_apos_falhas_por_email(client, monkeypatch):
+    from src.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "login_max_falhas_email", 3)
+    monkeypatch.setattr(get_settings(), "login_max_falhas_ip", 1000)
+    email = f"{unico('forca')}@x.com"
+    for _ in range(3):
+        assert client.post("/api/v1/auth/login", json={"email": email, "senha": "errada1"}).status_code == 401
+    r = client.post("/api/v1/auth/login", json={"email": email, "senha": "errada1"})
+    assert r.status_code == 429 and r.headers["Retry-After"] == "900"
+    outro = client.post("/api/v1/auth/login", json={"email": f"{unico('outro')}@x.com", "senha": "errada1"})
+    assert outro.status_code == 401
+
+
+def test_login_bloqueia_apos_falhas_por_ip(client, monkeypatch):
+    from src.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "login_max_falhas_email", 1000)
+    corpo = {"email": f"{unico('ip')}@x.com", "senha": "errada1"}
+    assert client.post("/api/v1/auth/login", json=corpo).status_code == 401  # grava 1 falha deste IP
+    monkeypatch.setattr(get_settings(), "login_max_falhas_ip", 1)
+    assert client.post("/api/v1/auth/login", json=corpo).status_code == 429
+
+
+def test_fazenda_nova_organizacao_recebe_codigo_e_serve_ao_cadastro(client, admin):
+    r = client.post("/api/v1/admin/fazendas", headers=admin,
+                    json={"nome": unico("Faz"), "organizacao_nome": unico("Grupo")})
+    assert r.status_code == 201
+    codigo = r.json()["codigo_organizacao"]
+    assert codigo and len(codigo) == 8
+    cad = client.post("/api/v1/auth/register", json={
+        "email": f"{unico('cod')}@teste.com", "senha": "senha123", "codigo_organizacao": codigo})
+    assert cad.status_code == 201 and cad.json()["ativo"] is False
+
+
+def test_novo_codigo_so_superadmin_e_invalida_o_antigo(client, admin, gestor):
+    r = client.post("/api/v1/admin/fazendas", headers=admin,
+                    json={"nome": unico("Faz"), "organizacao_nome": unico("Grupo")})
+    org_id, antigo = r.json()["organizacao_id"], r.json()["codigo_organizacao"]
+    assert client.post(f"/api/v1/admin/organizacoes/{org_id}/novo-codigo", headers=gestor).status_code == 403
+    novo = client.post(f"/api/v1/admin/organizacoes/{org_id}/novo-codigo", headers=admin).json()["codigo_organizacao"]
+    assert novo != antigo
+    cad = lambda codigo: client.post("/api/v1/auth/register", json={
+        "email": f"{unico('cod')}@teste.com", "senha": "senha123", "codigo_organizacao": codigo})
+    assert cad(antigo).status_code == 422 and cad(novo).status_code == 201
+
+
+def test_gestor_ve_codigo_da_propria_fazenda_mas_nao_o_altera(client, gestor):
+    orgs = client.get("/api/v1/organizacoes/", headers=gestor).json()
+    assert len(orgs) == 1 and orgs[0]["identificador"]
+    r = client.put(f"/api/v1/organizacoes/{orgs[0]['id']}", headers=gestor, json={"identificador": "MEUCODIGO"})
+    assert r.status_code == 403
