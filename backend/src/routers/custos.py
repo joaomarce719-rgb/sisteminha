@@ -40,7 +40,8 @@ def lancar_custo(
     obter_ciclo(db, ciclo_id)
     custo = CustoOperacional(
         ciclo_id=ciclo_id,
-        **payload.model_dump(exclude={"ciclo_id"}),
+        **payload.model_dump(exclude={"ciclo_id", "fase"}),
+        fase=payload.fase.value,
     )
     db.add(custo)
     db.flush()
@@ -57,6 +58,7 @@ def lancar_custo(
             "categoria": custo.categoria.value,
             "descricao": custo.descricao,
             "valor_rs": float(custo.valor_rs),
+            "fase": custo.fase,
         },
     )
 

@@ -15,7 +15,7 @@ from src.services.escopo import (
 )
 from src.services.audit import registrar_auditoria, snapshot
 from src.models.ciclo_produtivo import CicloProdutivo
-from src.models.enums import CategoriaCusto, RoleUsuario, StatusCiclo
+from src.models.enums import CategoriaCusto, FaseCusto, RoleUsuario, StatusCiclo
 from src.models.simulacao_despesca import SimulacaoDespesca
 from src.schemas.simulacao import (
     SimulacaoComparativaResponse,
@@ -152,6 +152,7 @@ def _executar_simulacao(
             custos_fixos_total=sum(
                 float(c.valor_rs) for c in ciclo.custos_operacionais
                 if c.categoria not in (CategoriaCusto.RACAO, CategoriaCusto.POS_LARVAS)
+                and c.fase == FaseCusto.CULTIVO  # preparo e despesca são pontuais: não entram no custo diário
             ),
             dias_cultivo=dias_cultivo,
             racao_diaria_hoje_kg=racao_hoje_kg,
