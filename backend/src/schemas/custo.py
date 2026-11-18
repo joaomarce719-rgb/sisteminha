@@ -57,6 +57,7 @@ class CustoResponse(BaseModel):
     descricao: str
     valor_rs: float
     valor: float | None = None
+    fase: str = "CULTIVO"
     created_at: datetime
 
     @model_validator(mode="before")
@@ -75,6 +76,7 @@ class CustoResponse(BaseModel):
             "descricao": data.descricao,
             "valor_rs": data.valor_rs,
             "valor": data.valor_rs,
+            "fase": data.fase,
             "created_at": data.created_at,
         }
 

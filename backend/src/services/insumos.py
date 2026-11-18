@@ -2,14 +2,19 @@
 
 import unicodedata
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Literal
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.models.insumo import CompraInsumo, ConsumoInsumo
+from src.models.ciclo_produtivo import CicloProdutivo
+from src.models.custo_operacional import CustoOperacional
+from src.models.enums import CategoriaCusto, StatusCiclo
+from src.models.insumo import CompraInsumo, ConsumoInsumo, Insumo
+from src.models.usuario import Usuario
+from src.services.audit import registrar_auditoria
 
 
 @dataclass(frozen=True)
@@ -59,6 +64,11 @@ def chave_do_nome(nome: str) -> str:
     return " ".join(sem_acento.casefold().split())
 
 
+def _em_utc(momento: datetime) -> datetime:
+    """Criação em UTC sem fuso: objetos recém-criados vêm com fuso e o SQLite devolve sem."""
+    return momento.astimezone(timezone.utc).replace(tzinfo=None) if momento.tzinfo else momento
+
+
 def eventos_do_insumo(db: Session, insumo_id: UUID) -> list[EventoInsumo]:
     """Compras e usos do insumo, lidos por (data, criação, id) para o desempate ser estável."""
     compras = db.scalars(
@@ -72,11 +82,11 @@ def eventos_do_insumo(db: Session, insumo_id: UUID) -> list[EventoInsumo]:
         .order_by(ConsumoInsumo.data_uso, ConsumoInsumo.created_at, ConsumoInsumo.id)
     )
     return [
-        EventoInsumo(c.id, "COMPRA", c.data_compra, c.created_at, float(c.quantidade), float(c.valor_total_rs))
+        EventoInsumo(c.id, "COMPRA", c.data_compra, _em_utc(c.created_at), float(c.quantidade), float(c.valor_total_rs))
         for c in compras
     ] + [
         EventoInsumo(
-            u.id, "USO", u.data_uso, u.created_at, float(u.quantidade),
+            u.id, "USO", u.data_uso, _em_utc(u.created_at), float(u.quantidade),
             preco_corrigido_rs=None if u.preco_corrigido_rs is None else float(u.preco_corrigido_rs),
         )
         for u in usos
@@ -89,9 +99,47 @@ def situacao_do_insumo(db: Session, insumo_id: UUID) -> tuple[float | None, floa
     return preco_medio, saldo
 
 
-def reprocessar_insumo(db: Session, insumo_id: UUID) -> None:
-    """Recalcula preço e custo dos usos do insumo depois de uma compra.
+def _texto_da_quantidade(quantidade: float) -> str:
+    return f"{quantidade:.4f}".rstrip("0").rstrip(".")
 
-    Sem efeito por enquanto: os usos de insumo (e o recálculo) chegam com as rotas de uso.
+
+def reprocessar_insumo(db: Session, insumo_id: UUID, usuario: Usuario | None = None) -> None:
+    """Reaplica compras e usos do insumo e acerta preço aplicado e custo gerado de cada uso.
+
+    Uso pendente (sem compra até a data e sem preço corrigido) fica sem custo. Quando o custo de
+    um uso de ciclo FINALIZADO muda, o uso recebe `recalculado_em` e a mudança vai para a auditoria.
     """
-    pass
+    insumo = db.get(Insumo, insumo_id)
+    resultados = {r.uso_id: r for r in aplicar_preco_medio(eventos_do_insumo(db, insumo_id))[0]}
+    usos = db.scalars(select(ConsumoInsumo).where(ConsumoInsumo.insumo_id == insumo_id)).all()
+    for uso in usos:
+        preco = resultados[uso.id].preco_unitario_rs
+        quantidade = float(uso.quantidade)
+        valor = None if preco is None else round(quantidade * preco, 2)
+        custo = db.get(CustoOperacional, uso.custo_id) if uso.custo_id else None
+        valor_anterior = None if custo is None else float(custo.valor_rs)
+
+        uso.preco_unitario_rs = None if preco is None else round(preco, 4)
+        if valor is None:
+            if custo is not None:
+                uso.custo_id = None
+                db.delete(custo)
+        else:
+            if custo is None:
+                custo = CustoOperacional(ciclo_id=uso.ciclo_id)
+                db.add(custo)
+            custo.data_lancamento = uso.data_uso
+            custo.categoria = CategoriaCusto(insumo.categoria)
+            custo.descricao = f"{insumo.nome} ({_texto_da_quantidade(quantidade)} {insumo.unidade_uso})"
+            custo.valor_rs = valor
+            custo.fase = uso.fase
+            db.flush()
+            uso.custo_id = custo.id
+
+        if valor != valor_anterior and db.get(CicloProdutivo, uso.ciclo_id).status == StatusCiclo.FINALIZADO:
+            uso.recalculado_em = datetime.now(timezone.utc)
+            registrar_auditoria(
+                db, "RECALCULAR_USO_INSUMO", "ConsumoInsumo", uso.id, usuario,
+                dados_anteriores={"valor_rs": valor_anterior}, dados_novos={"valor_rs": valor},
+            )
+    db.flush()

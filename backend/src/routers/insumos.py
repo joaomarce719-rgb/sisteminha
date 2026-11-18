@@ -122,7 +122,7 @@ def criar_compra(
     compra = CompraInsumo(insumo_id=insumo.id, **payload.model_dump())
     db.add(compra)
     db.flush()
-    reprocessar_insumo(db, insumo.id)
+    reprocessar_insumo(db, insumo.id, _user)
     registrar_auditoria(db, "CRIAR_COMPRA_INSUMO", "CompraInsumo", compra.id, _user, dados_novos=snapshot(compra))
     return compra
 
@@ -158,7 +158,7 @@ def atualizar_compra(
     for campo, valor in payload.model_dump().items():
         setattr(compra, campo, valor)
     db.flush()
-    reprocessar_insumo(db, insumo.id)
+    reprocessar_insumo(db, insumo.id, _user)
     registrar_auditoria(
         db, "ATUALIZAR_COMPRA_INSUMO", "CompraInsumo", compra.id, _user,
         dados_anteriores=antes, dados_novos=snapshot(compra),
@@ -179,5 +179,5 @@ def excluir_compra(
     antes = snapshot(compra)
     db.delete(compra)
     db.flush()
-    reprocessar_insumo(db, insumo.id)
+    reprocessar_insumo(db, insumo.id, _user)
     registrar_auditoria(db, "EXCLUIR_COMPRA_INSUMO", "CompraInsumo", compra_id, _user, dados_anteriores=antes)

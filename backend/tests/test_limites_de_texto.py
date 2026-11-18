@@ -23,6 +23,7 @@ ALVOS = {
     "CicloCreate": ["CicloProdutivo"],
     "CustoCreate": ["CustoOperacional"],
     "CompraCreate": ["CompraInsumo"],
+    "UsoInsumoCreate": ["ConsumoInsumo"],
     "PrecoCreate": ["TabelaPrecoMercado"],
     "PrecoUpdate": ["TabelaPrecoMercado"],
     "FazendaAdminCreate": ["Propriedade"],

@@ -60,14 +60,14 @@ class ConsumoInsumo(AuditMixin, Base):
     quantidade: Mapped[float] = mapped_column(Numeric(14, 4), nullable=False)
     fase: Mapped[str] = mapped_column(String(10), nullable=False, default="CULTIVO", server_default="CULTIVO")
     custo_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("custos_operacionais.id", ondelete="SET NULL"), nullable=True
+        UUID(as_uuid=True), ForeignKey("custos_operacionais.id", ondelete="SET NULL"), nullable=True, index=True
     )
     # R$ por unidade de uso aplicado no momento do registro; nulo = pendente de valor
     preco_unitario_rs: Mapped[float | None] = mapped_column(Numeric(12, 4), nullable=True)
     # preço após o recálculo por compra retroativa
     preco_corrigido_rs: Mapped[float | None] = mapped_column(Numeric(12, 4), nullable=True)
     registrado_por: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True
+        UUID(as_uuid=True), ForeignKey("usuarios.id", ondelete="SET NULL"), nullable=True, index=True
     )
     observacao: Mapped[str | None] = mapped_column(String(500), nullable=True)
     retroativo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=false())

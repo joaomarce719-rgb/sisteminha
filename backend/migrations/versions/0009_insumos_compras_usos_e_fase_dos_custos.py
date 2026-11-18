@@ -99,6 +99,12 @@ def upgrade() -> None:
         op.create_index("ix_consumos_insumo_ciclo_id", "consumos_insumo", ["ciclo_id"])
         op.create_index("ix_consumos_insumo_insumo_id", "consumos_insumo", ["insumo_id"])
 
+    # índices acrescentados depois da primeira versão desta revisão (bancos locais já podem ter a tabela)
+    indices = {i["name"] for i in _inspetor().get_indexes("consumos_insumo")}
+    for coluna in ("custo_id", "registrado_por"):
+        if f"ix_consumos_insumo_{coluna}" not in indices:
+            op.create_index(f"ix_consumos_insumo_{coluna}", "consumos_insumo", [coluna])
+
 
 def downgrade() -> None:
     op.drop_table("consumos_insumo")
