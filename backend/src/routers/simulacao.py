@@ -96,7 +96,7 @@ def _executar_simulacao(
     # Sobrevivência estimada (mortos contados, consumo × tabela e fuzzy)
     taxa_sobrev = sobrevivencia_vigente(ciclo.manejos_alimentares)
 
-    vendas = getattr(ciclo, "vendas", [])  # relação criada na Tarefa 9
+    vendas = ciclo.vendas
     pop_atual = populacao_vigente(ciclo.quantidade_pos_larvas, taxa_sobrev, vendas)
     receita_realizada = receita_realizada_rs(vendas)
     biomassa_atual = calcular_biomassa_kg(pop_atual, peso_atual)

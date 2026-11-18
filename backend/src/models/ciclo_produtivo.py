@@ -74,3 +74,8 @@ class CicloProdutivo(AuditMixin, Base):
         "Alerta", back_populates="ciclo", lazy="select",
         cascade="all, delete-orphan",
     )
+    vendas = relationship(
+        "VendaCiclo", back_populates="ciclo",
+        order_by="VendaCiclo.data_venda",
+        cascade="all, delete-orphan",
+    )

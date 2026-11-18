@@ -79,7 +79,7 @@ def registrar_manejo(
     anteriores = ordenar(m for m in ciclo.manejos_alimentares if m.data_registro < payload.data_registro)
     taxa_sobrev_anterior = sobrevivencia_vigente(anteriores)
     pos_larvas = ciclo.quantidade_pos_larvas
-    vendas = getattr(ciclo, "vendas", [])  # relação criada na Tarefa 9
+    vendas = ciclo.vendas
 
     # Biomassa estimada na data do manejo: vendas posteriores a ela não descontam
     pop_atual = populacao_vigente(pos_larvas, taxa_sobrev_anterior, vendas, ate=payload.data_registro)
@@ -200,7 +200,7 @@ def recomendacao_alimentar(
 
     manejos = ordenar(ciclo.manejos_alimentares)
     taxa_sobrev = sobrevivencia_vigente(manejos)
-    vendas = getattr(ciclo, "vendas", [])  # relação criada na Tarefa 9
+    vendas = ciclo.vendas
 
     pop_atual = populacao_vigente(ciclo.quantidade_pos_larvas, taxa_sobrev, vendas)
     biomassa = calcular_biomassa_kg(pop_atual, peso_medio)

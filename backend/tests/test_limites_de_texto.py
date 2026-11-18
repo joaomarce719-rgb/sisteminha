@@ -24,6 +24,7 @@ ALVOS = {
     "CustoCreate": ["CustoOperacional"],
     "CompraCreate": ["CompraInsumo"],
     "UsoInsumoCreate": ["ConsumoInsumo"],
+    "VendaCreate": ["VendaCiclo"],
     "PrecoCreate": ["TabelaPrecoMercado"],
     "PrecoUpdate": ["TabelaPrecoMercado"],
     "FazendaAdminCreate": ["Propriedade"],

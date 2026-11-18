@@ -33,6 +33,7 @@ from src.routers import (
     simulacao,
     tabelas_alimentares,
     usos_insumo,
+    vendas,
     viveiros,
 )
 
@@ -85,6 +86,7 @@ app.include_router(custos.router)
 app.include_router(custos.global_router)
 app.include_router(insumos.router)
 app.include_router(usos_insumo.router)
+app.include_router(vendas.router)
 app.include_router(precos.router)
 app.include_router(simulacao.router)
 app.include_router(simulacao.global_router)

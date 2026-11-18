@@ -19,6 +19,7 @@ from src.models.simulacao_despesca import SimulacaoDespesca
 from src.models.tabela_alimentar import TabelaAlimentar
 from src.models.tabela_preco import TabelaPrecoMercado
 from src.models.usuario import Usuario
+from src.models.venda_ciclo import VendaCiclo
 from src.models.viveiro import Viveiro
 
 __all__ = [
@@ -39,5 +40,6 @@ __all__ = [
     "TabelaAlimentar",
     "TabelaPrecoMercado",
     "Usuario",
+    "VendaCiclo",
     "Viveiro",
 ]

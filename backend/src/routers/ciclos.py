@@ -301,7 +301,7 @@ def metricas_atuais(
     manejos = ordenar(ciclo.manejos_alimentares)
     taxa_sobrev = sobrevivencia_vigente(manejos)
 
-    vendas = getattr(ciclo, "vendas", [])  # relação criada na Tarefa 9
+    vendas = ciclo.vendas
     pontos = pontos_alimentares(ciclo, db)
     confronto = confrontar_vivos(
         manejos,

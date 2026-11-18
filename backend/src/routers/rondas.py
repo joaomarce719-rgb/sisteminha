@@ -163,7 +163,7 @@ def _biomassa_estimada_kg_ha(ciclo: CicloProdutivo) -> float:
     for m in sorted(ciclo.manejos_alimentares, key=lambda m: m.data_registro):
         if m.taxa_sobrevivencia_estimada_fuzzy is not None:
             sobrevivencia = m.taxa_sobrevivencia_estimada_fuzzy
-    populacao = populacao_vigente(ciclo.quantidade_pos_larvas, sobrevivencia, getattr(ciclo, "vendas", []))
+    populacao = populacao_vigente(ciclo.quantidade_pos_larvas, sobrevivencia, ciclo.vendas)
     biomassa = calcular_biomassa_kg(populacao, biometrias[-1].peso_medio_g)
     return biomassa / (ciclo.viveiro.area_util_m2 / 10_000)
 
