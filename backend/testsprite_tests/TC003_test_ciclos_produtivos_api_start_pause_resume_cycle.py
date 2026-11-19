@@ -79,14 +79,19 @@ def test_ciclos_produtivos_api_start_pause_resume_cycle():
         viveiro_id = _extract_id(viveiro_json)
         assert viveiro_id is not None, f"Could not extract viveiro id from response: {viveiro_json}"
 
-        # Start a new production cycle
-        ciclo_payload = {
-            "viveiro_id": viveiro_id,
-            "data_inicio": date.today().isoformat(),
-            "densidade_inicial": 10,
-            "biomassa_inicial": 100.0
-        }
+        # Start a new production cycle: plan, resolve the preparation steps, stock
+        ciclo_payload = {"viveiro_id": viveiro_id, "data_povoamento": date.today().isoformat()}
         r = requests.post(f"{BASE_URL}/api/v1/ciclos/", json=ciclo_payload, headers=auth_headers, timeout=TIMEOUT)
+        assert r.status_code in (200, 201), f"Plan cycle failed: {r.status_code} {r.text}"
+        ciclo_id = _extract_id(r.json())
+        etapas_url = f"{BASE_URL}/api/v1/ciclos/{ciclo_id}/etapas-preparo"
+        for etapa in requests.get(etapas_url, headers=auth_headers, timeout=TIMEOUT).json():
+            requests.patch(f"{etapas_url}/{etapa['id']}", json={"status": "NAO_REALIZADA"},
+                           headers=auth_headers, timeout=TIMEOUT)
+        povoar_payload = {"data_povoamento": date.today().isoformat(), "quantidade_pos_larvas": 10000,
+                          "custo_aquisicao_pl": 100.0}
+        r = requests.post(f"{BASE_URL}/api/v1/ciclos/{ciclo_id}/povoar", json=povoar_payload,
+                          headers=auth_headers, timeout=TIMEOUT)
         assert r.status_code in (200, 201), f"Start cycle failed: {r.status_code} {r.text}"
         ciclo_json = r.json()
         ciclo_id = _extract_id(ciclo_json)

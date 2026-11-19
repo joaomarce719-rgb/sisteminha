@@ -2,10 +2,18 @@
 
 from uuid import uuid4
 
+from tests.conftest import planejar_e_povoar
+
 
 def test_ciclo_exige_dados_de_estocagem(client, gestor, novo_viveiro):
     viveiro = novo_viveiro()
     r = client.post("/api/v1/ciclos/", json={"viveiro_id": viveiro["id"]}, headers=gestor)
+    assert r.status_code == 422
+    # o povoamento exige as pós-larvas e o custo delas
+    r = client.post("/api/v1/ciclos/", json={"viveiro_id": viveiro["id"], "data_povoamento": "2026-08-01"},
+                    headers=gestor)
+    assert r.status_code == 201, r.text
+    r = client.post(f"/api/v1/ciclos/{r.json()['id']}/povoar", json={"data_povoamento": "2026-08-01"}, headers=gestor)
     assert r.status_code == 422
 
 
@@ -72,14 +80,7 @@ def test_simulacao_global_usa_dados_do_ciclo(client, gestor, campo, novo_ciclo):
 def test_fca_usa_biomassa_do_povoamento(client, gestor, novo_viveiro):
     # Ganho de biomassa = biomassa atual − biomassa no povoamento (PLs × peso da PL)
     viveiro = novo_viveiro()
-    r = client.post(
-        "/api/v1/ciclos/",
-        json={"viveiro_id": viveiro["id"], "data_povoamento": "2026-08-01",
-              "quantidade_pos_larvas": 300_000, "custo_aquisicao_pl": 3_000, "peso_medio_pl_g": 0.002},
-        headers=gestor,
-    )
-    assert r.status_code == 201, r.text
-    ciclo = r.json()
+    ciclo = planejar_e_povoar(client, gestor, viveiro["id"], custo_pl=3_000, peso_medio_pl_g=0.002)
     assert ciclo["peso_medio_pl_g"] == 0.002
     url = f"/api/v1/ciclos/{ciclo['id']}"
     assert client.post(f"{url}/biometrias/", json={"data_medicao": "2026-09-01", "quantidade_amostrada": 50,
@@ -96,10 +97,13 @@ def test_fca_usa_biomassa_do_povoamento(client, gestor, novo_viveiro):
 
 def test_peso_da_pl_fora_da_faixa_rejeitado(client, gestor, novo_viveiro):
     viveiro = novo_viveiro()
+    r = client.post("/api/v1/ciclos/", json={"viveiro_id": viveiro["id"], "data_povoamento": "2026-08-01"},
+                    headers=gestor)
+    assert r.status_code == 201, r.text
     r = client.post(
-        "/api/v1/ciclos/",
-        json={"viveiro_id": viveiro["id"], "data_povoamento": "2026-08-01",
-              "quantidade_pos_larvas": 1000, "custo_aquisicao_pl": 10, "peso_medio_pl_g": 50},
+        f"/api/v1/ciclos/{r.json()['id']}/povoar",
+        json={"data_povoamento": "2026-08-01", "quantidade_pos_larvas": 1000, "custo_aquisicao_pl": 10,
+              "peso_medio_pl_g": 50},
         headers=gestor,
     )
     assert r.status_code == 422

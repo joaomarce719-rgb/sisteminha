@@ -13,6 +13,7 @@ from src.services.sobrevivencia import (
     sobrevivencia_implicita_pct,
     sobrevivencia_vigente,
 )
+from tests.conftest import planejar_e_povoar
 
 DIA = date(2026, 9, 1)
 
@@ -132,10 +133,7 @@ def test_confronto_sem_dados_com_poucos_dias():
 
 def _ciclo_com_biometria(client, gestor, novo_viveiro, pls=100_000, peso=20.0):
     viveiro = novo_viveiro(10_000.0)
-    r = client.post("/api/v1/ciclos/", json={"viveiro_id": viveiro["id"], "data_povoamento": "2026-08-01",
-                                             "quantidade_pos_larvas": pls, "custo_aquisicao_pl": 1_000}, headers=gestor)
-    assert r.status_code == 201, r.text
-    url = f"/api/v1/ciclos/{r.json()['id']}"
+    url = f"/api/v1/ciclos/{planejar_e_povoar(client, gestor, viveiro['id'], pls=pls, custo_pl=1_000)['id']}"
     r = client.post(f"{url}/biometrias/", json={"data_medicao": "2026-09-01", "quantidade_amostrada": 50,
                                                 "peso_medio_g": peso}, headers=gestor)
     assert r.status_code == 201, r.text

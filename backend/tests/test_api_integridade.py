@@ -33,12 +33,7 @@ def test_um_ciclo_aberto_por_viveiro(client, gestor, novo_ciclo):
     assert client.post(f"/api/v1/ciclos/{ciclo['id']}/pausar", headers=gestor).status_code == 200
     r = client.post(
         "/api/v1/ciclos/",
-        json={
-            "viveiro_id": ciclo["viveiro_id"],
-            "data_povoamento": "2026-09-01",
-            "quantidade_pos_larvas": 1000,
-            "custo_aquisicao_pl": 10,
-        },
+        json={"viveiro_id": ciclo["viveiro_id"], "data_povoamento": "2026-09-01"},
         headers=gestor,
     )
     assert r.status_code == 409

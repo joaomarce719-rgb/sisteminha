@@ -20,7 +20,6 @@ MODELOS = {m.class_.__name__: m.class_ for m in Base.registry.mappers}
 
 # Schemas cujo nome não segue XxxCreate/XxxUpdate/XxxRequest -> modelo Xxx
 ALVOS = {
-    "CicloCreate": ["CicloProdutivo"],
     "CustoCreate": ["CustoOperacional"],
     "CompraCreate": ["CompraInsumo"],
     "UsoInsumoCreate": ["ConsumoInsumo"],
