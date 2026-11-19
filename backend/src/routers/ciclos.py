@@ -35,14 +35,15 @@ from src.schemas.ciclo import (
     CicloResponse,
     MetricasAtuaisResponse,
 )
+from src.schemas.financeiro import FinanceiroCicloResponse
 from src.schemas.etapa_preparo import ETAPAS_SUGERIDAS, STATUS_ETAPA_EM_ABERTO
 from src.schemas.venda import VendaCreate
 from src.services.auth_service import get_current_user, has_role
 from src.services import decision_engine as de
 from src.services.alimentacao import pontos_alimentares
-from src.services.precos import regra_da_organizacao, tabela_vigente
-from src.services.sobrevivencia import confrontar_vivos, ordenar, peso_na_data, sobrevivencia_vigente
+from src.services.sobrevivencia import confrontar_vivos, ordenar, peso_na_data
 from src.services import populacao as pv
+from src.services.historico import resumo_do_ciclo, situacao_atual
 from src.services.insumos import reprocessar_insumo
 from src.services.regras_ciclo import ciclo_aberto_do_viveiro, exigir_povoamento
 from src.services.regras_ciclo import obter_ciclo as buscar_ciclo  # a rota GET se chama obter_ciclo
@@ -441,18 +442,16 @@ def metricas_atuais(
     # Entradas faltantes para rastreabilidade (RN-015)
     entradas_faltantes: list[str] = []
 
-    # Última biometria
-    biometrias = sorted(ciclo.biometrias, key=lambda b: b.data_medicao)
-    if biometrias:
-        peso_medio = biometrias[-1].peso_medio_g
-    else:
-        peso_medio = None
+    # Peso da última biometria, sobrevivência vigente (mortos, consumo × tabela e fuzzy),
+    # população descontados os animais vendidos, biomassa e preço de hoje
+    atual = situacao_atual(db, ciclo, hoje)
+    peso_medio, taxa_sobrev, pop_atual = atual.peso_medio_g, atual.taxa_sobrevivencia_pct, atual.populacao
+    biomassa_atual, preco_kg = atual.biomassa_kg, atual.preco_kg
+    if peso_medio is None:
         entradas_faltantes.append("biometria")
 
-    # Sobrevivência estimada mais recente (mortos contados, consumo × tabela e fuzzy)
+    biometrias = sorted(ciclo.biometrias, key=lambda b: b.data_medicao)
     manejos = ordenar(ciclo.manejos_alimentares)
-    taxa_sobrev = sobrevivencia_vigente(manejos)
-
     vendas = ciclo.vendas
     pontos = pontos_alimentares(ciclo, db)
     confronto = confrontar_vivos(
@@ -464,10 +463,7 @@ def metricas_atuais(
         vendidos_ate=lambda data: pv.animais_vendidos_ate(vendas, data),
     )
 
-    # População (descontados os animais vendidos) e biomassa
-    pop_atual = pv.populacao_vigente(ciclo.quantidade_pos_larvas, taxa_sobrev, vendas)
     densidade_atual = de.calcular_densidade(pop_atual, viveiro.area_util_m2)
-    biomassa_atual = de.calcular_biomassa_kg(pop_atual, peso_medio) if peso_medio is not None else None
     # Biomassa inicial = biomassa no povoamento (PLs × peso da PL); sem o peso, considerada desprezível
     biomassa_inicial = de.calcular_biomassa_kg(ciclo.quantidade_pos_larvas, ciclo.peso_medio_pl_g or 0.0)
 
@@ -492,14 +488,6 @@ def metricas_atuais(
     # Custos
     custos_vals = [float(c.valor_rs) for c in ciclo.custos_operacionais]
 
-    # Preço de mercado vigente
-    preco_kg = None
-    if peso_medio is not None:
-        preco_kg = de.buscar_preco_por_gramatura(
-            peso_medio,
-            tabela_vigente(db, viveiro.organizacao_id, hoje),
-            regra_da_organizacao(db, viveiro.organizacao_id),
-        )
     if preco_kg is None:
         entradas_faltantes.append("preco_mercado")
 
@@ -538,6 +526,20 @@ def metricas_atuais(
         lucro_realizado_rs=round(receita_realizada - metricas.custo_operacional_total, 2) if mostrar_financeiro else None,
         entradas_faltantes=entradas_faltantes,
     )
+
+
+@router.get(
+    "/{ciclo_id}/financeiro", dependencies=[Depends(verificar_ciclo_da_organizacao)],
+    response_model=FinanceiroCicloResponse,
+)
+def financeiro_do_ciclo(
+    ciclo_id: UUID,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.GESTOR])),
+):
+    """Custos por fase e categoria, vendas, lucro realizado e lucro estimado se despescar hoje (seção 5.6)."""
+    resumo = resumo_do_ciclo(db, buscar_ciclo(db, ciclo_id), mostrar_valores=True)
+    return FinanceiroCicloResponse(**{**resumo, "vendas": resumo["vendas_lista"]})
 
 
 @router.get("/{ciclo_id}/exportar-csv", dependencies=[Depends(verificar_ciclo_da_organizacao)])

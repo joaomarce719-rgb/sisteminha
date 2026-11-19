@@ -9,10 +9,13 @@ from sqlalchemy.orm import Session
 from src.database import get_db
 from src.services.escopo import org_do_usuario, viveiro_da_organizacao
 from src.services.audit import registrar_auditoria, snapshot
+from src.models.ciclo_produtivo import CicloProdutivo
 from src.models.enums import RoleUsuario, StatusCiclo
 from src.models.viveiro import Viveiro
+from src.schemas.financeiro import HistoricoCicloResponse
 from src.schemas.viveiro import ViveiroCreate, ViveiroListResponse, ViveiroResponse, ViveiroUpdate
 from src.services.auth_service import get_current_user, has_role
+from src.services.historico import resumo_do_ciclo
 
 router = APIRouter(prefix="/api/v1/viveiros", tags=["Viveiros"])
 
@@ -84,6 +87,23 @@ def obter_viveiro(
     """Retorna um viveiro específico por ID."""
     viveiro = viveiro_da_organizacao(db, viveiro_id, _user)
     return viveiro
+
+
+@router.get("/{viveiro_id}/historico", response_model=list[HistoricoCicloResponse])
+def historico_do_viveiro(
+    viveiro_id: UUID,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.GESTOR, RoleUsuario.CAMPO, RoleUsuario.VIGIA])),
+):
+    """Ciclos do viveiro, do mais recente ao mais antigo, com o resumo de cada um (valores em reais só ao GESTOR)."""
+    viveiro_da_organizacao(db, viveiro_id, _user)
+    ciclos = db.scalars(
+        select(CicloProdutivo)
+        .where(CicloProdutivo.viveiro_id == viveiro_id)
+        .order_by(CicloProdutivo.data_povoamento.desc(), CicloProdutivo.created_at.desc())
+    ).all()
+    mostrar_valores = _user.papel == RoleUsuario.GESTOR
+    return [resumo_do_ciclo(db, ciclo, mostrar_valores) for ciclo in ciclos]
 
 
 @router.put("/{viveiro_id}", response_model=ViveiroResponse)
