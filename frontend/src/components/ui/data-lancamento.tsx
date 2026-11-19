@@ -18,13 +18,25 @@ export interface DataLancamentoProps {
   retroativo: boolean;
   onRetroativoChange: (retroativo: boolean) => void;
   label: string;
+  /** Aviso do que o lançamento retroativo recalcula; o padrão vale para o uso de insumo. */
+  aviso?: string;
 }
+
+const AVISO_PADRAO =
+  "O custo médio do insumo será recalculado com este lançamento, e os usos já registrados a partir desta data podem mudar de valor.";
 
 /**
  * Data de um lançamento: nasce hoje e travada. A caixa "Lançamento retroativo" libera o seletor
  * (nunca para o futuro) e avisa do recálculo; a API aplica a mesma regra via `retroativo`.
  */
-export function DataLancamento({ value, onChange, retroativo, onRetroativoChange, label }: DataLancamentoProps) {
+export function DataLancamento({
+  value,
+  onChange,
+  retroativo,
+  onRetroativoChange,
+  label,
+  aviso = AVISO_PADRAO,
+}: DataLancamentoProps) {
   const id = React.useId();
 
   const alternar = (marcado: boolean) => {
@@ -65,10 +77,7 @@ export function DataLancamento({ value, onChange, retroativo, onRetroativoChange
       {retroativo && (
         <div className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-          <span>
-            O custo médio do insumo será recalculado com este lançamento, e os usos já registrados a partir desta
-            data podem mudar de valor.
-          </span>
+          <span>{aviso}</span>
         </div>
       )}
     </div>

@@ -78,6 +78,8 @@ export interface MetricasAtuais {
   viveiro_identificacao: string;
   dias_cultivo: number;
   densidade_estocagem: number;
+  // População atual (já descontadas as vendas) ÷ área
+  densidade_atual?: number | null;
   alerta_hiperdensidade: boolean;
   populacao_inicial: number;
   taxa_sobrevivencia_fuzzy_pct: number;
@@ -92,9 +94,13 @@ export interface MetricasAtuais {
   racao_diaria_sugerida_kg: number | null;
   custo_operacional_total_rs: number | null;
   receita_bruta_estimada_rs: number | null;
+  // Lucro estimado se despescar hoje: já inclui a receita das vendas anteriores
   lucro_operacional_rs: number | null;
   margem_operacional_pct: number | null;
   preco_venda_atual_rs_kg: number | null;
+  // Só o GESTOR recebe: soma das vendas e (receita realizada − custo total lançado)
+  receita_realizada_rs?: number | null;
+  lucro_realizado_rs?: number | null;
   entradas_faltantes?: string[];
 }
 
@@ -270,6 +276,25 @@ export interface UsoInsumo {
   // Preço fixado pelo gestor (nota fiscal); null = vale o preço médio. O PUT precisa reenviá-lo para mantê-lo
   preco_corrigido_rs: number | null;
   recalculado_em: string | null;
+}
+
+// ── Vendas do ciclo (só GESTOR) ───────────────────────
+export type TipoVenda = "DESBASTE" | "DESPESCA_FINAL";
+
+export interface VendaCiclo {
+  id: string;
+  ciclo_id: string;
+  data_venda: string;
+  tipo: TipoVenda;
+  biomassa_kg: number;
+  peso_medio_g: number;
+  animais_estimados: number;
+  preco_kg: number;
+  valor_total_rs: number;
+  comprador: string | null;
+  observacao: string | null;
+  retroativo: boolean;
+  created_at: string;
 }
 
 // ── Preços ────────────────────────────────────────────

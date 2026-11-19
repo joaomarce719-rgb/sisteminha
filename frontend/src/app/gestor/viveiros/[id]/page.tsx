@@ -27,6 +27,7 @@ import {
   Pause,
   Play,
   Package,
+  Receipt,
 } from "lucide-react";
 import {
   viveirosApi,
@@ -54,6 +55,9 @@ import { Badge } from "@/components/ui/badge";
 import { MetricCard } from "@/components/ui/metric-card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AbaInsumosCiclo } from "@/components/insumos/aba-insumos-ciclo";
+import { fmtData, fmtMoney, fmtQtd } from "@/components/insumos/lista-usos-insumo";
+import { VendasCiclo, useVendasCiclo } from "@/components/viveiro/vendas-ciclo";
+import { hojeLocal } from "@/components/ui/data-lancamento";
 import { toast } from "@/components/ui/toast";
 
 function fmtDate(d: string) {
@@ -555,6 +559,8 @@ function ManejoDialog({
 }
 
 // ── Modal Encerrar Ciclo com Shadcn Dialog ──────────
+// A receita do ciclo é a soma das vendas: sem despesca final lançada, os dois campos abaixo criam essa venda;
+// com ela, enviar biomassa e receita de novo dobraria os totais, então o diálogo só confirma o encerramento.
 function EncerrarCicloDialog({
   open,
   onClose,
@@ -566,27 +572,39 @@ function EncerrarCicloDialog({
   onDone: () => void;
   cicloId: string;
 }) {
+  const { vendas, falhou } = useVendasCiclo(cicloId);
   const [form, setForm] = useState({
-    data_despesca_real: new Date().toISOString().split("T")[0],
+    data_despesca_real: hojeLocal(),
     biomassa_colhida_kg: "",
     receita_real_rs: "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const finais = (vendas ?? []).filter((v) => v.tipo === "DESPESCA_FINAL");
+  const temFinal = finais.length > 0;
+  const biomassaFinal = finais.reduce((soma, v) => soma + v.biomassa_kg, 0);
+  const receitaFinal = finais.reduce((soma, v) => soma + v.valor_total_rs, 0);
+  const dataUltimaFinal = finais.reduce((maior, v) => (v.data_venda > maior ? v.data_venda : maior), "");
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      await ciclosApi.encerrar(cicloId, {
-        data_despesca_real: form.data_despesca_real,
-        biomassa_colhida_kg: parseFloat(form.biomassa_colhida_kg),
-        receita_real_rs: parseFloat(form.receita_real_rs),
-      });
+      await ciclosApi.encerrar(
+        cicloId,
+        temFinal
+          ? {}
+          : {
+              data_despesca_real: form.data_despesca_real,
+              biomassa_colhida_kg: parseFloat(form.biomassa_colhida_kg),
+              receita_real_rs: parseFloat(form.receita_real_rs),
+            }
+      );
       toast.success(
         "Ciclo produtivo encerrado com sucesso!",
-        `Despesca de ${parseFloat(form.biomassa_colhida_kg).toLocaleString("pt-BR")} kg registrada.`
+        `Despesca de ${(temFinal ? biomassaFinal : parseFloat(form.biomassa_colhida_kg)).toLocaleString("pt-BR")} kg registrada.`
       );
       onDone();
       onClose();
@@ -608,55 +626,94 @@ function EncerrarCicloDialog({
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <Label htmlFor="data_despesca">Data da Despesca Efetiva *</Label>
-          <Input
-            id="data_despesca"
-            required
-            type="date"
-            value={form.data_despesca_real}
-            onChange={(e) => setForm({ ...form, data_despesca_real: e.target.value })}
-            className="mt-1"
-          />
-        </div>
+        {falhou && (
+          <p className="text-sm text-red-600">
+            Não foi possível ler as vendas do ciclo, então o encerramento está bloqueado. Feche e tente de novo.
+          </p>
+        )}
+        {vendas === null && !falhou && (
+          <div className="flex justify-center py-4">
+            <Loader2 className="w-5 h-5 text-sky-500 animate-spin" />
+          </div>
+        )}
 
-        <div>
-          <Label htmlFor="biomassa_colhida">Biomassa Real Colhida (kg) *</Label>
-          <Input
-            id="biomassa_colhida"
-            required
-            type="number"
-            step="0.01"
-            min="0.01"
-            inputMode="decimal"
-            value={form.biomassa_colhida_kg}
-            onChange={(e) => setForm({ ...form, biomassa_colhida_kg: e.target.value })}
-            placeholder="Ex: 3450.00"
-            className="mt-1"
-          />
-        </div>
+        {vendas !== null && temFinal && (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900 space-y-1">
+            <p>
+              Despesca final já lançada: <strong>{finais.length === 1 ? "1 venda" : `${finais.length} vendas`}</strong>,{" "}
+              <strong>{fmtQtd(biomassaFinal)} kg</strong> e <strong>{fmtMoney(receitaFinal)}</strong>.
+            </p>
+            <p>
+              O ciclo será encerrado na data da última venda final ({fmtData(dataUltimaFinal)}). Para lançar mais
+              cargas, feche este diálogo e use a aba Vendas.
+            </p>
+          </div>
+        )}
 
-        <div>
-          <Label htmlFor="receita_real">Receita Total Realizada (R$) *</Label>
-          <Input
-            id="receita_real"
-            required
-            type="number"
-            step="0.01"
-            min="0"
-            inputMode="decimal"
-            value={form.receita_real_rs}
-            onChange={(e) => setForm({ ...form, receita_real_rs: e.target.value })}
-            placeholder="Ex: 86250.00"
-            className="mt-1"
-          />
-        </div>
+        {vendas !== null && !temFinal && (
+          <>
+            <p className="text-xs text-slate-500">
+              Nenhuma venda de despesca final lançada: os valores abaixo criam essa venda, com o peso médio da última
+              biometria.
+            </p>
+            <div>
+              <Label htmlFor="data_despesca">Data da Despesca Efetiva *</Label>
+              <Input
+                id="data_despesca"
+                required
+                type="date"
+                max={hojeLocal()}
+                value={form.data_despesca_real}
+                onChange={(e) => setForm({ ...form, data_despesca_real: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="biomassa_colhida">Biomassa Real Colhida (kg) *</Label>
+              <Input
+                id="biomassa_colhida"
+                required
+                type="number"
+                step="0.01"
+                min="0.01"
+                max="9999999999"
+                inputMode="decimal"
+                value={form.biomassa_colhida_kg}
+                onChange={(e) => setForm({ ...form, biomassa_colhida_kg: e.target.value })}
+                placeholder="Ex: 3450.00"
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="receita_real">Receita Total Realizada (R$) *</Label>
+              <Input
+                id="receita_real"
+                required
+                type="number"
+                step="0.01"
+                min="0"
+                max="9999999999.99"
+                inputMode="decimal"
+                value={form.receita_real_rs}
+                onChange={(e) => setForm({ ...form, receita_real_rs: e.target.value })}
+                placeholder="Ex: 86250.00"
+                className="mt-1"
+              />
+            </div>
+          </>
+        )}
+
+        <p className="text-xs text-slate-500">
+          A receita do ciclo é a soma de todas as vendas lançadas (desbastes e despesca final).
+        </p>
 
         <div className="pt-2 flex gap-3">
           <Button type="button" variant="outline" onClick={onClose} className="flex-1">
             Cancelar
           </Button>
-          <Button type="submit" disabled={loading} className="flex-1 bg-red-600 hover:bg-red-700 text-white">
+          <Button type="submit" disabled={loading || vendas === null} className="flex-1 bg-red-600 hover:bg-red-700 text-white">
             {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <XCircle className="w-4 h-4 mr-2" />}
             Confirmar Despesca
           </Button>
@@ -999,6 +1056,10 @@ export default function ViveiroDetalhePage() {
                 <Package className="w-4 h-4 mr-2" />
                 Insumos
               </TabsTrigger>
+              <TabsTrigger value="vendas">
+                <Receipt className="w-4 h-4 mr-2" />
+                Vendas
+              </TabsTrigger>
             </TabsList>
 
             {/* ABA 1: MÉTRICAS */}
@@ -1010,7 +1071,7 @@ export default function ViveiroDetalhePage() {
                     <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 flex items-center gap-3 text-amber-900">
                       <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
                       <div className="text-sm">
-                        <strong>Alerta de Hiperdensidade:</strong> A densidade atual calculada ({metricas.densidade_estocagem} camarões/m²) está acima do limite recomendado para este tipo de aeração.
+                        <strong>Alerta de Hiperdensidade:</strong> A densidade de estocagem do povoamento ({metricas.densidade_estocagem} camarões/m²) está acima do limite recomendado para este tipo de aeração.
                       </div>
                     </div>
                   )}
@@ -1069,6 +1130,13 @@ export default function ViveiroDetalhePage() {
                       accent="ocean"
                     />
                     <MetricCard
+                      title="Densidade atual"
+                      value={metricas.densidade_atual != null ? `${metricas.densidade_atual.toLocaleString("pt-BR")} /m²` : "—"}
+                      subtitle={`Povoamento: ${metricas.densidade_estocagem.toLocaleString("pt-BR")} /m²`}
+                      icon={Droplets}
+                      accent="ocean"
+                    />
+                    <MetricCard
                       title="Custo Total Acumulado"
                       value={
                         metricas.custo_operacional_total_rs != null
@@ -1079,10 +1147,37 @@ export default function ViveiroDetalhePage() {
                       icon={DollarSign}
                       accent="purple"
                     />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <MetricCard
-                      title="Lucro Operacional Est."
+                      title="Receita realizada"
+                      value={metricas.receita_realizada_rs != null ? fmtMoney(metricas.receita_realizada_rs) : "Indisponível"}
+                      subtitle="Soma das vendas já lançadas"
+                      icon={Receipt}
+                      accent="emerald"
+                    />
+                    <MetricCard
+                      title="Lucro realizado"
+                      value={metricas.lucro_realizado_rs != null ? fmtMoney(metricas.lucro_realizado_rs) : "Indisponível"}
+                      subtitle={
+                        metricas.receita_realizada_rs
+                          ? "Vendas realizadas − custos lançados"
+                          : "Ainda sem vendas: só os custos lançados até agora"
+                      }
+                      icon={DollarSign}
+                      accent={
+                        metricas.lucro_realizado_rs == null || !metricas.receita_realizada_rs
+                          ? "slate"
+                          : metricas.lucro_realizado_rs >= 0
+                          ? "emerald"
+                          : "red"
+                      }
+                    />
+                    <MetricCard
+                      title="Lucro estimado se despescar hoje"
                       value={metricas.lucro_operacional_rs != null ? `R$ ${metricas.lucro_operacional_rs.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "Indisponível"}
-                      subtitle={metricas.margem_operacional_pct != null ? `Margem estimada: ${metricas.margem_operacional_pct}%` : (metricas.entradas_faltantes && metricas.entradas_faltantes.length > 0 ? `Requer: ${metricas.entradas_faltantes.join(", ")}` : "Receita menos custos")}
+                      subtitle={metricas.margem_operacional_pct != null ? `Margem estimada: ${metricas.margem_operacional_pct}%` : (metricas.entradas_faltantes && metricas.entradas_faltantes.length > 0 ? `Requer: ${metricas.entradas_faltantes.join(", ")}` : "Lucro realizado + biomassa na água ao preço de hoje")}
                       icon={DollarSign}
                       accent={metricas.lucro_operacional_rs == null ? "neutral" : metricas.lucro_operacional_rs >= 0 ? "emerald" : "red"}
                     />
@@ -1279,6 +1374,11 @@ export default function ViveiroDetalhePage() {
             <TabsContent value="insumos">
               <AbaInsumosCiclo cicloId={cicloAtivo.id} onAlterado={loadData} />
             </TabsContent>
+
+            {/* ABA 5: VENDAS */}
+            <TabsContent value="vendas">
+              <VendasCiclo cicloId={cicloAtivo.id} onAlterado={loadData} />
+            </TabsContent>
           </Tabs>
         </>
       )}
@@ -1306,12 +1406,14 @@ export default function ViveiroDetalhePage() {
             cicloId={cicloAtivo.id}
             recomendacao={recomendacao}
           />
-          <EncerrarCicloDialog
-            open={showEncerrarModal}
-            onClose={() => setShowEncerrarModal(false)}
-            onDone={loadData}
-            cicloId={cicloAtivo.id}
-          />
+          {showEncerrarModal && (
+            <EncerrarCicloDialog
+              open
+              onClose={() => setShowEncerrarModal(false)}
+              onDone={loadData}
+              cicloId={cicloAtivo.id}
+            />
+          )}
         </>
       )}
     </div>

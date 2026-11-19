@@ -27,6 +27,7 @@ import type {
   TokenResponse,
   UsoInsumo,
   Usuario,
+  VendaCiclo,
   Viveiro,
 } from "./types";
 
@@ -384,6 +385,21 @@ export const usosInsumoApi = {
     apiFetch<UsoInsumo>(`/ciclos/${cicloId}/usos-insumo/${usoId}`, { method: "PUT", body: JSON.stringify(data) }),
   excluir: (cicloId: string, usoId: string) =>
     apiFetch<void>(`/ciclos/${cicloId}/usos-insumo/${usoId}`, { method: "DELETE" }),
+};
+
+// ── Vendas do ciclo (desbaste e despesca final) ────────
+export const vendasApi = {
+  listar: (cicloId: string) => apiFetch<VendaCiclo[]>(`/ciclos/${cicloId}/vendas/`),
+  criar: (cicloId: string, data: Payload) =>
+    apiFetch<VendaCiclo>(`/ciclos/${cicloId}/vendas/`, { method: "POST", body: JSON.stringify(data) }),
+  // O PUT reenvia a venda inteira
+  atualizar: (cicloId: string, vendaId: string, data: Payload) =>
+    apiFetch<VendaCiclo>(`/ciclos/${cicloId}/vendas/${vendaId}`, { method: "PUT", body: JSON.stringify(data) }),
+  excluir: (cicloId: string, vendaId: string) =>
+    apiFetch<void>(`/ciclos/${cicloId}/vendas/${vendaId}`, { method: "DELETE" }),
+  // Preço por kg da tabela de preços para o peso médio; null quando não há faixa
+  precoSugerido: (cicloId: string, pesoMedioG: number) =>
+    apiFetch<{ preco_kg: number | null }>(`/ciclos/${cicloId}/vendas/preco-sugerido?peso_medio_g=${pesoMedioG}`),
 };
 
 // ── Preços ─────────────────────────────────────────────
