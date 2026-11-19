@@ -111,21 +111,25 @@ function useCustosPreparo(cicloId: string) {
   return { custos, recarregar: () => setVersao((v) => v + 1) };
 }
 
+/** Tabelas alimentares ativas; `carregadas` só é true depois de a API responder (falha deixa a lista vazia). */
 function useTabelasAlimentares() {
-  const [tabelas, setTabelas] = useState<TabelaAlimentar[]>([]);
+  const [estado, setEstado] = useState<{ tabelas: TabelaAlimentar[]; carregadas: boolean }>({
+    tabelas: [],
+    carregadas: false,
+  });
   useEffect(() => {
     let ativo = true;
     tabelasAlimentaresApi
       .listar(true)
       .then((lista) => {
-        if (ativo) setTabelas(lista);
+        if (ativo) setEstado({ tabelas: lista, carregadas: true });
       })
       .catch(() => {}); // sem a lista fica só o padrão do sistema
     return () => {
       ativo = false;
     };
   }, []);
-  return tabelas;
+  return estado;
 }
 
 // ── Checklist de etapas (gestor e campo) ─────────────────
@@ -381,11 +385,16 @@ export function ChecklistEtapas({
 function SeletorTabela({
   id,
   tabelas,
+  carregadas = true,
+  atualId,
   value,
   onChange,
 }: {
   id: string;
   tabelas: TabelaAlimentar[];
+  carregadas?: boolean;
+  /** Tabela que o ciclo já tem: se não estiver entre as ativas, aparece como opção desabilitada para o select não mentir. */
+  atualId?: string | null;
   value: string;
   onChange: (valor: string) => void;
 }) {
@@ -394,6 +403,11 @@ function SeletorTabela({
       <Label htmlFor={id}>Tabela de Arraçoamento</Label>
       <select id={id} value={value} onChange={(e) => onChange(e.target.value)} className={CLASSE_SELECT}>
         <option value="">Clifford (1992) — Padrão do Sistema</option>
+        {atualId && !tabelas.some((t) => t.id === atualId) && (
+          <option value={atualId} disabled>
+            {carregadas ? "Tabela atual (inativa)" : "Tabela atual"}
+          </option>
+        )}
         {tabelas.map((t) => (
           <option key={t.id} value={t.id}>
             {t.nome} (v{t.versao}) {t.is_padrao ? "★ [Padrão]" : ""}
@@ -417,7 +431,7 @@ export function PlanejarCicloDialog({
   onCreated: () => void;
   viveiroId: string;
 }) {
-  const tabelas = useTabelasAlimentares();
+  const { tabelas } = useTabelasAlimentares();
   const [data, setData] = useState(hojeLocal());
   // null = o usuário ainda não escolheu: vale a tabela padrão
   const [tabelaEscolhida, setTabelaEscolhida] = useState<string | null>(null);
@@ -499,14 +513,15 @@ function ReagendarDialog({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const tabelas = useTabelasAlimentares();
+  const { tabelas, carregadas } = useTabelasAlimentares();
   const [viveiros, setViveiros] = useState<Viveiro[] | null>(null);
   const [data, setData] = useState(ciclo.data_povoamento);
   const [viveiroId, setViveiroId] = useState(ciclo.viveiro_id);
   const [tabelaEscolhida, setTabelaEscolhida] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const tabelaId = tabelaEscolhida ?? ciclo.tabela_alimentar_id ?? "";
+  const tabelaAtual = ciclo.tabela_alimentar_id ?? "";
+  const tabelaId = tabelaEscolhida ?? tabelaAtual;
 
   useEffect(() => {
     let ativo = true;
@@ -528,13 +543,19 @@ function ReagendarDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    // Só o que mudou: a API revalida a tabela sempre que o campo vai no PATCH, e a atual pode estar inativa
+    const mudancas: Record<string, string | null> = {};
+    if (data !== ciclo.data_povoamento) mudancas.data_povoamento = data;
+    if (viveiroId !== ciclo.viveiro_id) mudancas.viveiro_id = viveiroId;
+    if (tabelaId !== tabelaAtual) mudancas.tabela_alimentar_id = tabelaId || null;
+    if (Object.keys(mudancas).length === 0) {
+      toast.info("Nada foi alterado", "O planejamento continua como estava.");
+      onClose();
+      return;
+    }
     setLoading(true);
     try {
-      await ciclosApi.reagendar(ciclo.id, {
-        data_povoamento: data,
-        viveiro_id: viveiroId,
-        tabela_alimentar_id: tabelaId || null,
-      });
+      await ciclosApi.reagendar(ciclo.id, mudancas);
       const novo = opcoes.find((v) => v.id === viveiroId);
       toast.success(
         "Ciclo reagendado",
@@ -599,7 +620,14 @@ function ReagendarDialog({
           <p className="text-[11px] text-slate-400 mt-1">O viveiro de destino não pode ter outro ciclo aberto.</p>
         </div>
 
-        <SeletorTabela id="reagendar_tabela" tabelas={tabelas} value={tabelaId} onChange={setTabelaEscolhida} />
+        <SeletorTabela
+          id="reagendar_tabela"
+          tabelas={tabelas}
+          carregadas={carregadas}
+          atualId={ciclo.tabela_alimentar_id}
+          value={tabelaId}
+          onChange={setTabelaEscolhida}
+        />
 
         <div className="pt-2 flex gap-3">
           <Button type="button" variant="outline" onClick={onClose} className="flex-1">

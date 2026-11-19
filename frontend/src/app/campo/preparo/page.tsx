@@ -93,6 +93,7 @@ export default function PreparoCampoPage() {
           <div className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm">
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Registrar uso de insumo</h2>
             <UsoInsumoForm
+              key={cicloId}
               cicloId={cicloId}
               fase="PREPARO"
               etapas={etapas ?? undefined}

@@ -43,7 +43,9 @@ export function UsoInsumoForm({ cicloId, fase, onSalvo, uso, gestor = false, onC
   const [retroativo, setRetroativo] = useState(uso ? uso.retroativo || uso.data_uso < hojeLocal() : false);
   const [observacao, setObservacao] = useState(uso?.observacao ?? "");
   // Mesmo sem a lista de etapas na tela, a edição reenvia a etapa do uso: o PUT regrava o registro inteiro
-  const [etapaId, setEtapaId] = useState(uso?.etapa_id ?? "");
+  const [etapaEscolhida, setEtapaId] = useState(uso?.etapa_id ?? "");
+  // Com a lista na tela, a etapa só vale se ainda estiver nela (excluída ou de outro ciclo volta a "sem etapa")
+  const etapaId = etapas && !etapas.some((e) => e.id === etapaEscolhida) ? "" : etapaEscolhida;
   // Preço fixo que o uso já tem: a edição o mantém, e limpar o campo é que o remove
   const [precoCorrigido, setPrecoCorrigido] = useState(uso?.preco_corrigido_rs != null ? String(uso.preco_corrigido_rs) : "");
   const [salvando, setSalvando] = useState(false);
