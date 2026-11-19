@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Shell, LogOut, Utensils, Scale, Package } from "lucide-react";
+import { Shell, LogOut, Utensils, Scale, Package, Sprout } from "lucide-react";
 import Link from "next/link";
 import { clearToken } from "@/lib/api";
 import { useSessao } from "@/lib/sessao";
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/campo/manejo", label: "Manejo Alimentar", icon: Utensils },
   { href: "/campo/biometria", label: "Biometria de Campo", icon: Scale },
   { href: "/campo/insumos", label: "Insumos", icon: Package },
+  { href: "/campo/preparo", label: "Preparo", icon: Sprout },
 ];
 
 export default function CampoLayout({ children }: { children: React.ReactNode }) {

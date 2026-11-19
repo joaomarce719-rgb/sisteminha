@@ -60,9 +60,11 @@ export interface Viveiro {
 export interface CicloProdutivo {
   id: string;
   viveiro_id: string;
+  // Data prevista enquanto PLANEJADO; passa a ser a real ao povoar
   data_povoamento: string;
-  quantidade_pos_larvas: number;
-  custo_aquisicao_pl: number;
+  // Vazios no ciclo PLANEJADO (antes do povoamento)
+  quantidade_pos_larvas: number | null;
+  custo_aquisicao_pl: number | null;
   peso_medio_pl_g?: number | null;
   laboratorio_origem: string | null;
   status: StatusCiclo;
@@ -102,6 +104,21 @@ export interface MetricasAtuais {
   receita_realizada_rs?: number | null;
   lucro_realizado_rs?: number | null;
   entradas_faltantes?: string[];
+}
+
+// ── Etapas do preparo (ciclo PLANEJADO) ───────────────
+export type TipoEtapa = "SECAGEM" | "CALAGEM" | "ADUBACAO" | "ABASTECIMENTO" | "TRATAMENTO_AGUA" | "OUTRA";
+export type StatusEtapa = "PENDENTE" | "EM_ANDAMENTO" | "CONCLUIDA" | "NAO_REALIZADA";
+
+export interface EtapaPreparo {
+  id: string;
+  ciclo_id: string;
+  tipo: TipoEtapa;
+  status: StatusEtapa;
+  data_inicio: string | null;
+  data_fim: string | null;
+  observacao: string | null;
+  ordem: number;
 }
 
 // ── Biometria ─────────────────────────────────────────
@@ -225,6 +242,7 @@ export interface CustoOperacional {
   categoria: CategoriaCusto;
   descricao: string;
   valor_rs: number;
+  fase: FaseCusto;
   created_at: string;
 }
 
@@ -267,6 +285,8 @@ export interface UsoInsumo {
   data_uso: string;
   quantidade: number;
   fase: FaseCusto;
+  // Etapa do preparo em que o insumo foi usado; o PUT precisa reenviá-la para mantê-la
+  etapa_id: string | null;
   retroativo: boolean;
   observacao: string | null;
   // Só o GESTOR recebe os campos de valor

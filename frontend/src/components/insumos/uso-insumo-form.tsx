@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { insumosApi, usosInsumoApi } from "@/lib/api";
 import { cn, mensagemErro } from "@/lib/utils";
-import type { FaseCusto, Insumo, UsoInsumo } from "@/lib/types";
+import { nomeEtapa } from "@/lib/etapas-preparo";
+import type { EtapaPreparo, FaseCusto, Insumo, UsoInsumo } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { DataLancamento, hojeLocal } from "@/components/ui/data-lancamento";
 import { Input } from "@/components/ui/input";
@@ -23,13 +24,15 @@ export interface UsoInsumoFormProps {
   gestor?: boolean;
   /** Mostra o botão "Cancelar" (formulário dentro de um diálogo). */
   onCancelar?: () => void;
+  /** Etapas do preparo: com elas, o uso pode ser ligado a uma etapa (ciclo planejado). */
+  etapas?: EtapaPreparo[];
 }
 
 /**
  * Lançamento de uso de insumo no ciclo. A lista de insumos já vem da API conforme o papel: o vigia
  * recebe só nome e unidade, o campo soma o saldo em quantidade e o gestor, o preço médio.
  */
-export function UsoInsumoForm({ cicloId, fase, onSalvo, uso, gestor = false, onCancelar }: UsoInsumoFormProps) {
+export function UsoInsumoForm({ cicloId, fase, onSalvo, uso, gestor = false, onCancelar, etapas }: UsoInsumoFormProps) {
   const [insumos, setInsumos] = useState<Insumo[] | null>(null);
   // Cada uso lançado incrementa a versão e a lista é recarregada (o saldo mudou)
   const [versao, setVersao] = useState(0);
@@ -39,6 +42,8 @@ export function UsoInsumoForm({ cicloId, fase, onSalvo, uso, gestor = false, onC
   // Uso de dias atrás editado hoje já é retroativo, mesmo que na época não fosse
   const [retroativo, setRetroativo] = useState(uso ? uso.retroativo || uso.data_uso < hojeLocal() : false);
   const [observacao, setObservacao] = useState(uso?.observacao ?? "");
+  // Mesmo sem a lista de etapas na tela, a edição reenvia a etapa do uso: o PUT regrava o registro inteiro
+  const [etapaId, setEtapaId] = useState(uso?.etapa_id ?? "");
   // Preço fixo que o uso já tem: a edição o mantém, e limpar o campo é que o remove
   const [precoCorrigido, setPrecoCorrigido] = useState(uso?.preco_corrigido_rs != null ? String(uso.preco_corrigido_rs) : "");
   const [salvando, setSalvando] = useState(false);
@@ -75,6 +80,7 @@ export function UsoInsumoForm({ cicloId, fase, onSalvo, uso, gestor = false, onC
       data_uso: data,
       quantidade: qtd,
       fase: uso?.fase ?? fase,
+      etapa_id: etapaId || null,
       observacao: observacao.trim() || null,
       // A caixa marcada com a data de hoje não é retroativa de fato
       retroativo: retroativo && data < hojeLocal(),
@@ -163,6 +169,25 @@ export function UsoInsumoForm({ cicloId, fase, onSalvo, uso, gestor = false, onC
           className="mt-1"
         />
       </div>
+
+      {etapas && etapas.length > 0 && (
+        <div>
+          <Label htmlFor="uso-etapa">Etapa do preparo</Label>
+          <select
+            id="uso-etapa"
+            value={etapaId}
+            onChange={(e) => setEtapaId(e.target.value)}
+            className="w-full mt-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 focus:border-sky-500 focus:outline-none h-11"
+          >
+            <option value="">Sem etapa específica</option>
+            {etapas.map((e) => (
+              <option key={e.id} value={e.id}>
+                {nomeEtapa(e)}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <DataLancamento label="Data do uso *" value={data} onChange={setData} retroativo={retroativo} onRetroativoChange={setRetroativo} />
 

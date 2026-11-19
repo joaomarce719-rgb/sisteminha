@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MetricCard } from "@/components/ui/metric-card";
 import { toast } from "@/components/ui/toast";
+import { fmtData } from "@/components/insumos/lista-usos-insumo";
 
 // ── Modal de Criar Viveiro com Dialog Shadcn ──────────────
 function CriarViveiroDialog({
@@ -151,9 +152,11 @@ function CriarViveiroDialog({
 function ViveiroCard({
   viveiro,
   cicloAtivo,
+  cicloPlanejado,
 }: {
   viveiro: Viveiro;
   cicloAtivo?: CicloProdutivo | null;
+  cicloPlanejado?: CicloProdutivo | null;
 }) {
   const diasCultivo = cicloAtivo
     ? Math.floor(
@@ -225,6 +228,16 @@ function ViveiroCard({
                 Dia {diasCultivo}
               </span>
             </div>
+          ) : cicloPlanejado ? (
+            <div className="flex items-center justify-between rounded-xl bg-sky-50/70 border border-sky-200/60 px-3 py-2 text-xs">
+              <div className="flex items-center gap-1.5 font-semibold text-sky-800">
+                <span className="w-2 h-2 rounded-full bg-sky-500" />
+                Ciclo em Preparo
+              </div>
+              <span className="font-bold text-sky-700 bg-sky-100/80 px-2 py-0.5 rounded-md">
+                Povoar em {fmtData(cicloPlanejado.data_povoamento)}
+              </span>
+            </div>
           ) : (
             <div className="flex items-center justify-between rounded-xl bg-slate-50 border border-slate-200/60 px-3 py-2 text-xs text-slate-500">
               <span className="flex items-center gap-1.5">
@@ -244,6 +257,7 @@ function ViveiroCard({
 export default function ViveirosPage() {
   const [viveiros, setViveiros] = useState<Viveiro[]>([]);
   const [ciclos, setCiclos] = useState<CicloProdutivo[]>([]);
+  const [planejados, setPlanejados] = useState<CicloProdutivo[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -251,12 +265,14 @@ export default function ViveirosPage() {
 
   const loadData = async () => {
     try {
-      const [vivs, cycs] = await Promise.all([
+      const [vivs, cycs, planos] = await Promise.all([
         viveirosApi.listar(),
         ciclosApi.listar({ status_filtro: "ATIVO" }),
+        ciclosApi.listar({ status_filtro: "PLANEJADO" }),
       ]);
       setViveiros(vivs);
       setCiclos(cycs);
+      setPlanejados(planos);
     } catch (err) {
       toast.error("Erro ao carregar viveiros", mensagemErro(err, "Tente recarregar a página"));
     } finally {
@@ -273,6 +289,8 @@ export default function ViveirosPage() {
 
   const getCicloAtivo = (viveiroId: string) =>
     ciclos.find((c) => c.viveiro_id === viveiroId) || null;
+  const getCicloPlanejado = (viveiroId: string) =>
+    planejados.find((c) => c.viveiro_id === viveiroId) || null;
 
   const filteredViveiros = viveiros.filter((v) => {
     const matchSearch =
@@ -410,6 +428,7 @@ export default function ViveirosPage() {
               key={v.id}
               viveiro={v}
               cicloAtivo={getCicloAtivo(v.id)}
+              cicloPlanejado={getCicloPlanejado(v.id)}
             />
           ))}
         </div>

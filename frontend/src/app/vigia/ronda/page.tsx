@@ -182,7 +182,7 @@ export default function RondaPage() {
             const v = viveiros.find((viv) => viv.id === c.viveiro_id);
             return (
               <option key={c.id} value={c.id} className="text-slate-900 bg-white dark:bg-slate-900 dark:text-white">
-                {v?.identificacao || "Viveiro"} — {(c.quantidade_pos_larvas / 1000).toFixed(0)}k PLs
+                {v?.identificacao || "Viveiro"} — {((c.quantidade_pos_larvas ?? 0) / 1000).toFixed(0)}k PLs
               </option>
             );
           })}

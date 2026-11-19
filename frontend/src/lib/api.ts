@@ -7,6 +7,7 @@ import type {
   CompraInsumo,
   CustoOperacional,
   CustoResumo,
+  EtapaPreparo,
   FazendaAdmin,
   GestorAdmin,
   Insumo,
@@ -314,8 +315,15 @@ export const ciclosApi = {
     return apiFetch<CicloProdutivo[]>(`/ciclos/?${q.toString()}`);
   },
   obter: (id: string) => apiFetch<CicloProdutivo>(`/ciclos/${id}`),
+  // Planeja o ciclo (nasce PLANEJADO, com as etapas do preparo); as pós-larvas entram em `povoar`
   criar: (data: Payload) =>
     apiFetch<CicloProdutivo>("/ciclos/", { method: "POST", body: JSON.stringify(data) }),
+  povoar: (id: string, data: Payload) =>
+    apiFetch<CicloProdutivo>(`/ciclos/${id}/povoar`, { method: "POST", body: JSON.stringify(data) }),
+  // Muda data prevista, tabela alimentar ou viveiro do ciclo planejado; só os campos enviados mudam
+  reagendar: (id: string, data: Payload) =>
+    apiFetch<CicloProdutivo>(`/ciclos/${id}/planejamento`, { method: "PATCH", body: JSON.stringify(data) }),
+  cancelar: (id: string) => apiFetch<CicloProdutivo>(`/ciclos/${id}/cancelar`, { method: "POST" }),
   encerrar: (id: string, data: Payload) =>
     apiFetch<CicloProdutivo>(`/ciclos/${id}/encerrar`, { method: "POST", body: JSON.stringify(data) }),
   pausar: (id: string) => apiFetch<CicloProdutivo>(`/ciclos/${id}/pausar`, { method: "POST" }),
@@ -352,6 +360,21 @@ export const custosApi = {
   resumo: (cicloId: string) => apiFetch<CustoResumo[]>(`/ciclos/${cicloId}/custos/resumo`),
   exportarCsv: (cicloId: string) =>
     downloadFile(`/ciclos/${cicloId}/custos/exportar-csv`, `custos_ciclo_${cicloId.slice(0, 8)}.csv`),
+};
+
+// ── Etapas do preparo (ciclo planejado) ────────────────
+export const etapasPreparoApi = {
+  listar: (cicloId: string) => apiFetch<EtapaPreparo[]>(`/ciclos/${cicloId}/etapas-preparo/`),
+  criar: (cicloId: string, data: Payload) =>
+    apiFetch<EtapaPreparo>(`/ciclos/${cicloId}/etapas-preparo/`, { method: "POST", body: JSON.stringify(data) }),
+  // O PATCH muda só os campos enviados (status, datas e observação)
+  atualizar: (cicloId: string, etapaId: string, data: Payload) =>
+    apiFetch<EtapaPreparo>(`/ciclos/${cicloId}/etapas-preparo/${etapaId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  excluir: (cicloId: string, etapaId: string) =>
+    apiFetch<void>(`/ciclos/${cicloId}/etapas-preparo/${etapaId}`, { method: "DELETE" }),
 };
 
 // ── Insumos e compras ──────────────────────────────────

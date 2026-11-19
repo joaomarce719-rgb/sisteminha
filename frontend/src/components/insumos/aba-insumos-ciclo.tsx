@@ -4,15 +4,24 @@ import { useState } from "react";
 import { AlertTriangle, Plus } from "lucide-react";
 import { usosInsumoApi } from "@/lib/api";
 import { mensagemErro } from "@/lib/utils";
-import type { UsoInsumo } from "@/lib/types";
+import type { EtapaPreparo, FaseCusto, UsoInsumo } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/toast";
 import { fmtData, fmtQtd, ListaUsosInsumo, useUsosInsumo } from "@/components/insumos/lista-usos-insumo";
 import { UsoInsumoForm } from "@/components/insumos/uso-insumo-form";
 
+export interface AbaInsumosCicloProps {
+  cicloId: string;
+  onAlterado?: () => void;
+  /** Fase dos usos lançados; o ciclo planejado usa PREPARO. */
+  fase?: FaseCusto;
+  /** Etapas do preparo, para ligar o uso a uma etapa. */
+  etapas?: EtapaPreparo[];
+}
+
 /** Aba "Insumos" do ciclo para o gestor: lista os usos com valores e permite lançar, corrigir e excluir. */
-export function AbaInsumosCiclo({ cicloId, onAlterado }: { cicloId: string; onAlterado?: () => void }) {
+export function AbaInsumosCiclo({ cicloId, onAlterado, fase = "CULTIVO", etapas }: AbaInsumosCicloProps) {
   const { usos, recarregar } = useUsosInsumo(cicloId);
   const [aberto, setAberto] = useState(false);
   const [editando, setEditando] = useState<UsoInsumo | null>(null);
@@ -49,7 +58,9 @@ export function AbaInsumosCiclo({ cicloId, onAlterado }: { cicloId: string; onAl
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="font-bold text-slate-900 text-base">Insumos usados no ciclo</h3>
+        <h3 className="font-bold text-slate-900 text-base">
+          {fase === "PREPARO" ? "Insumos usados no preparo" : "Insumos usados no ciclo"}
+        </h3>
         <Button size="sm" onClick={() => abrir(null)}>
           <Plus className="w-4 h-4 mr-2" />
           Registrar uso
@@ -80,7 +91,8 @@ export function AbaInsumosCiclo({ cicloId, onAlterado }: { cicloId: string; onAl
         <div className="pt-2">
           <UsoInsumoForm
             cicloId={cicloId}
-            fase="CULTIVO"
+            fase={fase}
+            etapas={etapas}
             uso={editando ?? undefined}
             gestor
             onCancelar={() => setAberto(false)}

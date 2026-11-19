@@ -179,7 +179,7 @@ export default function ManejoPage() {
         {viveiroAtual && cicloAtual && (
           <div className="mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-white/5 pt-2.5">
             <span>Área: <strong className="text-slate-700 dark:text-slate-200">{(viveiroAtual.area_util_m2 / 10000).toFixed(1)} ha</strong></span>
-            <span>População: <strong className="text-slate-700 dark:text-slate-200">{(cicloAtual.quantidade_pos_larvas / 1000).toFixed(0)}k PL</strong></span>
+            <span>População: <strong className="text-slate-700 dark:text-slate-200">{((cicloAtual.quantidade_pos_larvas ?? 0) / 1000).toFixed(0)}k PL</strong></span>
             <span>Status: <strong className="text-emerald-600 dark:text-emerald-400 font-bold">Ativo</strong></span>
           </div>
         )}
