@@ -19,13 +19,23 @@ from src.services.audit import registrar_auditoria, snapshot
 from src.models.biometria import Biometria
 from src.models.ciclo_produtivo import CicloProdutivo
 from src.models.custo_operacional import CustoOperacional
-from src.models.enums import RoleUsuario, StatusCiclo
+from src.models.enums import CategoriaCusto, RoleUsuario, StatusCiclo
+from src.models.etapa_preparo import EtapaPreparo
 from src.models.insumo import ConsumoInsumo
 from src.models.manejo_alimentar import ManejoAlimentar
+from src.models.tabela_alimentar import TabelaAlimentar
 from src.models.venda_ciclo import VendaCiclo
 from src.models.viveiro import Viveiro
 from src.routers.vendas import colunas_da_venda, sincronizar_totais_do_ciclo
-from src.schemas.ciclo import CicloCreate, CicloEncerrar, CicloResponse, MetricasAtuaisResponse
+from src.schemas.ciclo import (
+    CicloEncerrar,
+    CicloPlanejar,
+    CicloPovoar,
+    CicloReagendar,
+    CicloResponse,
+    MetricasAtuaisResponse,
+)
+from src.schemas.etapa_preparo import ETAPAS_SUGERIDAS, STATUS_ETAPA_EM_ABERTO
 from src.schemas.venda import VendaCreate
 from src.services.auth_service import get_current_user, has_role
 from src.services import decision_engine as de
@@ -34,86 +44,170 @@ from src.services.precos import regra_da_organizacao, tabela_vigente
 from src.services.sobrevivencia import confrontar_vivos, ordenar, peso_na_data, sobrevivencia_vigente
 from src.services import populacao as pv
 from src.services.insumos import reprocessar_insumo
-from src.services.regras_ciclo import ciclo_aberto_do_viveiro
+from src.services.regras_ciclo import ciclo_aberto_do_viveiro, exigir_povoamento
+from src.services.regras_ciclo import obter_ciclo as buscar_ciclo  # a rota GET se chama obter_ciclo
 
 router = APIRouter(prefix="/api/v1/ciclos", tags=["Ciclos Produtivos"])
 
 
+def _validar_tabela_alimentar(db: Session, tabela_id: UUID | None, organizacao_id: UUID) -> None:
+    if tabela_id is None:
+        return
+    tabela = db.get(TabelaAlimentar, tabela_id)
+    if not tabela or not tabela.ativo or tabela.organizacao_id not in (None, organizacao_id):
+        raise HTTPException(status_code=404, detail="Tabela alimentar não encontrada ou inativa.")
+
+
+def _viveiro_livre(db: Session, viveiro_id: UUID, user, exceto_id: UUID | None = None) -> Viveiro:
+    """Viveiro ativo da organização e sem outro ciclo aberto (PLANEJADO, ATIVO ou PAUSADO)."""
+    viveiro = viveiro_da_organizacao(db, viveiro_id, user)
+    if not viveiro.status_ativo:
+        raise HTTPException(status_code=400, detail="Viveiro inativo.")
+    if ciclo_aberto_do_viveiro(db, viveiro_id, exceto_id=exceto_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Este viveiro já possui um ciclo PLANEJADO, ATIVO ou PAUSADO.",
+        )
+    return viveiro
+
+
+def _ciclo_planejado(db: Session, ciclo_id: UUID, acao: str) -> CicloProdutivo:
+    ciclo = buscar_ciclo(db, ciclo_id)
+    if ciclo.status != StatusCiclo.PLANEJADO:
+        raise HTTPException(status_code=400, detail=f"Somente ciclos PLANEJADOS podem ser {acao}.")
+    return ciclo
+
+
 @router.post("", response_model=CicloResponse, status_code=201)
 @router.post("/", response_model=CicloResponse, status_code=201)
-def criar_ciclo(
-    payload: CicloCreate,
+def planejar_ciclo(
+    payload: CicloPlanejar,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
 ):
-    """Abre um novo ciclo produtivo em um viveiro (RF-02)."""
-    # Verificar viveiro
-    viveiro = viveiro_da_organizacao(db, payload.viveiro_id, _user)
-    if not viveiro.status_ativo:
-        raise HTTPException(status_code=400, detail="Viveiro inativo.")
+    """Planeja um ciclo: nasce PLANEJADO com as etapas sugeridas do preparo (o povoamento vem depois)."""
+    viveiro = _viveiro_livre(db, payload.viveiro_id, _user)
+    _validar_tabela_alimentar(db, payload.tabela_alimentar_id, viveiro.organizacao_id)
 
-    # Um ciclo aberto (ATIVO ou PAUSADO) por viveiro
-    if ciclo_aberto_do_viveiro(db, payload.viveiro_id):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Este viveiro já possui um ciclo ATIVO ou PAUSADO.",
-        )
-
-    if payload.tabela_alimentar_id is not None:
-        from src.models.tabela_alimentar import TabelaAlimentar
-        tabela = db.get(TabelaAlimentar, payload.tabela_alimentar_id)
-        if (
-            not tabela
-            or not tabela.ativo
-            or tabela.organizacao_id not in (None, viveiro.organizacao_id)
-        ):
-            raise HTTPException(status_code=404, detail="Tabela alimentar não encontrada ou inativa.")
-
-    # Verificar densidade (RN-01)
-    densidade = de.calcular_densidade(payload.quantidade_pos_larvas, viveiro.area_util_m2)
-
-    ciclo_data = payload.model_dump()
-
-    import uuid
-    ciclo_id = uuid.uuid4()
-    ciclo = CicloProdutivo(
-        id=ciclo_id,
-        **ciclo_data,
-        status=StatusCiclo.ATIVO,
-    )
+    ciclo = CicloProdutivo(**payload.model_dump(), status=StatusCiclo.PLANEJADO)
+    ciclo.etapas_preparo = [
+        EtapaPreparo(tipo=tipo, status="PENDENTE", ordem=ordem)
+        for ordem, tipo in enumerate(ETAPAS_SUGERIDAS, start=1)
+    ]
     db.add(ciclo)
     db.flush()
 
-    # Auto-lançar custo de PLs
-    from src.models.custo_operacional import CustoOperacional
-    from src.models.enums import CategoriaCusto
-    custo_pl = CustoOperacional(
-        id=uuid.uuid4(),
+    registrar_auditoria(
+        db=db,
+        acao="PLANEJAR_CICLO",
+        entidade="CicloProdutivo",
+        registro_id=ciclo.id,
+        usuario=_user,
+        dados_novos=snapshot(ciclo),
+    )
+    db.refresh(ciclo)
+    return ciclo
+
+
+@router.post("/{ciclo_id}/povoar", dependencies=[Depends(verificar_ciclo_da_organizacao)], response_model=CicloResponse)
+def povoar_ciclo(
+    ciclo_id: UUID,
+    payload: CicloPovoar,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.GESTOR])),
+):
+    """Povoa o ciclo planejado: grava as pós-larvas, lança o custo delas e ativa o ciclo."""
+    ciclo = _ciclo_planejado(db, ciclo_id, "povoados")
+    em_aberto = sum(1 for e in ciclo.etapas_preparo if e.status in STATUS_ETAPA_EM_ABERTO)
+    if em_aberto:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Há {em_aberto} {'etapa' if em_aberto == 1 else 'etapas'} do preparo pendentes ou em "
+            "andamento: marque cada uma como concluída ou não realizada antes de povoar.",
+        )
+    _viveiro_livre(db, ciclo.viveiro_id, _user, exceto_id=ciclo.id)
+
+    antes = snapshot(ciclo)
+    for campo, valor in payload.model_dump().items():
+        setattr(ciclo, campo, valor)
+    ciclo.status = StatusCiclo.ATIVO
+    db.add(CustoOperacional(
         ciclo_id=ciclo.id,
         data_lancamento=payload.data_povoamento,
         categoria=CategoriaCusto.POS_LARVAS,
         descricao=f"Aquisição de {payload.quantidade_pos_larvas:,} PLs",
         valor_rs=payload.custo_aquisicao_pl,
-    )
-    db.add(custo_pl)
+    ))
     db.flush()
 
     registrar_auditoria(
         db=db,
-        acao="CRIAR_CICLO",
+        acao="POVOAR_CICLO",
         entidade="CicloProdutivo",
         registro_id=ciclo.id,
         usuario=_user,
-        dados_novos={
-            "viveiro_id": str(ciclo.viveiro_id),
-            "data_povoamento": str(ciclo.data_povoamento),
-            "quantidade_pos_larvas": ciclo.quantidade_pos_larvas,
-            "custo_aquisicao_pl": float(ciclo.custo_aquisicao_pl),
-            "peso_medio_pl_g": ciclo.peso_medio_pl_g,
-            "laboratorio_origem": ciclo.laboratorio_origem,
-        },
+        dados_anteriores=antes,
+        dados_novos=snapshot(ciclo),
     )
+    db.refresh(ciclo)
+    return ciclo
 
+
+@router.patch(
+    "/{ciclo_id}/planejamento", dependencies=[Depends(verificar_ciclo_da_organizacao)], response_model=CicloResponse
+)
+def reagendar_ciclo(
+    ciclo_id: UUID,
+    payload: CicloReagendar,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.GESTOR])),
+):
+    """Muda data prevista, tabela alimentar ou viveiro do ciclo planejado; o já lançado fica no ciclo."""
+    ciclo = _ciclo_planejado(db, ciclo_id, "reagendados")
+    dados = payload.model_dump(exclude_unset=True)
+    if "viveiro_id" in dados and dados["viveiro_id"] != ciclo.viveiro_id:
+        _viveiro_livre(db, dados["viveiro_id"], _user, exceto_id=ciclo.id)
+    if "tabela_alimentar_id" in dados:
+        _validar_tabela_alimentar(db, dados["tabela_alimentar_id"], ciclo.viveiro.organizacao_id)
+
+    antes = snapshot(ciclo)
+    for campo, valor in dados.items():
+        setattr(ciclo, campo, valor)
+    db.flush()
+
+    registrar_auditoria(
+        db=db,
+        acao="REAGENDAR_CICLO",
+        entidade="CicloProdutivo",
+        registro_id=ciclo.id,
+        usuario=_user,
+        dados_anteriores=antes,
+        dados_novos=snapshot(ciclo),
+    )
+    db.refresh(ciclo)
+    return ciclo
+
+
+@router.post("/{ciclo_id}/cancelar", dependencies=[Depends(verificar_ciclo_da_organizacao)], response_model=CicloResponse)
+def cancelar_ciclo(
+    ciclo_id: UUID,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.GESTOR])),
+):
+    """Cancela um ciclo planejado que não vai acontecer, liberando o viveiro."""
+    ciclo = _ciclo_planejado(db, ciclo_id, "cancelados")
+    ciclo.status = StatusCiclo.CANCELADO
+    db.flush()
+
+    registrar_auditoria(
+        db=db,
+        acao="CANCELAR_CICLO",
+        entidade="CicloProdutivo",
+        registro_id=ciclo.id,
+        usuario=_user,
+        dados_anteriores={"status": StatusCiclo.PLANEJADO.value},
+        dados_novos={"status": ciclo.status.value},
+    )
     db.refresh(ciclo)
     return ciclo
 
@@ -334,6 +428,7 @@ def metricas_atuais(
     ciclo = result.scalar_one_or_none()
     if not ciclo:
         raise HTTPException(status_code=404, detail="Ciclo não encontrado.")
+    exigir_povoamento(ciclo)
 
     viveiro = ciclo.viveiro
     hoje = date.today()
@@ -469,8 +564,8 @@ def exportar_ciclo_csv(
     writer.writerow([
         "POVOAMENTO",
         ciclo.data_povoamento.isoformat(),
-        f"PLs: {ciclo.quantidade_pos_larvas}",
-        f"Custo: R$ {float(ciclo.custo_aquisicao_pl):.2f}".replace(".", ","),
+        f"PLs: {ciclo.quantidade_pos_larvas or ''}",
+        f"Custo: R$ {float(ciclo.custo_aquisicao_pl or 0):.2f}".replace(".", ","),
         ciclo.laboratorio_origem or "",
         "",
     ])

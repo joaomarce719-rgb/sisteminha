@@ -18,6 +18,8 @@ class UsoInsumoCreate(BaseModel):
     # mínimo = escala da coluna Numeric(14,4); máximo = 10 dígitos inteiros
     quantidade: float = Field(..., ge=0.0001, le=9_999_999_999)
     fase: FaseCusto = FaseCusto.CULTIVO
+    # etapa do preparo em que o insumo foi usado (do mesmo ciclo)
+    etapa_id: UUID | None = None
     observacao: str | None = Field(None, max_length=500)
     retroativo: bool = False
     # correção do preço pelo gestor (nota fiscal); Numeric(12,4) = 8 dígitos inteiros
@@ -34,6 +36,7 @@ class UsoInsumoResponse(BaseModel):
     data_uso: date
     quantidade: float
     fase: FaseCusto
+    etapa_id: UUID | None = None
     retroativo: bool
     observacao: str | None
     preco_unitario_rs: float | None = None

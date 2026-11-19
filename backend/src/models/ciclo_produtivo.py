@@ -26,8 +26,9 @@ class CicloProdutivo(AuditMixin, Base):
         index=True,
     )
     data_povoamento: Mapped[date] = mapped_column(Date, nullable=False)
-    quantidade_pos_larvas: Mapped[int] = mapped_column(Integer, nullable=False)
-    custo_aquisicao_pl: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    # vazios enquanto o ciclo está PLANEJADO (preenchidos no povoamento)
+    quantidade_pos_larvas: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    custo_aquisicao_pl: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     # Peso médio da PL no povoamento: base da biomassa inicial do FCA (vazio = desprezível)
     peso_medio_pl_g: Mapped[float | None] = mapped_column(Float, nullable=True)
     laboratorio_origem: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -77,5 +78,10 @@ class CicloProdutivo(AuditMixin, Base):
     vendas = relationship(
         "VendaCiclo", back_populates="ciclo",
         order_by="VendaCiclo.data_venda",
+        cascade="all, delete-orphan",
+    )
+    etapas_preparo = relationship(
+        "EtapaPreparo", back_populates="ciclo",
+        order_by="EtapaPreparo.ordem",
         cascade="all, delete-orphan",
     )

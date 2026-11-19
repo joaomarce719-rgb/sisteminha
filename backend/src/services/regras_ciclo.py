@@ -11,7 +11,7 @@ from src.models.ciclo_produtivo import CicloProdutivo
 from src.models.enums import FaseCusto, StatusCiclo
 
 # Um viveiro só pode ter um ciclo nestes estados ao mesmo tempo
-STATUS_CICLO_ABERTO = (StatusCiclo.ATIVO, StatusCiclo.PAUSADO)
+STATUS_CICLO_ABERTO = (StatusCiclo.PLANEJADO, StatusCiclo.ATIVO, StatusCiclo.PAUSADO)
 
 
 def obter_ciclo(db: Session, ciclo_id: UUID) -> CicloProdutivo:
@@ -31,6 +31,15 @@ def ciclo_aberto_do_viveiro(
     if exceto_id is not None:
         query = query.where(CicloProdutivo.id != exceto_id)
     return db.scalars(query.limit(1)).first()
+
+
+def exigir_povoamento(ciclo: CicloProdutivo) -> None:
+    """Métricas e recomendação dependem das pós-larvas, que só existem depois do povoamento."""
+    if ciclo.quantidade_pos_larvas is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ciclo ainda em preparo: povoe o ciclo para calcular as métricas.",
+        )
 
 
 def validar_data_no_ciclo(

@@ -62,6 +62,9 @@ class ConsumoInsumo(AuditMixin, Base):
     custo_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("custos_operacionais.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    etapa_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("etapas_preparo.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     # R$ por unidade de uso aplicado no momento do registro; nulo = pendente de valor
     preco_unitario_rs: Mapped[float | None] = mapped_column(Numeric(12, 4), nullable=True)
     # preço após o recálculo por compra retroativa

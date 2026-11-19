@@ -14,6 +14,7 @@ from src.models.enums import FaseCusto, RoleUsuario, StatusCiclo
 from src.models.insumo import ConsumoInsumo, Insumo
 from src.models.usuario import Usuario
 from src.schemas.uso_insumo import UsoInsumoCreate, UsoInsumoResponse
+from src.routers.etapas_preparo import etapa_do_ciclo
 from src.services.audit import registrar_auditoria, snapshot
 from src.services.auth_service import has_role
 from src.services.escopo import insumo_da_organizacao, verificar_ciclo_da_organizacao
@@ -47,6 +48,8 @@ def _validar_lancamento(
         raise HTTPException(status_code=422, detail="Insumo inativo não pode ser usado.")
     if payload.preco_corrigido_rs is not None and user.papel != RoleUsuario.GESTOR:
         raise HTTPException(status_code=403, detail="Somente o gestor corrige o preço do uso.")
+    if payload.etapa_id is not None:
+        etapa_do_ciclo(db, ciclo.id, payload.etapa_id)
     exigir_retroativo_para_data_passada(payload.data_uso, payload.retroativo, "A data do uso")
     validar_data_no_ciclo(ciclo, payload.data_uso, "A data do uso", payload.fase)
     return insumo
@@ -67,7 +70,8 @@ def _resposta(db: Session, uso: ConsumoInsumo, user: Usuario) -> UsoInsumoRespon
     insumo = db.get(Insumo, uso.insumo_id)
     resposta = UsoInsumoResponse(
         id=uso.id, insumo_id=uso.insumo_id, insumo_nome=insumo.nome, unidade_uso=insumo.unidade_uso,
-        data_uso=uso.data_uso, quantidade=uso.quantidade, fase=uso.fase, retroativo=uso.retroativo,
+        data_uso=uso.data_uso, quantidade=uso.quantidade, fase=uso.fase, etapa_id=uso.etapa_id,
+        retroativo=uso.retroativo,
         observacao=uso.observacao, recalculado_em=uso.recalculado_em,
     )
     if user.papel == RoleUsuario.GESTOR:

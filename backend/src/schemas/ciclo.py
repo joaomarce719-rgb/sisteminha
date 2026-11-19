@@ -10,21 +10,50 @@ from src.models.enums import StatusCiclo
 from src.schemas.manejo_alimentar import ConfrontoVivosResponse
 
 
-class CicloCreate(BaseModel):
+class CicloPlanejar(BaseModel):
+    """Planejamento: a data é só a prevista (qualquer data). Campos desconhecidos dão 422,
+    para que um cliente antigo que envia pós-larvas falhe em vez de criar um ciclo planejado."""
+
+    model_config = {"extra": "forbid"}
+
     viveiro_id: UUID
     data_povoamento: date
-    quantidade_pos_larvas: int = Field(..., gt=0)
-    custo_aquisicao_pl: float = Field(..., ge=0)
-    peso_medio_pl_g: float | None = Field(None, ge=0, le=5)
-    laboratorio_origem: str | None = Field(None, max_length=120)
     tabela_alimentar_id: UUID | None = None
 
     @model_validator(mode="before")
     @classmethod
     def map_aliases(cls, data: Any) -> Any:
-        if isinstance(data, dict) and not data.get("data_povoamento") and data.get("data_inicio"):
-            data["data_povoamento"] = data["data_inicio"]
+        if isinstance(data, dict) and "data_inicio" in data:
+            data = dict(data)
+            data_inicio = data.pop("data_inicio")
+            data.setdefault("data_povoamento", data_inicio)
         return data
+
+
+class CicloReagendar(BaseModel):
+    """Só os campos enviados mudam; data e viveiro não podem ser apagados."""
+
+    model_config = {"extra": "forbid"}
+
+    data_povoamento: date | None = None
+    tabela_alimentar_id: UUID | None = None
+    viveiro_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def obrigatorios_nao_nulos(self) -> "CicloReagendar":
+        for campo in ("data_povoamento", "viveiro_id"):
+            if campo in self.model_fields_set and getattr(self, campo) is None:
+                raise ValueError(f"O campo {campo} não pode ser vazio.")
+        return self
+
+
+class CicloPovoar(BaseModel):
+    data_povoamento: date
+    # limites = colunas Integer (32 bits) e Numeric(12,2)
+    quantidade_pos_larvas: int = Field(..., gt=0, le=2_147_483_647)
+    custo_aquisicao_pl: float = Field(..., ge=0, le=9_999_999_999.99)
+    peso_medio_pl_g: float | None = Field(None, ge=0, le=5)
+    laboratorio_origem: str | None = Field(None, max_length=120)
 
 
 class CicloEncerrar(BaseModel):
@@ -47,8 +76,9 @@ class CicloResponse(BaseModel):
     viveiro_id: UUID
     data_povoamento: date
     data_inicio: date | None = None
-    quantidade_pos_larvas: int
-    custo_aquisicao_pl: float
+    # vazios no ciclo PLANEJADO (antes do povoamento)
+    quantidade_pos_larvas: int | None = None
+    custo_aquisicao_pl: float | None = None
     peso_medio_pl_g: float | None = None
     laboratorio_origem: str | None
     status: StatusCiclo
@@ -68,7 +98,7 @@ class CicloResponse(BaseModel):
             return data
         viveiro = getattr(data, "viveiro", None)
         densidade = None
-        if viveiro is not None and viveiro.area_util_m2:
+        if viveiro is not None and viveiro.area_util_m2 and data.quantidade_pos_larvas is not None:
             densidade = round(data.quantidade_pos_larvas / viveiro.area_util_m2, 2)
         return {
             "id": data.id,

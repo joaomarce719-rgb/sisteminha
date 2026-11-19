@@ -33,7 +33,7 @@ from src.services.decision_engine import (
     calcular_ganho_semanal,
 )
 from src.services.populacao import animais_vendidos_ate, populacao_vigente
-from src.services.regras_ciclo import validar_data_no_ciclo
+from src.services.regras_ciclo import exigir_povoamento, validar_data_no_ciclo
 from src.services.fuzzy_engine import inferir_ajuste_sobrevivencia
 from src.services.sobrevivencia import (
     agrupar_por_dia,
@@ -194,6 +194,7 @@ def recomendacao_alimentar(
     ciclo = result.scalar_one_or_none()
     if not ciclo:
         raise HTTPException(status_code=404, detail="Ciclo não encontrado.")
+    exigir_povoamento(ciclo)
 
     biometrias = sorted(ciclo.biometrias, key=lambda b: b.data_medicao)
     peso_medio = biometrias[-1].peso_medio_g if biometrias else 1.0
