@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { ciclosApi, custosApi, viveirosApi } from "@/lib/api";
 import { mensagemErro } from "@/lib/utils";
-import type { CicloProdutivo, Viveiro, CustoOperacional, CustoResumo, FinanceiroCiclo } from "@/lib/types";
+import type { CicloProdutivo, Viveiro, CustoOperacional, CustoResumo, FaseCusto, FinanceiroCiclo } from "@/lib/types";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -236,6 +236,7 @@ export default function FinanceiroPage() {
   const [custoForm, setCustoForm] = useState({
     data_lancamento: new Date().toISOString().split("T")[0],
     categoria: "RACAO",
+    fase: "CULTIVO" as FaseCusto,
     descricao: "",
     valor_rs: "",
   });
@@ -318,6 +319,7 @@ export default function FinanceiroPage() {
       await custosApi.criar(selectedCiclo, {
         data_lancamento: custoForm.data_lancamento,
         categoria: custoForm.categoria,
+        fase: custoForm.fase,
         descricao: custoForm.descricao,
         valor_rs: parseFloat(custoForm.valor_rs),
       });
@@ -327,6 +329,7 @@ export default function FinanceiroPage() {
       setCustoForm({
         data_lancamento: new Date().toISOString().split("T")[0],
         categoria: "RACAO",
+        fase: "CULTIVO",
         descricao: "",
         valor_rs: "",
       });
@@ -627,6 +630,23 @@ export default function FinanceiroPage() {
                 ))}
               </select>
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor="custo-fase">Fase do ciclo *</Label>
+            <select
+              id="custo-fase"
+              value={custoForm.fase}
+              onChange={(e) => setCustoForm({ ...custoForm, fase: e.target.value as FaseCusto })}
+              className="w-full mt-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 focus:border-sky-500 focus:outline-none h-11"
+            >
+              {Object.entries(FASES).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-slate-500">
+              Despesca (gelo, mão de obra da colheita) e preparo não entram no custo diário usado na recomendação de despesca.
+            </p>
           </div>
 
           <div>

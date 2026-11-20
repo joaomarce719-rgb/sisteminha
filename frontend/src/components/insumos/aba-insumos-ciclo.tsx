@@ -18,10 +18,12 @@ export interface AbaInsumosCicloProps {
   fase?: FaseCusto;
   /** Etapas do preparo, para ligar o uso a uma etapa. */
   etapas?: EtapaPreparo[];
+  /** O formulário deixa escolher a fase de cada uso (ciclo em curso); `fase` vira só o padrão. */
+  escolherFase?: boolean;
 }
 
 /** Aba "Insumos" do ciclo para o gestor: lista os usos com valores e permite lançar, corrigir e excluir. */
-export function AbaInsumosCiclo({ cicloId, onAlterado, fase = "CULTIVO", etapas }: AbaInsumosCicloProps) {
+export function AbaInsumosCiclo({ cicloId, onAlterado, fase = "CULTIVO", etapas, escolherFase }: AbaInsumosCicloProps) {
   const { usos, recarregar } = useUsosInsumo(cicloId);
   const [aberto, setAberto] = useState(false);
   const [editando, setEditando] = useState<UsoInsumo | null>(null);
@@ -92,6 +94,7 @@ export function AbaInsumosCiclo({ cicloId, onAlterado, fase = "CULTIVO", etapas 
           <UsoInsumoForm
             cicloId={cicloId}
             fase={fase}
+            escolherFase={escolherFase}
             etapas={etapas}
             uso={editando ?? undefined}
             gestor

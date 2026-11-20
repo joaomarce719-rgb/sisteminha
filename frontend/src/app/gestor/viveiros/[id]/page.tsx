@@ -1203,7 +1203,7 @@ export default function ViveiroDetalhePage() {
 
             {/* ABA 4: INSUMOS */}
             <TabsContent value="insumos">
-              <AbaInsumosCiclo cicloId={cicloAtivo.id} onAlterado={loadData} />
+              <AbaInsumosCiclo cicloId={cicloAtivo.id} escolherFase onAlterado={loadData} />
             </TabsContent>
 
             {/* ABA 5: VENDAS */}
