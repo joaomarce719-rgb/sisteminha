@@ -621,8 +621,6 @@ As fórmulas abaixo foram transcritas ou normalizadas a partir dos PDFs. A valid
 | Estocagem / biometria / ambiente | C/E | C/E | C/E | C | L | L |
 | Arraçoamento / sobras | C/E | C/E | C/E | C | L | L |
 | Custos / vendas / indicadores financeiros | C/E | C/E | L* | L | C/E | L |
-| Insumos e compras (preços e saldo) | C/E | C/E | L* | - | C/E | L |
-| Uso de insumo e etapas do preparo | C/E | C/E | C/E | C/E | L | L |
 | Usuários / perfis | C/E | C* | L | - | - | L |
 | Parâmetros / fórmulas | C/E | C* | C* | - | - | L |
 | Auditoria | C | C* | L* | - | L* | L |
@@ -630,7 +628,7 @@ As fórmulas abaixo foram transcritas ou normalizadas a partir dos PDFs. A valid
 > **Legenda:** **C** = Consultar; **E** = Editar; **L** = Somente leitura; **-** = Sem acesso.  
 > `*` Depende do escopo e da política da organização.
 
-Na implementação, os perfis mapeiam para os papéis GESTOR, CAMPO e VIGIA. Para os recursos de insumos, preparo e vendas:
+A matriz acima não cobre os recursos de insumos, preparo e vendas; para eles, a tabela a seguir (papéis GESTOR, CAMPO e VIGIA) é a referência:
 
 | Recurso | GESTOR | CAMPO | VIGIA |
 | :--- | :--- | :--- | :--- |
