@@ -1,13 +1,21 @@
 """SAD Carcinicultura — Regra de data dos lançamentos retroativos (compras, usos de insumo e vendas)."""
 
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
+
+from src.config import get_settings
+
+
+def hoje_da_fazenda() -> date:
+    """Data de hoje no fuso da fazenda: com o servidor em UTC, date.today() já vira o dia às 21h."""
+    return datetime.now(ZoneInfo(get_settings().fazenda_fuso_horario)).date()
 
 
 def exigir_retroativo_para_data_passada(data: date, retroativo: bool, rotulo: str) -> None:
     """Recusa data futura sempre e data passada sem a marca de lançamento retroativo."""
-    hoje = date.today()
+    hoje = hoje_da_fazenda()
     if data > hoje:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

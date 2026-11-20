@@ -14,6 +14,7 @@ from src.models.insumo import ConsumoInsumo, Insumo
 from src.services import decision_engine as de
 from src.services import populacao as pv
 from src.services.precos import regra_da_organizacao, tabela_vigente
+from src.services.regras_data import hoje_da_fazenda
 from src.services.sobrevivencia import peso_na_data, sobrevivencia_vigente
 
 
@@ -132,7 +133,7 @@ def resumo_do_ciclo(db: Session, ciclo: CicloProdutivo, mostrar_valores: bool) -
             peso_final = sum(float(v.biomassa_kg) * float(v.peso_medio_g) for v in finais) / biomassa_finais
         fca = de.calcular_fca(racao_total, 0.0, biomassa_inicial, biomassa_vendida)
     elif povoado:
-        atual = situacao_atual(db, ciclo, date.today())
+        atual = situacao_atual(db, ciclo, hoje_da_fazenda())
         if atual.biomassa_kg is not None:
             fca = de.calcular_fca(racao_total, atual.biomassa_kg, biomassa_inicial, biomassa_vendida)
         lucro_estimado = de.calcular_metricas_economicas(

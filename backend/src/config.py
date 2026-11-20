@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     # E-mails (separados por vírgula) com acesso ao painel de Administração Central.
     superadmin_emails: str = ""
 
+    # ── Fazenda ──────────────────────────────────────
+    # Fuso que define "hoje" nas regras de data (o servidor pode rodar em UTC).
+    fazenda_fuso_horario: str = "America/Sao_Paulo"
+
     @property
     def cors_origins_list(self) -> List[str]:
         return [origin.strip() for origin in self.cors_origins.split(",")]

@@ -47,6 +47,7 @@ from src.services.historico import resumo_do_ciclo, situacao_atual
 from src.services.insumos import reprocessar_insumo
 from src.services.regras_ciclo import ciclo_aberto_do_viveiro, exigir_povoamento
 from src.services.regras_ciclo import obter_ciclo as buscar_ciclo  # a rota GET se chama obter_ciclo
+from src.services.regras_data import hoje_da_fazenda
 
 router = APIRouter(prefix="/api/v1/ciclos", tags=["Ciclos Produtivos"])
 
@@ -119,6 +120,11 @@ def povoar_ciclo(
 ):
     """Povoa o ciclo planejado: grava as pós-larvas, lança o custo delas e ativa o ciclo."""
     ciclo = _ciclo_planejado(db, ciclo_id, "povoados")
+    if payload.data_povoamento > hoje_da_fazenda():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="A data do povoamento não pode estar no futuro: povoe o ciclo no dia em que as pós-larvas entrarem.",
+        )
     em_aberto = sum(1 for e in ciclo.etapas_preparo if e.status in STATUS_ETAPA_EM_ABERTO)
     if em_aberto:
         raise HTTPException(
@@ -287,7 +293,8 @@ def encerrar_ciclo(
     datas_finais = list(db.scalars(
         select(VendaCiclo.data_venda).where(VendaCiclo.ciclo_id == ciclo.id, VendaCiclo.tipo == "DESPESCA_FINAL")
     ))
-    data_venda_nova = payload.data_despesca_real or date.today()
+    hoje = hoje_da_fazenda()
+    data_venda_nova = payload.data_despesca_real or hoje
     if payload.biomassa_colhida_kg is not None:
         datas_finais.append(data_venda_nova)
     if not datas_finais:
@@ -309,7 +316,7 @@ def encerrar_ciclo(
                 biomassa_kg=payload.biomassa_colhida_kg,
                 peso_medio_g=peso_final_g,
                 preco_kg=payload.receita_real_rs / payload.biomassa_colhida_kg,
-                retroativo=data_venda_nova < date.today(),
+                retroativo=data_venda_nova < hoje,
             )
         except ValidationError:
             raise HTTPException(

@@ -1,6 +1,5 @@
 """SAD Carcinicultura — Rotas de vendas do ciclo (desbaste e despesca final), só GESTOR."""
 
-from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -20,7 +19,7 @@ from src.services.escopo import verificar_ciclo_da_organizacao
 from src.services.populacao import biomassa_vendida_kg, receita_realizada_rs
 from src.services.precos import regra_da_organizacao, tabela_vigente
 from src.services.regras_ciclo import obter_ciclo, validar_data_no_ciclo
-from src.services.regras_data import exigir_retroativo_para_data_passada
+from src.services.regras_data import exigir_retroativo_para_data_passada, hoje_da_fazenda
 
 router = APIRouter(
     prefix="/api/v1/ciclos/{ciclo_id}/vendas",
@@ -62,7 +61,7 @@ def _preco_da_tabela(db: Session, ciclo: CicloProdutivo, peso_medio_g: float) ->
     """Preço sugerido para a gramatura: tabela vigente hoje e regra de arredondamento da organização."""
     organizacao_id = ciclo.viveiro.organizacao_id
     return buscar_preco_por_gramatura(
-        peso_medio_g, tabela_vigente(db, organizacao_id, date.today()), regra_da_organizacao(db, organizacao_id)
+        peso_medio_g, tabela_vigente(db, organizacao_id, hoje_da_fazenda()), regra_da_organizacao(db, organizacao_id)
     )
 
 

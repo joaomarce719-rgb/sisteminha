@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from src.models.ciclo_produtivo import CicloProdutivo
 from src.models.enums import FaseCusto, StatusCiclo
+from src.services.regras_data import hoje_da_fazenda
 
 # Um viveiro só pode ter um ciclo nestes estados ao mesmo tempo
 STATUS_CICLO_ABERTO = (StatusCiclo.PLANEJADO, StatusCiclo.ATIVO, StatusCiclo.PAUSADO)
@@ -51,7 +52,7 @@ def validar_data_no_ciclo(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{rotulo} não pode ser anterior ao povoamento ({ciclo.data_povoamento:%d/%m/%Y}).",
         )
-    if data_registro > date.today():
+    if data_registro > hoje_da_fazenda():
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{rotulo} não pode estar no futuro.",
