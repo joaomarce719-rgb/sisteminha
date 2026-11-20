@@ -9,6 +9,12 @@ Cria etapas_preparo (tipo e status em texto, não enum nativo) e liga o uso de i
 Só altera o que faltar (conferido pelo inspetor): bancos criados antes do Alembic
 podem já estar no formato novo (ver src.database.executar_migracoes).
 
+No Postgres garante os valores PLANEJADO e CANCELADO no tipo enumerado status_ciclo,
+que este código é o primeiro a gravar (bancos legados criaram o tipo fora do Alembic;
+ver 0006, cujo padrão se repete: ADD VALUE IF NOT EXISTS dentro da transação da
+migração, sem autocommit_block). No SQLite não há tipo enumerado nativo. O Postgres
+não remove valor de enum, então o downgrade os mantém.
+
 Revision ID: 0011
 Revises: 0010
 """
@@ -31,6 +37,10 @@ def _inspetor():
 
 
 def upgrade() -> None:
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute("ALTER TYPE status_ciclo ADD VALUE IF NOT EXISTS 'PLANEJADO'")
+        op.execute("ALTER TYPE status_ciclo ADD VALUE IF NOT EXISTS 'CANCELADO'")
+
     colunas = {c["name"]: c for c in _inspetor().get_columns("ciclos_produtivos")}
     obrigatorias = [nome for nome in _COLUNAS_DO_POVOAMENTO if not colunas[nome]["nullable"]]
     if obrigatorias:
