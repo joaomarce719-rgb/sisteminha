@@ -16,7 +16,7 @@ export const fmtPreco = (v: number) =>
   `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
 export const fmtData = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("pt-BR");
 
-const FASES: Record<FaseCusto, string> = { PREPARO: "Preparo", CULTIVO: "Cultivo", DESPESCA: "Despesca" };
+export const FASES: Record<FaseCusto, string> = { PREPARO: "Preparo", CULTIVO: "Cultivo", DESPESCA: "Despesca" };
 
 /** Usos de insumo do ciclo; `usos` é null até a primeira resposta e para ciclo vazio (""). */
 export function useUsosInsumo(cicloId: string) {

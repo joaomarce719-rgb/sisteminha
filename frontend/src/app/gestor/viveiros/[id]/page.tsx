@@ -29,6 +29,7 @@ import {
   Package,
   Receipt,
   ClipboardList,
+  History,
 } from "lucide-react";
 import {
   viveirosApi,
@@ -56,6 +57,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { AbaInsumosCiclo } from "@/components/insumos/aba-insumos-ciclo";
 import { fmtData, fmtMoney, fmtQtd } from "@/components/insumos/lista-usos-insumo";
 import { VendasCiclo, useVendasCiclo } from "@/components/viveiro/vendas-ciclo";
+import { HistoricoViveiro } from "@/components/viveiro/historico-viveiro";
 import { PlanejarCicloDialog, PreparoCiclo } from "@/components/viveiro/preparo-ciclo";
 import { hojeLocal } from "@/components/ui/data-lancamento";
 import { toast } from "@/components/ui/toast";
@@ -817,6 +819,9 @@ export default function ViveiroDetalhePage() {
         </div>
       )}
 
+      {/* Sem ciclo em curso não há abas: o histórico (ciclos finalizados) aparece direto */}
+      {!cicloAtivo && <HistoricoViveiro viveiroId={viveiroId} />}
+
       {/* Conteúdo do Ciclo Ativo */}
       {cicloAtivo && (
         <>
@@ -881,6 +886,10 @@ export default function ViveiroDetalhePage() {
               <TabsTrigger value="vendas">
                 <Receipt className="w-4 h-4 mr-2" />
                 Vendas
+              </TabsTrigger>
+              <TabsTrigger value="historico">
+                <History className="w-4 h-4 mr-2" />
+                Histórico
               </TabsTrigger>
             </TabsList>
 
@@ -1200,6 +1209,11 @@ export default function ViveiroDetalhePage() {
             {/* ABA 5: VENDAS */}
             <TabsContent value="vendas">
               <VendasCiclo cicloId={cicloAtivo.id} onAlterado={loadData} />
+            </TabsContent>
+
+            {/* ABA 6: HISTÓRICO */}
+            <TabsContent value="historico">
+              <HistoricoViveiro viveiroId={viveiroId} />
             </TabsContent>
           </Tabs>
         </>

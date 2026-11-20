@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/toast";
 import { fmtData, fmtMoney, fmtQtd } from "@/components/insumos/lista-usos-insumo";
 
-const TIPOS_VENDA: Record<TipoVenda, string> = { DESBASTE: "Desbaste", DESPESCA_FINAL: "Despesca final" };
+export const TIPOS_VENDA: Record<TipoVenda, string> = { DESBASTE: "Desbaste", DESPESCA_FINAL: "Despesca final" };
 
 /**
  * Vendas do ciclo. `vendas` é null enquanto carrega e quando a leitura falha (`falhou`): quem decide

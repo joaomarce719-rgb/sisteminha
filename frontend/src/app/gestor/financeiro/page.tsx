@@ -13,10 +13,13 @@ import {
   PieChart,
   Download,
   Percent,
+  AlertTriangle,
+  Scale,
+  Wallet,
 } from "lucide-react";
 import { ciclosApi, custosApi, viveirosApi } from "@/lib/api";
 import { mensagemErro } from "@/lib/utils";
-import type { CicloProdutivo, Viveiro, CustoOperacional, CustoResumo } from "@/lib/types";
+import type { CicloProdutivo, Viveiro, CustoOperacional, CustoResumo, FinanceiroCiclo } from "@/lib/types";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +28,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
 import { toast } from "@/components/ui/toast";
+import { FASES, fmtData, fmtMoney, fmtQtd } from "@/components/insumos/lista-usos-insumo";
+import { TIPOS_VENDA } from "@/components/viveiro/vendas-ciclo";
 
 const CATEGORIAS: Record<string, string> = {
   RACAO: "Ração",
@@ -46,12 +51,172 @@ const CAT_COLORS: Record<string, string> = {
   OUTROS: "#94a3b8",
 };
 
-function fmtMoney(v: number) {
-  return `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
+const ORDEM_FASES = Object.keys(FASES);
 
-function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString("pt-BR");
+const STATUS_CICLO: Record<string, string> = {
+  PLANEJADO: "Planejado",
+  ATIVO: "Ativo",
+  PAUSADO: "Pausado",
+  FINALIZADO: "Finalizado",
+  CANCELADO: "Cancelado",
+};
+
+/** Resultado do ciclo: lucro realizado e lucro estimado (sempre rotulados), margem, custo por kg e avisos. */
+function ResultadoCiclo({ dados }: { dados: FinanceiroCiclo }) {
+  const { definitivo } = dados;
+  const fases = Object.entries(dados.custos_por_fase).sort(([a], [b]) => ORDEM_FASES.indexOf(a) - ORDEM_FASES.indexOf(b));
+  const estimado = dados.lucro_estimado_se_despescar_hoje_rs;
+  return (
+    <div className="space-y-6">
+      {dados.usos_pendentes > 0 && (
+        <div className="flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>
+            {dados.usos_pendentes === 1 ? "1 uso sem valor" : `${dados.usos_pendentes} usos sem valor`}: o custo ainda
+            não entrou no ciclo, então custos e lucros estão incompletos. Registre a compra do insumo ou corrija o
+            preço do uso.
+          </span>
+        </div>
+      )}
+      {dados.valores_recalculados_em && (
+        <p className="text-xs text-slate-500">
+          Valores recalculados em {new Date(dados.valores_recalculados_em).toLocaleDateString("pt-BR")} (lançamento
+          retroativo de insumo).
+        </p>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <MetricCard
+          label="Receita realizada"
+          value={fmtMoney(dados.receita_realizada_rs)}
+          accentColor="emerald"
+          icon={Receipt}
+          subtitle="Soma das vendas do ciclo"
+        />
+        <MetricCard
+          label="Custo total"
+          value={fmtMoney(dados.custo_total_rs)}
+          accentColor="coral"
+          icon={Wallet}
+          subtitle="Todos os custos lançados no ciclo"
+        />
+        <MetricCard
+          label="Lucro realizado"
+          value={fmtMoney(dados.lucro_realizado_rs)}
+          accentColor={dados.lucro_realizado_rs >= 0 ? "emerald" : "coral"}
+          icon={DollarSign}
+          badge={{ text: definitivo ? "Definitivo" : "Parcial", variant: definitivo ? "success" : "warning" }}
+          subtitle={
+            definitivo
+              ? "Receita das vendas − custos lançados"
+              : "Receita das vendas já feitas − custos lançados até agora"
+          }
+        />
+        <MetricCard
+          label="Lucro estimado se despescar hoje"
+          value={estimado !== null ? fmtMoney(estimado) : "Indisponível"}
+          accentColor={estimado === null ? "slate" : estimado >= 0 ? "emerald" : "coral"}
+          icon={TrendingUp}
+          badge={{ text: "Estimativa", variant: "info" }}
+          subtitle={
+            estimado !== null
+              ? "Lucro realizado + biomassa na água ao preço de hoje"
+              : definitivo
+                ? "Ciclo finalizado: vale o lucro realizado"
+                : "Falta biometria ou preço de venda para estimar"
+          }
+        />
+        <MetricCard
+          label="Margem realizada"
+          value={dados.margem_realizada_pct !== null ? `${fmtQtd(dados.margem_realizada_pct)}%` : "—"}
+          accentColor="slate"
+          icon={Percent}
+          subtitle={dados.margem_realizada_pct !== null ? "Lucro realizado ÷ receita realizada" : "Sem receita de vendas"}
+        />
+        <MetricCard
+          label="Custo por kg"
+          value={dados.custo_por_kg_rs !== null ? fmtMoney(dados.custo_por_kg_rs) : "—"}
+          accentColor="slate"
+          icon={Scale}
+          subtitle={dados.custo_por_kg_rs !== null ? "Custo total ÷ kg vendidos" : "Sem biomassa vendida"}
+        />
+      </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <PieChart className="w-4 h-4 text-sky-600" />
+            Custos por fase e categoria
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {fases.length === 0 ? (
+            <p className="py-6 text-center text-xs text-slate-400">Nenhum custo lançado neste ciclo.</p>
+          ) : (
+            <div className="space-y-5">
+              {fases.map(([fase, total]) => (
+                <div key={fase}>
+                  <div className="flex justify-between text-sm font-bold text-slate-800 pb-1 border-b border-slate-100">
+                    <span>{FASES[fase as keyof typeof FASES] ?? fase}</span>
+                    <span className="tabular-nums">{fmtMoney(total)}</span>
+                  </div>
+                  <ul className="mt-2 space-y-1">
+                    {dados.custos_fase_categoria
+                      .filter((c) => c.fase === fase)
+                      .sort((a, b) => b.total_rs - a.total_rs)
+                      .map((c) => (
+                        <li key={c.categoria} className="flex justify-between text-xs text-slate-600">
+                          <span className="flex items-center gap-2">
+                            <span
+                              className="inline-block h-2 w-2 rounded-full"
+                              style={{ background: CAT_COLORS[c.categoria] || "#94a3b8" }}
+                            />
+                            {CATEGORIAS[c.categoria] || c.categoria}
+                          </span>
+                          <span className="tabular-nums">{fmtMoney(c.total_rs)}</span>
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Receipt className="w-4 h-4 text-sky-600" />
+              Vendas do ciclo
+            </CardTitle>
+            <Badge variant="secondary">{dados.vendas.length} registros</Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0">
+          {dados.vendas.length === 0 ? (
+            <p className="py-6 text-center text-xs text-slate-400">Nenhuma venda registrada neste ciclo.</p>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {dados.vendas.map((v) => (
+                <li key={v.id} className="py-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span className="flex items-center gap-2 font-semibold text-slate-700">
+                    {fmtData(v.data_venda)}
+                    <Badge variant={v.tipo === "DESPESCA_FINAL" ? "success" : "info"}>{TIPOS_VENDA[v.tipo]}</Badge>
+                  </span>
+                  <span className="text-slate-600 tabular-nums">
+                    {fmtQtd(v.biomassa_kg)} kg · {fmtQtd(v.peso_medio_g)} g · {fmtMoney(v.preco_kg)}/kg
+                  </span>
+                  <strong className="text-sm text-slate-900 tabular-nums">{fmtMoney(v.valor_total_rs)}</strong>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
 
 export default function FinanceiroPage() {
@@ -61,6 +226,10 @@ export default function FinanceiroPage() {
   const [custos, setCustos] = useState<CustoOperacional[]>([]);
   const [resumo, setResumo] = useState<CustoResumo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [falhouCiclos, setFalhouCiclos] = useState(false);
+  // Guardado com o ciclo a que pertence: trocar de ciclo não mostra o resultado do anterior
+  const [financeiro, setFinanceiro] = useState<{ cicloId: string; dados: FinanceiroCiclo | null } | null>(null);
+  const [versaoFinanceiro, setVersaoFinanceiro] = useState(0);
 
   // Modals state
   const [showCustoModal, setShowCustoModal] = useState(false);
@@ -77,12 +246,17 @@ export default function FinanceiroPage() {
       try {
         const [vivs, cycs] = await Promise.all([
           viveirosApi.listar(),
-          ciclosApi.listar({ status_filtro: "ATIVO" }),
+          ciclosApi.listar(),
         ]);
         setViveiros(vivs);
         setCiclos(cycs);
-        if (cycs.length > 0) setSelectedCiclo(cycs[0].id);
-      } catch { } finally { setLoading(false); }
+        // Qualquer ciclo pode ser consultado (o finalizado mostra o lucro definitivo); começa pelo que está em curso
+        const emCurso = cycs.find((c) => c.status === "ATIVO" || c.status === "PAUSADO");
+        if (cycs.length > 0) setSelectedCiclo((emCurso ?? cycs[0]).id);
+      } catch (err) {
+        setFalhouCiclos(true);
+        toast.error("Não foi possível carregar os ciclos", mensagemErro(err, "Tente novamente"));
+      } finally { setLoading(false); }
     }
     load();
   }, []);
@@ -97,10 +271,33 @@ export default function FinanceiroPage() {
         ]);
         setCustos(cs);
         setResumo(rs);
-      } catch { }
+      } catch (err) {
+        toast.error("Não foi possível carregar os custos do ciclo", mensagemErro(err, "Tente novamente"));
+      }
     }
     loadCustos();
   }, [selectedCiclo]);
+
+  useEffect(() => {
+    if (!selectedCiclo) return;
+    let ativo = true;
+    ciclosApi
+      .financeiro(selectedCiclo)
+      .then((dados) => {
+        if (ativo) setFinanceiro({ cicloId: selectedCiclo, dados });
+      })
+      .catch((err) => {
+        if (ativo) {
+          setFinanceiro({ cicloId: selectedCiclo, dados: null });
+          toast.error("Não foi possível carregar o resultado do ciclo", mensagemErro(err, "Tente novamente"));
+        }
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [selectedCiclo, versaoFinanceiro]);
+
+  const resultado = financeiro && financeiro.cicloId === selectedCiclo ? financeiro : null;
 
   const refreshCustos = async () => {
     if (!selectedCiclo) return;
@@ -110,6 +307,7 @@ export default function FinanceiroPage() {
     ]);
     setCustos(cs);
     setResumo(rs);
+    setVersaoFinanceiro((v) => v + 1);
   };
 
   const handleCustoSubmit = async (e: React.FormEvent) => {
@@ -253,11 +451,17 @@ export default function FinanceiroPage() {
 
       {/* ── Custos operacionais do ciclo ── */}
       <div className="space-y-6">
-        {ciclos.length === 0 ? (
+        {falhouCiclos ? (
+          <Card className="p-10 text-center">
+            <AlertTriangle className="w-10 h-10 text-red-400 mx-auto mb-3" />
+            <h3 className="font-bold text-slate-800">Não foi possível carregar os ciclos</h3>
+            <p className="text-xs text-slate-500 mt-1">Recarregue a página para tentar novamente.</p>
+          </Card>
+        ) : ciclos.length === 0 ? (
           <Card className="p-10 text-center">
             <Shell className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-            <h3 className="font-bold text-slate-800">Nenhum ciclo ativo encontrado</h3>
-            <p className="text-xs text-slate-500 mt-1">Inicie um ciclo em um viveiro para lançar despesas.</p>
+            <h3 className="font-bold text-slate-800">Nenhum ciclo encontrado</h3>
+            <p className="text-xs text-slate-500 mt-1">Planeje um ciclo em um viveiro para lançar despesas.</p>
           </Card>
         ) : (
           <>
@@ -265,7 +469,7 @@ export default function FinanceiroPage() {
             <div className="flex flex-col sm:flex-row items-end gap-3 bg-white p-4 rounded-2xl border border-slate-200">
               <div className="flex-1 w-full">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-1.5">
-                  Filtrar por Viveiro / Ciclo Ativo
+                  Viveiro / Ciclo
                 </label>
                 <select
                   value={selectedCiclo}
@@ -274,12 +478,28 @@ export default function FinanceiroPage() {
                 >
                   {ciclos.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {getViveiroName(c.viveiro_id)} — Povoado em {fmtDate(c.data_povoamento)} (Lote #{c.id.substring(0, 6)})
+                      {getViveiroName(c.viveiro_id)} — {c.quantidade_pos_larvas === null ? "Previsto para" : "Povoado em"} {fmtData(c.data_povoamento)} · {STATUS_CICLO[c.status] ?? c.status} (Lote #{c.id.substring(0, 6)})
                     </option>
                   ))}
                 </select>
               </div>
             </div>
+
+            {/* Resultado do ciclo: lucros, margem, custo por kg, custos por fase e vendas */}
+            {resultado === null && (
+              <div className="flex justify-center py-8">
+                <Loader2 className="w-6 h-6 text-sky-500 animate-spin" />
+              </div>
+            )}
+            {resultado !== null && resultado.dados === null && (
+              <Card className="p-8 text-center">
+                <p className="text-xs text-red-500">Não foi possível carregar o resultado do ciclo.</p>
+                <Button size="sm" variant="outline" className="mt-3" onClick={() => setVersaoFinanceiro((v) => v + 1)}>
+                  Tentar novamente
+                </Button>
+              </Card>
+            )}
+            {resultado?.dados && <ResultadoCiclo dados={resultado.dados} />}
 
             {/* Distribuição por Categoria de Custo */}
             {resumo.length > 0 && (
@@ -343,7 +563,7 @@ export default function FinanceiroPage() {
                       <div key={c.id} className="py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
                         <div className="flex items-center gap-3 min-w-[140px]">
                           <CalendarDays className="w-4 h-4 text-slate-400 shrink-0" />
-                          <span className="font-semibold text-slate-700">{fmtDate(c.data_lancamento)}</span>
+                          <span className="font-semibold text-slate-700">{fmtData(c.data_lancamento)}</span>
                         </div>
 
                         <div className="w-36">

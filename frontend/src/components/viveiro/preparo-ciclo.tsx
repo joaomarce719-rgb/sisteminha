@@ -43,7 +43,7 @@ const MENSAGEM_ERRO_FORM =
 
 const OPCOES_STATUS: StatusEtapa[] = ["PENDENTE", "EM_ANDAMENTO", "CONCLUIDA", "NAO_REALIZADA"];
 
-const VARIANTE_STATUS = {
+export const VARIANTE_STATUS = {
   PENDENTE: "secondary",
   EM_ANDAMENTO: "info",
   CONCLUIDA: "success",

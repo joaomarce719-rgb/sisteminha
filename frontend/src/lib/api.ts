@@ -9,7 +9,9 @@ import type {
   CustoResumo,
   EtapaPreparo,
   FazendaAdmin,
+  FinanceiroCiclo,
   GestorAdmin,
+  HistoricoCiclo,
   Insumo,
   LogAuditoria,
   ManejoAlimentar,
@@ -283,6 +285,8 @@ export const viveirosApi = {
   criar: (data: Payload) => apiFetch<Viveiro>("/viveiros/", { method: "POST", body: JSON.stringify(data) }),
   atualizar: (id: string, data: Payload) =>
     apiFetch<Viveiro>(`/viveiros/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  // Ciclos do viveiro, do mais recente ao mais antigo; os campos em reais só vêm para o GESTOR
+  historico: (id: string) => apiFetch<HistoricoCiclo[]>(`/viveiros/${id}/historico`),
 };
 
 export async function downloadFile(path: string, defaultFilename: string): Promise<void> {
@@ -329,6 +333,8 @@ export const ciclosApi = {
   pausar: (id: string) => apiFetch<CicloProdutivo>(`/ciclos/${id}/pausar`, { method: "POST" }),
   retomar: (id: string) => apiFetch<CicloProdutivo>(`/ciclos/${id}/retomar`, { method: "POST" }),
   metricas: (id: string) => apiFetch<MetricasAtuais>(`/ciclos/${id}/metricas-atuais`),
+  // Custos por fase e categoria, vendas, lucro realizado e lucro estimado se despescar hoje (só GESTOR)
+  financeiro: (id: string) => apiFetch<FinanceiroCiclo>(`/ciclos/${id}/financeiro`),
   exportarCsv: (id: string) =>
     downloadFile(`/ciclos/${id}/exportar-csv`, `relatorio_ciclo_${id.slice(0, 8)}.csv`),
 };

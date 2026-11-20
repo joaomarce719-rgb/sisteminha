@@ -317,6 +317,78 @@ export interface VendaCiclo {
   created_at: string;
 }
 
+// ── Financeiro do ciclo (só GESTOR) ───────────────────
+export interface CustoFaseCategoria {
+  fase: FaseCusto;
+  categoria: CategoriaCusto;
+  total_rs: number;
+}
+
+export interface FinanceiroCiclo {
+  custos_por_fase: Record<string, number>;
+  custos_por_categoria: Record<string, number>;
+  custos_fase_categoria: CustoFaseCategoria[];
+  vendas: VendaCiclo[];
+  receita_realizada_rs: number;
+  custo_total_rs: number;
+  // Receita das vendas − custos lançados; definitivo com o ciclo finalizado
+  lucro_realizado_rs: number;
+  margem_realizada_pct: number | null;
+  // Lucro realizado + biomassa na água × preço de hoje; null no ciclo finalizado ou sem biometria/preço
+  lucro_estimado_se_despescar_hoje_rs: number | null;
+  custo_por_kg_rs: number | null;
+  definitivo: boolean;
+  usos_pendentes: number;
+  valores_recalculados_em: string | null;
+}
+
+// ── Histórico do viveiro (um item por ciclo, do mais recente ao mais antigo) ──
+// Todo campo em reais vem null para CAMPO e VIGIA
+export interface EtapaHistorico {
+  tipo: TipoEtapa;
+  status: StatusEtapa;
+  data_inicio: string | null;
+  data_fim: string | null;
+}
+
+export interface InsumoHistorico {
+  insumo_id: string;
+  nome: string;
+  unidade_uso: string;
+  quantidade_total: number;
+  custo_total_rs: number | null;
+}
+
+export interface SemanaRacao {
+  inicio: string;
+  fim: string;
+  kg: number;
+  custo_rs: number | null;
+  fca_parcial: number | null;
+}
+
+export interface HistoricoCiclo {
+  ciclo_id: string;
+  status: StatusCiclo;
+  data_povoamento: string;
+  data_despesca_real: string | null;
+  quantidade_pos_larvas: number | null;
+  etapas: EtapaHistorico[];
+  insumos: InsumoHistorico[];
+  racao_total_kg: number;
+  racao_custo_rs: number | null;
+  racao_por_semana: SemanaRacao[];
+  vendas: { quantidade: number; biomassa_total_kg: number; receita_rs: number | null };
+  peso_final_g: number | null;
+  sobrevivencia_final_pct: number | null;
+  // Final no ciclo finalizado, o atual no ativo
+  fca: number | null;
+  custo_total_rs: number | null;
+  lucro_realizado_rs: number | null;
+  margem_pct: number | null;
+  custo_por_kg_rs: number | null;
+}
+
 // ── Preços ────────────────────────────────────────────
 export interface PrecoMercado {
   id: string;
