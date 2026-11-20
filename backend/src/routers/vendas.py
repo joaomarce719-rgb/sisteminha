@@ -3,7 +3,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from src.database import get_db
@@ -33,13 +33,17 @@ _MAX_VALOR_RS = 9_999_999_999.99
 
 
 def sincronizar_totais_do_ciclo(db: Session, ciclo: CicloProdutivo) -> None:
-    """Com o ciclo finalizado, biomassa colhida e receita real passam a ser a soma das vendas."""
+    """Com o ciclo finalizado, biomassa colhida e receita real passam a ser a soma das vendas,
+    e a data da despesca, a da última despesca final."""
     if ciclo.status != StatusCiclo.FINALIZADO:
         return
     db.flush()
     vendas = db.scalars(select(VendaCiclo).where(VendaCiclo.ciclo_id == ciclo.id)).all()
     ciclo.biomassa_colhida_kg = round(biomassa_vendida_kg(vendas), 2)
     ciclo.receita_real_rs = round(receita_realizada_rs(vendas), 2)
+    datas_finais = [v.data_venda for v in vendas if v.tipo == "DESPESCA_FINAL"]
+    if datas_finais:
+        ciclo.data_despesca_real = max(datas_finais)
 
 
 def _validar_status(ciclo: CicloProdutivo, tipo: str, tipo_atual: str | None = None) -> None:
@@ -152,11 +156,17 @@ def corrigir_venda(
     db: Session = Depends(get_db),
     _user: Usuario = Depends(require_gestor),
 ):
-    """Corrige uma venda (reenvia os campos); animais e valor total são recalculados."""
+    """Corrige uma venda (reenvia os campos); animais e valor total são recalculados.
+
+    Com biomassa e preço iguais aos gravados, o valor total fica: a venda do encerramento guarda a
+    receita informada, que biomassa × preço arredondado a centavos não reproduz.
+    """
     venda = _venda_do_ciclo(db, ciclo_id, venda_id)
     ciclo = obter_ciclo(db, ciclo_id)
     _validar_status(ciclo, payload.tipo, venda.tipo)
     colunas = colunas_da_venda(db, ciclo, payload)
+    if colunas["biomassa_kg"] == float(venda.biomassa_kg) and colunas["preco_kg"] == float(venda.preco_kg):
+        colunas["valor_total_rs"] = venda.valor_total_rs
     antes = snapshot(venda)
     for campo, valor in colunas.items():
         setattr(venda, campo, valor)
@@ -179,6 +189,16 @@ def excluir_venda(
     venda = _venda_do_ciclo(db, ciclo_id, venda_id)
     ciclo = obter_ciclo(db, ciclo_id)
     _validar_status(ciclo, venda.tipo, venda.tipo)
+    if ciclo.status == StatusCiclo.FINALIZADO and venda.tipo == "DESPESCA_FINAL":
+        outras_finais = db.scalar(select(func.count()).select_from(VendaCiclo).where(
+            VendaCiclo.ciclo_id == ciclo_id, VendaCiclo.tipo == "DESPESCA_FINAL", VendaCiclo.id != venda_id
+        ))
+        if not outras_finais:
+            raise HTTPException(
+                status_code=409,
+                detail="Esta é a única despesca final do ciclo encerrado: corrija a venda em vez de excluí-la, "
+                "ou lance outra despesca final antes.",
+            )
     antes = snapshot(venda)
     db.delete(venda)
     db.flush()

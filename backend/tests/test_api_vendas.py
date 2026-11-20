@@ -348,3 +348,71 @@ def test_manejo_ronda_e_simulacao_leem_as_vendas(client, gestor, vigia, ciclo):
     depois = simular()
     assert depois.status_code == 200, depois.text
     assert depois.json()["biomassa_atual_kg"] < antes.json()["biomassa_atual_kg"]
+
+
+# ── Ciclo finalizado: última despesca final, data da despesca e receita do encerramento ──
+
+def _encerrar_com_payload(client, gestor, ciclo_id, biomassa, receita, data=HOJE):
+    r = client.post(f"/api/v1/ciclos/{ciclo_id}/biometrias/",
+                    json={"data_medicao": "2026-09-01", "quantidade_amostrada": 50, "peso_medio_g": 20},
+                    headers=gestor)
+    assert r.status_code == 201, r.text
+    r = client.post(f"/api/v1/ciclos/{ciclo_id}/encerrar",
+                    json={"data_despesca_real": data, "biomassa_colhida_kg": biomassa, "receita_real_rs": receita},
+                    headers=gestor)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_excluir_a_ultima_despesca_final_do_ciclo_finalizado_da_409(client, gestor, ciclo):
+    _encerrar_com_payload(client, gestor, ciclo["id"], 1000, 25000)
+    base = f"/api/v1/ciclos/{ciclo['id']}/vendas"
+    [final] = client.get(base, headers=gestor).json()
+    r = client.delete(f"{base}/{final['id']}", headers=gestor)
+    assert r.status_code == 409 and "única despesca final" in r.json()["detail"]
+    total = _ciclo_da_api(client, gestor, ciclo["id"])
+    assert (total["biomassa_colhida_kg"], total["receita_real_rs"]) == (1000.0, 25000.0)
+    # mudar o tipo da última despesca final continua bloqueado (desbaste no ciclo finalizado)
+    corpo = {"data_venda": HOJE, "tipo": "DESBASTE", "biomassa_kg": 1000, "peso_medio_g": 20, "preco_kg": 25}
+    assert client.put(f"{base}/{final['id']}", json=corpo, headers=gestor).status_code == 400
+
+
+def test_excluir_uma_de_duas_despescas_finais_ressincroniza_a_data(client, gestor, ciclo):
+    _criar(client, gestor, ciclo["id"], tipo="DESPESCA_FINAL", data_venda="2026-10-01", retroativo=True,
+           biomassa_kg=300, preco_kg=20)
+    _encerrar_com_payload(client, gestor, ciclo["id"], 100, 3000, data=HOJE)
+    assert _ciclo_da_api(client, gestor, ciclo["id"])["data_despesca_real"] == HOJE
+    base = f"/api/v1/ciclos/{ciclo['id']}/vendas"
+    ultima = next(v for v in client.get(base, headers=gestor).json() if v["data_venda"] == HOJE)
+
+    assert client.delete(f"{base}/{ultima['id']}", headers=gestor).status_code == 204
+    resto = _ciclo_da_api(client, gestor, ciclo["id"])
+    assert resto["data_despesca_real"] == "2026-10-01"
+    assert (resto["biomassa_colhida_kg"], resto["receita_real_rs"]) == (300.0, 6000.0)
+
+
+def test_mudar_a_data_da_ultima_despesca_final_move_a_data_da_despesca(client, gestor, ciclo):
+    _encerrar_com_payload(client, gestor, ciclo["id"], 1000, 25000)
+    base = f"/api/v1/ciclos/{ciclo['id']}/vendas"
+    [final] = client.get(base, headers=gestor).json()
+    corpo = {"data_venda": ONTEM, "retroativo": True, "tipo": "DESPESCA_FINAL", "biomassa_kg": 1000,
+             "peso_medio_g": 20, "preco_kg": 25}
+    assert client.put(f"{base}/{final['id']}", json=corpo, headers=gestor).status_code == 200
+    assert _ciclo_da_api(client, gestor, ciclo["id"])["data_despesca_real"] == ONTEM
+
+
+def test_corrigir_so_o_comprador_mantem_a_receita_do_encerramento(client, gestor, ciclo):
+    _encerrar_com_payload(client, gestor, ciclo["id"], 8765.4, 123456.78)
+    base = f"/api/v1/ciclos/{ciclo['id']}/vendas"
+    [final] = client.get(base, headers=gestor).json()
+    assert (final["preco_kg"], final["valor_total_rs"]) == (14.08, 123456.78)  # preço arredondado a centavos
+    corpo = {k: final[k] for k in ("data_venda", "tipo", "biomassa_kg", "peso_medio_g", "preco_kg")}
+    r = client.put(f"{base}/{final['id']}", json={**corpo, "comprador": "Frigorífico Sul"}, headers=gestor)
+    assert r.status_code == 200, r.text
+    assert (r.json()["comprador"], r.json()["valor_total_rs"]) == ("Frigorífico Sul", 123456.78)
+    assert _ciclo_da_api(client, gestor, ciclo["id"])["receita_real_rs"] == 123456.78
+
+    # mudar o preço recalcula o valor
+    r = client.put(f"{base}/{final['id']}", json={**corpo, "preco_kg": 14.00}, headers=gestor)
+    assert r.json()["valor_total_rs"] == round(8765.4 * 14.00, 2)
+    assert _ciclo_da_api(client, gestor, ciclo["id"])["receita_real_rs"] == round(8765.4 * 14.00, 2)
