@@ -66,7 +66,7 @@ def _racao_por_semana(
         acumulado += kg
         fca = None
         peso = peso_na_data(ciclo.biometrias, fim)
-        if peso is not None:
+        if peso is not None and acumulado > 0:  # sem ração ainda, FCA 0 pareceria perfeito
             vendas_ate = [v for v in ciclo.vendas if v.data_venda <= fim]
             if finalizado and ciclo.data_despesca_real and fim >= ciclo.data_despesca_real:
                 biomassa = 0.0  # a água foi esvaziada na despesca final
@@ -126,15 +126,17 @@ def resumo_do_ciclo(db: Session, ciclo: CicloProdutivo, mostrar_valores: bool) -
     # zootécnicos e lucro estimado
     biomassa_inicial = de.calcular_biomassa_kg(ciclo.quantidade_pos_larvas or 0, ciclo.peso_medio_pl_g or 0.0)
     fca = lucro_estimado = sobrevivencia_final = peso_final = None
+    tem_racao = racao_total > 0  # sem ração registrada, FCA 0 pareceria perfeito
     if finalizado:
         if ciclo.quantidade_pos_larvas:
             sobrevivencia_final = pv.animais_vendidos_ate(vendas) / ciclo.quantidade_pos_larvas * 100
         if biomassa_finais > 0:  # a última despesca final pode ter sido excluída por correção
             peso_final = sum(float(v.biomassa_kg) * float(v.peso_medio_g) for v in finais) / biomassa_finais
-        fca = de.calcular_fca(racao_total, 0.0, biomassa_inicial, biomassa_vendida)
+        if tem_racao:
+            fca = de.calcular_fca(racao_total, 0.0, biomassa_inicial, biomassa_vendida)
     elif povoado:
         atual = situacao_atual(db, ciclo, hoje_da_fazenda())
-        if atual.biomassa_kg is not None:
+        if atual.biomassa_kg is not None and tem_racao:
             fca = de.calcular_fca(racao_total, atual.biomassa_kg, biomassa_inicial, biomassa_vendida)
         lucro_estimado = de.calcular_metricas_economicas(
             [float(c.valor_rs) for c in custos], atual.biomassa_kg, atual.preco_kg, receita

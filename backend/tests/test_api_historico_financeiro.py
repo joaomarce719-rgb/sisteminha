@@ -245,3 +245,20 @@ def test_fca_parcial_com_biometria(client, gestor, novo_ciclo):
     manejo = client.get(f"/api/v1/ciclos/{ciclo['id']}/manejos-alimentares/", headers=gestor).json()[0]
     biomassa = int(300_000 * manejo["taxa_sobrevivencia_estimada_fuzzy"] / 100) * 2 / 1000
     assert semana["fca_parcial"] == pytest.approx(300 / biomassa, abs=0.001)
+
+
+def test_sem_racao_registrada_o_fca_fica_vazio(client, gestor, novo_ciclo):
+    ciclo = novo_ciclo(data_povoamento="2026-08-01")
+    _biometria(client, gestor, ciclo["id"], 5, data="2026-08-05")
+    [item] = _historico(client, gestor, ciclo["viveiro_id"])
+    assert item["racao_total_kg"] == 0 and item["fca"] is None and item["racao_por_semana"] == []
+
+
+def test_semana_sem_racao_acumulada_nao_tem_fca_parcial(client, gestor, novo_ciclo):
+    ciclo = novo_ciclo(data_povoamento="2026-08-01")
+    _biometria(client, gestor, ciclo["id"], 2, data="2026-08-02")
+    _manejo(client, gestor, ciclo["id"], "2026-08-10", 300)  # só na semana 2
+    [item] = _historico(client, gestor, ciclo["viveiro_id"])
+    primeira, segunda = item["racao_por_semana"]
+    assert primeira["kg"] == 0 and primeira["fca_parcial"] is None
+    assert segunda["fca_parcial"] is not None
