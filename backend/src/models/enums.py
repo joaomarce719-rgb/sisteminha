@@ -53,6 +53,13 @@ class CategoriaCusto(str, enum.Enum):
     OUTROS = "OUTROS"
 
 
+class FaseCusto(str, enum.Enum):
+    """Fase do ciclo em que o custo ou o uso de insumo ocorreu."""
+    PREPARO = "PREPARO"
+    CULTIVO = "CULTIVO"
+    DESPESCA = "DESPESCA"
+
+
 # ── Simulação de Despesca ───────────────────────────
 class RecomendacaoDespesca(str, enum.Enum):
     """Diretriz de decisão emitida pelo simulador Δ V."""

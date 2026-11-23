@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 from src.services.decision_engine import taxa_alimentar_clifford
+from tests.conftest import planejar_e_povoar
 
 DIAS = 100
 PESO_PL_G = 0.01
@@ -40,11 +41,9 @@ def _simular(client, gestor, novo_viveiro, cenario):
         return float(np.interp(d, [p[0] for p in pontos_sobrev], [p[1] for p in pontos_sobrev]))
 
     viveiro = novo_viveiro(area)
-    r = client.post("/api/v1/ciclos/", json={
-        "viveiro_id": viveiro["id"], "data_povoamento": str(povoamento), "quantidade_pos_larvas": pls,
-        "custo_aquisicao_pl": pls / 1000 * 30, "peso_medio_pl_g": PESO_PL_G}, headers=gestor)
-    assert r.status_code == 201, r.text
-    url = f"/api/v1/ciclos/{r.json()['id']}"
+    ciclo = planejar_e_povoar(client, gestor, viveiro["id"], str(povoamento), pls, pls / 1000 * 30,
+                              peso_medio_pl_g=PESO_PL_G)
+    url = f"/api/v1/ciclos/{ciclo['id']}"
 
     for d in range(INICIO_REGISTROS, DIAS + 1):
         data = str(povoamento + timedelta(days=d))

@@ -84,6 +84,42 @@ def novo_viveiro(client, gestor):
     return _criar
 
 
+def planejar_e_povoar(
+    client,
+    headers,
+    viveiro_id: str,
+    data_povoamento: str = "2026-08-01",
+    pls: int = 300_000,
+    custo_pl: float = 3_000.0,
+    **extra,
+) -> dict:
+    """Planeja o ciclo, marca todas as etapas do preparo como não realizadas e povoa.
+
+    `extra` vai para o povoamento (peso_medio_pl_g, laboratorio_origem), exceto
+    `tabela_alimentar_id`, que é do planejamento. Devolve o ciclo ATIVO.
+    """
+    plano = {"viveiro_id": viveiro_id, "data_povoamento": data_povoamento}
+    if "tabela_alimentar_id" in extra:
+        plano["tabela_alimentar_id"] = extra.pop("tabela_alimentar_id")
+    r = client.post("/api/v1/ciclos/", json=plano, headers=headers)
+    assert r.status_code == 201, r.text
+    ciclo_id = r.json()["id"]
+    etapas = client.get(f"/api/v1/ciclos/{ciclo_id}/etapas-preparo", headers=headers)
+    assert etapas.status_code == 200, etapas.text
+    for etapa in etapas.json():
+        r = client.patch(f"/api/v1/ciclos/{ciclo_id}/etapas-preparo/{etapa['id']}",
+                         json={"status": "NAO_REALIZADA"}, headers=headers)
+        assert r.status_code == 200, r.text
+    r = client.post(
+        f"/api/v1/ciclos/{ciclo_id}/povoar",
+        json={"data_povoamento": data_povoamento, "quantidade_pos_larvas": pls, "custo_aquisicao_pl": custo_pl,
+              **extra},
+        headers=headers,
+    )
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
 @pytest.fixture
 def novo_ciclo(client, gestor, novo_viveiro):
     def _criar(
@@ -91,18 +127,6 @@ def novo_ciclo(client, gestor, novo_viveiro):
         pls: int = 300_000,
         custo_pl: float = 3_000.0,
     ) -> dict:
-        viveiro = novo_viveiro()
-        r = client.post(
-            "/api/v1/ciclos/",
-            json={
-                "viveiro_id": viveiro["id"],
-                "data_povoamento": data_povoamento,
-                "quantidade_pos_larvas": pls,
-                "custo_aquisicao_pl": custo_pl,
-            },
-            headers=gestor,
-        )
-        assert r.status_code == 201, r.text
-        return r.json()
+        return planejar_e_povoar(client, gestor, novo_viveiro()["id"], data_povoamento, pls, custo_pl)
 
     return _criar

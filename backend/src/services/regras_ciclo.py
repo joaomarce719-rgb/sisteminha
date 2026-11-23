@@ -8,10 +8,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.models.ciclo_produtivo import CicloProdutivo
-from src.models.enums import StatusCiclo
+from src.models.enums import FaseCusto, StatusCiclo
+from src.models.etapa_preparo import EtapaPreparo
+from src.services.regras_data import hoje_da_fazenda
 
 # Um viveiro só pode ter um ciclo nestes estados ao mesmo tempo
-STATUS_CICLO_ABERTO = (StatusCiclo.ATIVO, StatusCiclo.PAUSADO)
+STATUS_CICLO_ABERTO = (StatusCiclo.PLANEJADO, StatusCiclo.ATIVO, StatusCiclo.PAUSADO)
 
 
 def obter_ciclo(db: Session, ciclo_id: UUID) -> CicloProdutivo:
@@ -33,15 +35,33 @@ def ciclo_aberto_do_viveiro(
     return db.scalars(query.limit(1)).first()
 
 
-def validar_data_no_ciclo(ciclo: CicloProdutivo, data_registro: date, rotulo: str) -> None:
-    """Rejeita datas anteriores ao povoamento ou no futuro (RNF-008)."""
-    if data_registro < ciclo.data_povoamento:
+def exigir_povoamento(ciclo: CicloProdutivo) -> None:
+    """Métricas e recomendação dependem das pós-larvas, que só existem depois do povoamento."""
+    if ciclo.quantidade_pos_larvas is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ciclo ainda em preparo: povoe o ciclo para calcular as métricas.",
+        )
+
+
+def validar_data_no_ciclo(
+    ciclo: CicloProdutivo, data_registro: date, rotulo: str, fase: str = FaseCusto.CULTIVO.value
+) -> None:
+    """Rejeita datas anteriores ao povoamento (exceto na fase PREPARO) ou no futuro (RNF-008)."""
+    if fase != FaseCusto.PREPARO and data_registro < ciclo.data_povoamento:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{rotulo} não pode ser anterior ao povoamento ({ciclo.data_povoamento:%d/%m/%Y}).",
         )
-    if data_registro > date.today():
+    if data_registro > hoje_da_fazenda():
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{rotulo} não pode estar no futuro.",
         )
+
+
+def etapa_do_ciclo(db: Session, ciclo_id: UUID, etapa_id: UUID) -> EtapaPreparo:
+    etapa = db.get(EtapaPreparo, etapa_id)
+    if not etapa or etapa.ciclo_id != ciclo_id:
+        raise HTTPException(status_code=404, detail="Etapa do preparo não encontrada.")
+    return etapa

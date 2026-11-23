@@ -32,6 +32,8 @@ class CustoOperacional(AuditMixin, Base):
     )
     descricao: Mapped[str] = mapped_column(String(255), nullable=False)
     valor_rs: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    # valor de FaseCusto; só CULTIVO entra no custo diário estimado, validado no schema
+    fase: Mapped[str] = mapped_column(String(10), nullable=False, default="CULTIVO", server_default="CULTIVO")
 
     # Relacionamento
     ciclo = relationship("CicloProdutivo", back_populates="custos_operacionais")

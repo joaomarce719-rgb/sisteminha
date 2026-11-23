@@ -15,6 +15,7 @@ from src.services.escopo import (
 from src.services.audit import registrar_auditoria, snapshot
 from src.models.custo_operacional import CustoOperacional
 from src.models.enums import RoleUsuario
+from src.models.insumo import ConsumoInsumo
 from src.schemas.custo import CustoCreate, CustoListResponse, CustoResumoResponse, CustoResponse
 from src.services.auth_service import has_role
 from src.services.regras_ciclo import obter_ciclo
@@ -39,7 +40,8 @@ def lancar_custo(
     obter_ciclo(db, ciclo_id)
     custo = CustoOperacional(
         ciclo_id=ciclo_id,
-        **payload.model_dump(exclude={"ciclo_id"}),
+        **payload.model_dump(exclude={"ciclo_id", "fase"}),
+        fase=payload.fase.value,
     )
     db.add(custo)
     db.flush()
@@ -56,6 +58,7 @@ def lancar_custo(
             "categoria": custo.categoria.value,
             "descricao": custo.descricao,
             "valor_rs": float(custo.valor_rs),
+            "fase": custo.fase,
         },
     )
 
@@ -202,6 +205,8 @@ def deletar_custo(
     if not custo:
         raise HTTPException(status_code=404, detail="Custo não encontrado.")
     ciclo_da_organizacao(db, custo.ciclo_id, _user)
+    if db.scalar(select(ConsumoInsumo.id).where(ConsumoInsumo.custo_id == custo.id).limit(1)):
+        raise HTTPException(status_code=409, detail="Custo gerado por uso de insumo; exclua o uso.")
     registrar_auditoria(db, "EXCLUIR", "CustoOperacional", custo.id, _user, dados_anteriores=snapshot(custo))
     db.delete(custo)
     db.flush()

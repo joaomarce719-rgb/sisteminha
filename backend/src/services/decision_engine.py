@@ -71,12 +71,18 @@ def calcular_biomassa_kg(populacao: int, peso_medio_g: float) -> float:
 
 
 # ── RN-03: Fator de Conversão Alimentar ──────────────
-def calcular_fca(racao_total_kg: float, biomassa_atual_kg: float, biomassa_inicial_kg: float) -> float | None:
-    """FCA = Ração_Total / (Biomassa_Atual - Biomassa_Inicial).
+def calcular_fca(
+    racao_total_kg: float,
+    biomassa_atual_kg: float,
+    biomassa_inicial_kg: float,
+    biomassa_vendida_kg: float = 0.0,
+) -> float | None:
+    """FCA = Ração_Total / (Biomassa_Atual + Biomassa_Vendida - Biomassa_Inicial).
 
+    A biomassa já vendida (desbastes) também foi produzida com a ração do ciclo.
     Retorna None se o ganho de biomassa for zero ou negativo.
     """
-    ganho = biomassa_atual_kg - biomassa_inicial_kg
+    ganho = biomassa_atual_kg + biomassa_vendida_kg - biomassa_inicial_kg
     if ganho <= 0:
         return None
     return racao_total_kg / ganho
@@ -117,8 +123,12 @@ def calcular_metricas_economicas(
     custos: list[float],
     biomassa_kg: float | None,
     preco_venda_kg: float | None,
+    receita_realizada_rs: float = 0.0,
 ) -> MetricasEconomicas:
-    """Calcula CO, RB, LO e MO conforme RN-06 e RN-015."""
+    """Calcula CO, RB, LO e MO conforme RN-06 e RN-015.
+
+    A receita e o lucro estimados (despescar hoje) incluem a receita já realizada em vendas.
+    """
     co_total = sum(custos)
     if biomassa_kg is None or preco_venda_kg is None or preco_venda_kg <= 0:
         return MetricasEconomicas(
@@ -127,7 +137,7 @@ def calcular_metricas_economicas(
             lucro_operacional=None,
             margem_operacional_pct=None,
         )
-    receita = biomassa_kg * preco_venda_kg
+    receita = biomassa_kg * preco_venda_kg + receita_realizada_rs
     lucro = receita - co_total
     margem = (lucro / receita * 100.0) if receita > 0 else None
     return MetricasEconomicas(
@@ -179,6 +189,7 @@ def simular_delta_v(
     preco_futuro_kg: float | None,
     custo_diario_racao_energia: float,
     biomassa_atual_kg: float,
+    receita_realizada_rs: float = 0.0,
 ) -> ResultadoDeltaV:
     """Executa o algoritmo preditivo ΔV conforme RN-07.
 
@@ -193,6 +204,7 @@ def simular_delta_v(
         preco_futuro_kg: Preço na faixa de gramatura futura (se None, usa o atual).
         custo_diario_racao_energia: Custo diário de ração + energia + mão-de-obra.
         biomassa_atual_kg: Biomassa viva atual (kg).
+        receita_realizada_rs: Receita já recebida em vendas (somada aos dois lucros; o ΔV não muda).
 
     Returns:
         ResultadoDeltaV com projeção e recomendação.
@@ -213,8 +225,8 @@ def simular_delta_v(
     custo_add = custo_diario_racao_energia * dias_horizonte
 
     # Lucros
-    lo_atual = (biomassa_atual_kg * preco_atual_kg) - custo_operacional_total
-    lucro_proj = receita_proj - (custo_operacional_total + custo_add)
+    lo_atual = (biomassa_atual_kg * preco_atual_kg) + receita_realizada_rs - custo_operacional_total
+    lucro_proj = receita_proj + receita_realizada_rs - (custo_operacional_total + custo_add)
 
     # Delta V
     delta_v = lucro_proj - lo_atual

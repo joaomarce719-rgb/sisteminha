@@ -12,6 +12,7 @@ import pytest
 
 from src.services.decision_engine import buscar_preco_por_gramatura as buscar
 from src.services.decision_engine import simular_delta_v, taxa_alimentar_clifford
+from tests.conftest import planejar_e_povoar
 
 # Tabela 1 (peso g, consumo alimentar g, taxa alimentar %), adaptada de Clifford (1992),
 # transcrita do documento "Dados essenciais BIOLOGICO".
@@ -34,13 +35,9 @@ def _preco_da_faixa(client, gestor, peso_g: float) -> float:
 
 def _ciclo(client, gestor, novo_viveiro, pls=300_000, custo_pl=3_000.0, peso_pl=None):
     viveiro = novo_viveiro(10_000.0)
-    corpo = {"viveiro_id": viveiro["id"], "data_povoamento": "2026-08-01",
-             "quantidade_pos_larvas": pls, "custo_aquisicao_pl": custo_pl}
-    if peso_pl is not None:
-        corpo["peso_medio_pl_g"] = peso_pl
-    r = client.post("/api/v1/ciclos/", json=corpo, headers=gestor)
-    assert r.status_code == 201, r.text
-    return f"/api/v1/ciclos/{r.json()['id']}"
+    extra = {} if peso_pl is None else {"peso_medio_pl_g": peso_pl}
+    ciclo = planejar_e_povoar(client, gestor, viveiro["id"], pls=pls, custo_pl=custo_pl, **extra)
+    return f"/api/v1/ciclos/{ciclo['id']}"
 
 
 def _biometria(client, gestor, url, dia, peso):
@@ -384,10 +381,7 @@ def test_melhor_dia_acha_o_salto_que_os_horizontes_fixos_nao_veem(client, gestor
     assert _criar_faixa(client, h, 12, 40, preco=40.0).status_code == 201
     v = client.post("/api/v1/viveiros/", json={"identificacao": unico("VIV"), "area_util_m2": 10_000.0}, headers=h)
     assert v.status_code == 201, v.text
-    c = client.post("/api/v1/ciclos/", json={"viveiro_id": v.json()["id"], "data_povoamento": "2026-08-01",
-                                             "quantidade_pos_larvas": 300_000, "custo_aquisicao_pl": 3_000.0}, headers=h)
-    assert c.status_code == 201, c.text
-    url = f"/api/v1/ciclos/{c.json()['id']}"
+    url = f"/api/v1/ciclos/{planejar_e_povoar(client, h, v.json()['id'])['id']}"
     _biometria(client, h, url, "2026-09-03", 10.0)
     _biometria(client, h, url, "2026-09-15", 11.0)   # ganho 1/12 g/dia: 12 g exatos no dia 12
     body = client.get(f"{url}/simular-despesca/comparativo?custo_diario_rs=3000", headers=h).json()

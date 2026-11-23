@@ -9,6 +9,8 @@ from src.models.auditoria import LogAuditoria
 from src.models.biometria import Biometria
 from src.models.ciclo_produtivo import CicloProdutivo
 from src.models.custo_operacional import CustoOperacional
+from src.models.etapa_preparo import EtapaPreparo
+from src.models.insumo import CompraInsumo, ConsumoInsumo, Insumo
 from src.models.manejo_alimentar import ManejoAlimentar
 from src.models.monitoramento_aerador import MonitoramentoAerador
 from src.models.organizacao import Organizacao
@@ -18,13 +20,18 @@ from src.models.simulacao_despesca import SimulacaoDespesca
 from src.models.tabela_alimentar import TabelaAlimentar
 from src.models.tabela_preco import TabelaPrecoMercado
 from src.models.usuario import Usuario
+from src.models.venda_ciclo import VendaCiclo
 from src.models.viveiro import Viveiro
 
 __all__ = [
     "Alerta",
     "Biometria",
     "CicloProdutivo",
+    "CompraInsumo",
+    "ConsumoInsumo",
     "CustoOperacional",
+    "EtapaPreparo",
+    "Insumo",
     "LogAuditoria",
     "ManejoAlimentar",
     "MonitoramentoAerador",
@@ -35,5 +42,6 @@ __all__ = [
     "TabelaAlimentar",
     "TabelaPrecoMercado",
     "Usuario",
+    "VendaCiclo",
     "Viveiro",
 ]

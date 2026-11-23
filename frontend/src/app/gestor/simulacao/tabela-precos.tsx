@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Check, CheckCircle2, Loader2, Pencil, Plus, Tag, Trash2, X } from "lucide-react";
 import { organizacoesApi, precosApi } from "@/lib/api";
-import { mensagemErro } from "@/lib/utils";
+import { fmtData, fmtMoney, mensagemErro } from "@/lib/utils";
 import type { Organizacao, PrecoMercado, RegraArredondamento } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,10 +18,7 @@ function hoje() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-const fmtMoney = (v: number) =>
-  `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const fmtPeso = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
-const fmtData = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("pt-BR");
 
 const formVazio = () => ({ min: "", max: "", preco: "", incremento: "1", inicio: hoje(), fim: "" });
 

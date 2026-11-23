@@ -6,7 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, model_validator
 
-from src.models.enums import CategoriaCusto
+from src.models.enums import CategoriaCusto, FaseCusto
 
 # Sinônimos aceitos para a categoria (comparação por trecho, em maiúsculas)
 _SINONIMOS_CATEGORIA = (
@@ -26,6 +26,7 @@ class CustoCreate(BaseModel):
     categoria: CategoriaCusto
     descricao: str = Field(..., min_length=3, max_length=255)
     valor_rs: float = Field(..., gt=0)
+    fase: FaseCusto = FaseCusto.CULTIVO
 
     @model_validator(mode="before")
     @classmethod
@@ -57,6 +58,7 @@ class CustoResponse(BaseModel):
     descricao: str
     valor_rs: float
     valor: float | None = None
+    fase: str = "CULTIVO"
     created_at: datetime
 
     @model_validator(mode="before")
@@ -75,6 +77,7 @@ class CustoResponse(BaseModel):
             "descricao": data.descricao,
             "valor_rs": data.valor_rs,
             "valor": data.valor_rs,
+            "fase": data.fase,
             "created_at": data.created_at,
         }
 

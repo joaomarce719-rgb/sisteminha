@@ -5,6 +5,7 @@ from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import ValidationError
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
@@ -18,95 +19,202 @@ from src.services.audit import registrar_auditoria, snapshot
 from src.models.biometria import Biometria
 from src.models.ciclo_produtivo import CicloProdutivo
 from src.models.custo_operacional import CustoOperacional
-from src.models.enums import RoleUsuario, StatusCiclo
+from src.models.enums import CategoriaCusto, RoleUsuario, StatusCiclo
+from src.models.etapa_preparo import EtapaPreparo
+from src.models.insumo import ConsumoInsumo
 from src.models.manejo_alimentar import ManejoAlimentar
+from src.models.tabela_alimentar import TabelaAlimentar
+from src.models.venda_ciclo import VendaCiclo
 from src.models.viveiro import Viveiro
-from src.schemas.ciclo import CicloCreate, CicloEncerrar, CicloResponse, MetricasAtuaisResponse
+from src.schemas.ciclo import (
+    CicloEncerrar,
+    CicloPlanejar,
+    CicloPovoar,
+    CicloReagendar,
+    CicloResponse,
+    MetricasAtuaisResponse,
+)
+from src.schemas.financeiro import FinanceiroCicloResponse
+from src.schemas.etapa_preparo import ETAPAS_SUGERIDAS, STATUS_ETAPA_EM_ABERTO
+from src.schemas.venda import VendaCreate
 from src.services.auth_service import get_current_user, has_role
 from src.services import decision_engine as de
 from src.services.alimentacao import pontos_alimentares
-from src.services.precos import regra_da_organizacao, tabela_vigente
-from src.services.sobrevivencia import confrontar_vivos, ordenar, peso_na_data, sobrevivencia_vigente
-from src.services.regras_ciclo import ciclo_aberto_do_viveiro
+from src.services.sobrevivencia import confrontar_vivos, ordenar, peso_na_data
+from src.services import populacao as pv
+from src.services.historico import resumo_do_ciclo, situacao_atual
+from src.services.insumos import reprocessar_insumo
+from src.services.regras_ciclo import ciclo_aberto_do_viveiro, exigir_povoamento
+from src.services.regras_ciclo import obter_ciclo as buscar_ciclo  # a rota GET se chama obter_ciclo
+from src.services.regras_data import hoje_da_fazenda
+from src.services.vendas import colunas_da_venda, sincronizar_totais_do_ciclo
 
 router = APIRouter(prefix="/api/v1/ciclos", tags=["Ciclos Produtivos"])
 
 
+def _validar_tabela_alimentar(db: Session, tabela_id: UUID | None, organizacao_id: UUID) -> None:
+    if tabela_id is None:
+        return
+    tabela = db.get(TabelaAlimentar, tabela_id)
+    if not tabela or not tabela.ativo or tabela.organizacao_id not in (None, organizacao_id):
+        raise HTTPException(status_code=404, detail="Tabela alimentar não encontrada ou inativa.")
+
+
+def _viveiro_livre(db: Session, viveiro_id: UUID, user, exceto_id: UUID | None = None) -> Viveiro:
+    """Viveiro ativo da organização e sem outro ciclo aberto (PLANEJADO, ATIVO ou PAUSADO)."""
+    viveiro = viveiro_da_organizacao(db, viveiro_id, user)
+    if not viveiro.status_ativo:
+        raise HTTPException(status_code=400, detail="Viveiro inativo.")
+    if ciclo_aberto_do_viveiro(db, viveiro_id, exceto_id=exceto_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Este viveiro já possui um ciclo PLANEJADO, ATIVO ou PAUSADO.",
+        )
+    return viveiro
+
+
+def _ciclo_planejado(db: Session, ciclo_id: UUID, acao: str) -> CicloProdutivo:
+    ciclo = buscar_ciclo(db, ciclo_id)
+    if ciclo.status != StatusCiclo.PLANEJADO:
+        raise HTTPException(status_code=400, detail=f"Somente ciclos PLANEJADOS podem ser {acao}.")
+    return ciclo
+
+
 @router.post("", response_model=CicloResponse, status_code=201)
 @router.post("/", response_model=CicloResponse, status_code=201)
-def criar_ciclo(
-    payload: CicloCreate,
+def planejar_ciclo(
+    payload: CicloPlanejar,
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
 ):
-    """Abre um novo ciclo produtivo em um viveiro (RF-02)."""
-    # Verificar viveiro
-    viveiro = viveiro_da_organizacao(db, payload.viveiro_id, _user)
-    if not viveiro.status_ativo:
-        raise HTTPException(status_code=400, detail="Viveiro inativo.")
+    """Planeja um ciclo: nasce PLANEJADO com as etapas sugeridas do preparo (o povoamento vem depois)."""
+    viveiro = _viveiro_livre(db, payload.viveiro_id, _user)
+    _validar_tabela_alimentar(db, payload.tabela_alimentar_id, viveiro.organizacao_id)
 
-    # Um ciclo aberto (ATIVO ou PAUSADO) por viveiro
-    if ciclo_aberto_do_viveiro(db, payload.viveiro_id):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Este viveiro já possui um ciclo ATIVO ou PAUSADO.",
-        )
-
-    if payload.tabela_alimentar_id is not None:
-        from src.models.tabela_alimentar import TabelaAlimentar
-        tabela = db.get(TabelaAlimentar, payload.tabela_alimentar_id)
-        if (
-            not tabela
-            or not tabela.ativo
-            or tabela.organizacao_id not in (None, viveiro.organizacao_id)
-        ):
-            raise HTTPException(status_code=404, detail="Tabela alimentar não encontrada ou inativa.")
-
-    # Verificar densidade (RN-01)
-    densidade = de.calcular_densidade(payload.quantidade_pos_larvas, viveiro.area_util_m2)
-
-    ciclo_data = payload.model_dump()
-
-    import uuid
-    ciclo_id = uuid.uuid4()
-    ciclo = CicloProdutivo(
-        id=ciclo_id,
-        **ciclo_data,
-        status=StatusCiclo.ATIVO,
-    )
+    ciclo = CicloProdutivo(**payload.model_dump(), status=StatusCiclo.PLANEJADO)
+    ciclo.etapas_preparo = [
+        EtapaPreparo(tipo=tipo, status="PENDENTE", ordem=ordem)
+        for ordem, tipo in enumerate(ETAPAS_SUGERIDAS, start=1)
+    ]
     db.add(ciclo)
     db.flush()
 
-    # Auto-lançar custo de PLs
-    from src.models.custo_operacional import CustoOperacional
-    from src.models.enums import CategoriaCusto
-    custo_pl = CustoOperacional(
-        id=uuid.uuid4(),
+    registrar_auditoria(
+        db=db,
+        acao="PLANEJAR_CICLO",
+        entidade="CicloProdutivo",
+        registro_id=ciclo.id,
+        usuario=_user,
+        dados_novos=snapshot(ciclo),
+    )
+    db.refresh(ciclo)
+    return ciclo
+
+
+@router.post("/{ciclo_id}/povoar", dependencies=[Depends(verificar_ciclo_da_organizacao)], response_model=CicloResponse)
+def povoar_ciclo(
+    ciclo_id: UUID,
+    payload: CicloPovoar,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.GESTOR])),
+):
+    """Povoa o ciclo planejado: grava as pós-larvas, lança o custo delas e ativa o ciclo."""
+    ciclo = _ciclo_planejado(db, ciclo_id, "povoados")
+    if payload.data_povoamento > hoje_da_fazenda():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="A data do povoamento não pode estar no futuro: povoe o ciclo no dia em que as pós-larvas entrarem.",
+        )
+    em_aberto = sum(1 for e in ciclo.etapas_preparo if e.status in STATUS_ETAPA_EM_ABERTO)
+    if em_aberto:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Há {em_aberto} {'etapa' if em_aberto == 1 else 'etapas'} do preparo pendentes ou em "
+            "andamento: marque cada uma como concluída ou não realizada antes de povoar.",
+        )
+    _viveiro_livre(db, ciclo.viveiro_id, _user, exceto_id=ciclo.id)
+
+    antes = snapshot(ciclo)
+    for campo, valor in payload.model_dump().items():
+        setattr(ciclo, campo, valor)
+    ciclo.status = StatusCiclo.ATIVO
+    db.add(CustoOperacional(
         ciclo_id=ciclo.id,
         data_lancamento=payload.data_povoamento,
         categoria=CategoriaCusto.POS_LARVAS,
         descricao=f"Aquisição de {payload.quantidade_pos_larvas:,} PLs",
         valor_rs=payload.custo_aquisicao_pl,
-    )
-    db.add(custo_pl)
+    ))
     db.flush()
 
     registrar_auditoria(
         db=db,
-        acao="CRIAR_CICLO",
+        acao="POVOAR_CICLO",
         entidade="CicloProdutivo",
         registro_id=ciclo.id,
         usuario=_user,
-        dados_novos={
-            "viveiro_id": str(ciclo.viveiro_id),
-            "data_povoamento": str(ciclo.data_povoamento),
-            "quantidade_pos_larvas": ciclo.quantidade_pos_larvas,
-            "custo_aquisicao_pl": float(ciclo.custo_aquisicao_pl),
-            "peso_medio_pl_g": ciclo.peso_medio_pl_g,
-            "laboratorio_origem": ciclo.laboratorio_origem,
-        },
+        dados_anteriores=antes,
+        dados_novos=snapshot(ciclo),
     )
+    db.refresh(ciclo)
+    return ciclo
 
+
+@router.patch(
+    "/{ciclo_id}/planejamento", dependencies=[Depends(verificar_ciclo_da_organizacao)], response_model=CicloResponse
+)
+def reagendar_ciclo(
+    ciclo_id: UUID,
+    payload: CicloReagendar,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.GESTOR])),
+):
+    """Muda data prevista, tabela alimentar ou viveiro do ciclo planejado; o já lançado fica no ciclo."""
+    ciclo = _ciclo_planejado(db, ciclo_id, "reagendados")
+    dados = payload.model_dump(exclude_unset=True)
+    if "viveiro_id" in dados and dados["viveiro_id"] != ciclo.viveiro_id:
+        _viveiro_livre(db, dados["viveiro_id"], _user, exceto_id=ciclo.id)
+    if "tabela_alimentar_id" in dados:
+        _validar_tabela_alimentar(db, dados["tabela_alimentar_id"], ciclo.viveiro.organizacao_id)
+
+    antes = snapshot(ciclo)
+    for campo, valor in dados.items():
+        setattr(ciclo, campo, valor)
+    db.flush()
+
+    registrar_auditoria(
+        db=db,
+        acao="REAGENDAR_CICLO",
+        entidade="CicloProdutivo",
+        registro_id=ciclo.id,
+        usuario=_user,
+        dados_anteriores=antes,
+        dados_novos=snapshot(ciclo),
+    )
+    db.refresh(ciclo)
+    return ciclo
+
+
+@router.post("/{ciclo_id}/cancelar", dependencies=[Depends(verificar_ciclo_da_organizacao)], response_model=CicloResponse)
+def cancelar_ciclo(
+    ciclo_id: UUID,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.GESTOR])),
+):
+    """Cancela um ciclo planejado que não vai acontecer, liberando o viveiro."""
+    ciclo = _ciclo_planejado(db, ciclo_id, "cancelados")
+    ciclo.status = StatusCiclo.CANCELADO
+    db.flush()
+
+    registrar_auditoria(
+        db=db,
+        acao="CANCELAR_CICLO",
+        entidade="CicloProdutivo",
+        registro_id=ciclo.id,
+        usuario=_user,
+        dados_anteriores={"status": StatusCiclo.PLANEJADO.value},
+        dados_novos={"status": ciclo.status.value},
+    )
     db.refresh(ciclo)
     return ciclo
 
@@ -155,15 +263,70 @@ def encerrar_ciclo(
     db: Session = Depends(get_db),
     _user=Depends(has_role([RoleUsuario.GESTOR])),
 ):
-    """Encerra o ciclo com dados da despesca real (RF-02)."""
+    """Encerra o ciclo: biomassa colhida e receita real passam a ser a soma das vendas (RF-02).
+
+    Biomassa e receita no corpo viram uma venda DESPESCA_FINAL com o peso médio da última biometria;
+    sem elas valem as vendas já lançadas, que precisam incluir ao menos uma despesca final.
+    """
     result = db.execute(select(CicloProdutivo).where(CicloProdutivo.id == ciclo_id))
     ciclo = result.scalar_one_or_none()
     if not ciclo:
         raise HTTPException(status_code=404, detail="Ciclo não encontrado.")
     if ciclo.status not in (StatusCiclo.ATIVO, StatusCiclo.PAUSADO):
         raise HTTPException(status_code=400, detail="Somente ciclos ATIVOS ou PAUSADOS podem ser encerrados.")
-    if payload.data_despesca_real < ciclo.data_povoamento:
+
+    peso_final_g = peso_na_data(ciclo.biometrias, date.max)  # a da última biometria
+    if peso_final_g is None:
+        raise HTTPException(status_code=422, detail="Registre ao menos uma biometria antes de encerrar o ciclo.")
+    pendentes = db.scalar(
+        select(func.count()).select_from(ConsumoInsumo).where(
+            ConsumoInsumo.ciclo_id == ciclo.id, ConsumoInsumo.preco_unitario_rs.is_(None)
+        )
+    )
+    if pendentes:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Há {pendentes} {'uso de insumo pendente' if pendentes == 1 else 'usos de insumo pendentes'} "
+            "de valor: registre a compra faltante ou corrija o preço do uso antes de encerrar.",
+        )
+
+    datas_finais = list(db.scalars(
+        select(VendaCiclo.data_venda).where(VendaCiclo.ciclo_id == ciclo.id, VendaCiclo.tipo == "DESPESCA_FINAL")
+    ))
+    hoje = hoje_da_fazenda()
+    data_venda_nova = payload.data_despesca_real or hoje
+    if payload.biomassa_colhida_kg is not None:
+        datas_finais.append(data_venda_nova)
+    if not datas_finais:
+        raise HTTPException(
+            status_code=422,
+            detail="O encerramento exige ao menos uma venda de despesca final: "
+            "informe biomassa e receita ou lance a venda antes.",
+        )
+    data_despesca = payload.data_despesca_real or max(datas_finais)
+    if data_despesca < ciclo.data_povoamento:
         raise HTTPException(status_code=422, detail="A despesca não pode ser anterior ao povoamento.")
+
+    venda = None
+    if payload.biomassa_colhida_kg is not None:
+        try:
+            nova = VendaCreate(
+                data_venda=data_venda_nova,
+                tipo="DESPESCA_FINAL",
+                biomassa_kg=payload.biomassa_colhida_kg,
+                peso_medio_g=peso_final_g,
+                preco_kg=payload.receita_real_rs / payload.biomassa_colhida_kg,
+                retroativo=data_venda_nova < hoje,
+            )
+        except ValidationError:
+            raise HTTPException(
+                status_code=422, detail="Biomassa, receita e peso médio resultam em valores fora dos limites da venda."
+            )
+        colunas = colunas_da_venda(db, ciclo, nova)
+        # a receita informada vale mais que o preço por kg arredondado a centavos
+        colunas["valor_total_rs"] = round(payload.receita_real_rs, 2)
+        venda = VendaCiclo(ciclo_id=ciclo.id, **colunas)
+        db.add(venda)
 
     dados_ant = {
         "status": ciclo.status.value,
@@ -173,11 +336,9 @@ def encerrar_ciclo(
     }
 
     ciclo.status = StatusCiclo.FINALIZADO
-    ciclo.data_despesca_real = payload.data_despesca_real
-    ciclo.biomassa_colhida_kg = payload.biomassa_colhida_kg
-    ciclo.receita_real_rs = payload.receita_real_rs
+    ciclo.data_despesca_real = data_despesca
     db.add(ciclo)
-    db.flush()
+    sincronizar_totais_do_ciclo(db, ciclo)
 
     registrar_auditoria(
         db=db,
@@ -191,6 +352,7 @@ def encerrar_ciclo(
             "data_despesca_real": str(ciclo.data_despesca_real),
             "biomassa_colhida_kg": ciclo.biomassa_colhida_kg,
             "receita_real_rs": float(ciclo.receita_real_rs),
+            "venda_despesca_final_id": str(venda.id) if venda else None,
         },
     )
 
@@ -274,9 +436,10 @@ def metricas_atuais(
     ciclo = result.scalar_one_or_none()
     if not ciclo:
         raise HTTPException(status_code=404, detail="Ciclo não encontrado.")
+    exigir_povoamento(ciclo)
 
     viveiro = ciclo.viveiro
-    hoje = date.today()
+    hoje = hoje_da_fazenda()
     dias_cultivo = (hoje - ciclo.data_povoamento).days
 
     # Densidade
@@ -286,18 +449,17 @@ def metricas_atuais(
     # Entradas faltantes para rastreabilidade (RN-015)
     entradas_faltantes: list[str] = []
 
-    # Última biometria
-    biometrias = sorted(ciclo.biometrias, key=lambda b: b.data_medicao)
-    if biometrias:
-        peso_medio = biometrias[-1].peso_medio_g
-    else:
-        peso_medio = None
+    # Peso da última biometria, sobrevivência vigente (mortos, consumo × tabela e fuzzy),
+    # população descontados os animais vendidos, biomassa e preço de hoje
+    atual = situacao_atual(db, ciclo, hoje)
+    peso_medio, taxa_sobrev, pop_atual = atual.peso_medio_g, atual.taxa_sobrevivencia_pct, atual.populacao
+    biomassa_atual, preco_kg = atual.biomassa_kg, atual.preco_kg
+    if peso_medio is None:
         entradas_faltantes.append("biometria")
 
-    # Sobrevivência estimada mais recente (mortos contados, consumo × tabela e fuzzy)
+    biometrias = sorted(ciclo.biometrias, key=lambda b: b.data_medicao)
     manejos = ordenar(ciclo.manejos_alimentares)
-    taxa_sobrev = sobrevivencia_vigente(manejos)
-
+    vendas = ciclo.vendas
     pontos = pontos_alimentares(ciclo, db)
     confronto = confrontar_vivos(
         manejos,
@@ -305,11 +467,10 @@ def metricas_atuais(
         lambda data: peso_na_data(biometrias, data),
         lambda peso: de.taxa_alimentar(peso, pontos),
         hoje,
+        vendidos_ate=lambda data: pv.animais_vendidos_ate(vendas, data),
     )
 
-    # População e biomassa
-    pop_atual = de.calcular_populacao_atual(ciclo.quantidade_pos_larvas, taxa_sobrev)
-    biomassa_atual = de.calcular_biomassa_kg(pop_atual, peso_medio) if peso_medio is not None else None
+    densidade_atual = de.calcular_densidade(pop_atual, viveiro.area_util_m2)
     # Biomassa inicial = biomassa no povoamento (PLs × peso da PL); sem o peso, considerada desprezível
     biomassa_inicial = de.calcular_biomassa_kg(ciclo.quantidade_pos_larvas, ciclo.peso_medio_pl_g or 0.0)
 
@@ -320,7 +481,7 @@ def metricas_atuais(
     fca = None
     class_fca = None
     if biomassa_atual is not None:
-        fca = de.calcular_fca(racao_total, biomassa_atual, biomassa_inicial)
+        fca = de.calcular_fca(racao_total, biomassa_atual, biomassa_inicial, pv.biomassa_vendida_kg(vendas))
         class_fca = de.classificar_fca(fca)
 
     # Clifford
@@ -334,18 +495,12 @@ def metricas_atuais(
     # Custos
     custos_vals = [float(c.valor_rs) for c in ciclo.custos_operacionais]
 
-    # Preço de mercado vigente
-    preco_kg = None
-    if peso_medio is not None:
-        preco_kg = de.buscar_preco_por_gramatura(
-            peso_medio,
-            tabela_vigente(db, viveiro.organizacao_id, hoje),
-            regra_da_organizacao(db, viveiro.organizacao_id),
-        )
     if preco_kg is None:
         entradas_faltantes.append("preco_mercado")
 
-    metricas = de.calcular_metricas_economicas(custos_vals, biomassa_atual, preco_kg)
+    receita_realizada = pv.receita_realizada_rs(vendas)
+    # lucro_operacional = lucro estimado se despescar hoje, já com a receita das vendas
+    metricas = de.calcular_metricas_economicas(custos_vals, biomassa_atual, preco_kg, receita_realizada)
 
     # Restringir dados financeiros conforme perfil
     user = _user
@@ -356,6 +511,7 @@ def metricas_atuais(
         viveiro_identificacao=viveiro.identificacao,
         dias_cultivo=dias_cultivo,
         densidade_estocagem=round(densidade, 2),
+        densidade_atual=round(densidade_atual, 2),
         alerta_hiperdensidade=alerta_hiper,
         populacao_inicial=ciclo.quantidade_pos_larvas,
         taxa_sobrevivencia_fuzzy_pct=taxa_sobrev,
@@ -373,8 +529,24 @@ def metricas_atuais(
         lucro_operacional_rs=round(metricas.lucro_operacional, 2) if (metricas.lucro_operacional is not None and mostrar_financeiro) else None,
         margem_operacional_pct=round(metricas.margem_operacional_pct, 2) if (metricas.margem_operacional_pct is not None and mostrar_financeiro) else None,
         preco_venda_atual_rs_kg=preco_kg if mostrar_financeiro else None,
+        receita_realizada_rs=round(receita_realizada, 2) if mostrar_financeiro else None,
+        lucro_realizado_rs=round(receita_realizada - metricas.custo_operacional_total, 2) if mostrar_financeiro else None,
         entradas_faltantes=entradas_faltantes,
     )
+
+
+@router.get(
+    "/{ciclo_id}/financeiro", dependencies=[Depends(verificar_ciclo_da_organizacao)],
+    response_model=FinanceiroCicloResponse,
+)
+def financeiro_do_ciclo(
+    ciclo_id: UUID,
+    db: Session = Depends(get_db),
+    _user=Depends(has_role([RoleUsuario.GESTOR])),
+):
+    """Custos por fase e categoria, vendas, lucro realizado e lucro estimado se despescar hoje (seção 5.6)."""
+    resumo = resumo_do_ciclo(db, buscar_ciclo(db, ciclo_id), mostrar_valores=True)
+    return FinanceiroCicloResponse(**{**resumo, "vendas": resumo["vendas_lista"]})
 
 
 @router.get("/{ciclo_id}/exportar-csv", dependencies=[Depends(verificar_ciclo_da_organizacao)])
@@ -401,8 +573,8 @@ def exportar_ciclo_csv(
     writer.writerow([
         "POVOAMENTO",
         ciclo.data_povoamento.isoformat(),
-        f"PLs: {ciclo.quantidade_pos_larvas}",
-        f"Custo: R$ {float(ciclo.custo_aquisicao_pl):.2f}".replace(".", ","),
+        f"PLs: {ciclo.quantidade_pos_larvas or ''}",
+        f"Custo: R$ {float(ciclo.custo_aquisicao_pl or 0):.2f}".replace(".", ","),
         ciclo.laboratorio_origem or "",
         "",
     ])
@@ -452,8 +624,14 @@ def deletar_ciclo(
     if not ciclo:
         raise HTTPException(status_code=404, detail="Ciclo não encontrado.")
     registrar_auditoria(db, "EXCLUIR", "CicloProdutivo", ciclo.id, _user, dados_anteriores=snapshot(ciclo))
+    # os usos somem por CASCADE; o preço médio dos insumos usados muda para os outros ciclos
+    insumos_usados = db.scalars(
+        select(ConsumoInsumo.insumo_id).where(ConsumoInsumo.ciclo_id == ciclo.id).distinct()
+    ).all()
     db.delete(ciclo)
     db.flush()
+    for insumo_id in insumos_usados:
+        reprocessar_insumo(db, insumo_id, _user)
     return {"detail": "Ciclo excluído com sucesso.", "id": str(ciclo_id)}
 
 

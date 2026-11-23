@@ -1,6 +1,6 @@
 """SAD Carcinicultura — Rotas do Simulador de Despesca ΔV (RF-06, RN-07)."""
 
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -15,7 +15,7 @@ from src.services.escopo import (
 )
 from src.services.audit import registrar_auditoria, snapshot
 from src.models.ciclo_produtivo import CicloProdutivo
-from src.models.enums import CategoriaCusto, RoleUsuario, StatusCiclo
+from src.models.enums import CategoriaCusto, FaseCusto, RoleUsuario, StatusCiclo
 from src.models.simulacao_despesca import SimulacaoDespesca
 from src.schemas.simulacao import (
     SimulacaoComparativaResponse,
@@ -26,15 +26,16 @@ from src.schemas.simulacao import (
 )
 from src.services.alimentacao import pontos_alimentares
 from src.services.auth_service import has_role
+from src.services.regras_data import hoje_da_fazenda
 from src.services.precos import regra_da_organizacao, tabela_vigente
 from src.services.sobrevivencia import sobrevivencia_vigente
+from src.services.populacao import populacao_vigente, receita_realizada_rs
 
 from src.services.decision_engine import (
     buscar_preco_por_gramatura,
     peso_para_preco,
     calcular_biomassa_kg,
     calcular_ganho_diario,
-    calcular_populacao_atual,
     calcular_racao_diaria,
     estimar_custo_diario,
     estimar_mortalidade_diaria,
@@ -75,7 +76,7 @@ def _executar_simulacao(
     if ciclo.status != StatusCiclo.ATIVO:
         raise HTTPException(status_code=400, detail="Ciclo não está ativo.")
 
-    hoje = date.today()
+    hoje = hoje_da_fazenda()
     dias_cultivo = (hoje - ciclo.data_povoamento).days
 
     # Biometrias
@@ -96,7 +97,9 @@ def _executar_simulacao(
     # Sobrevivência estimada (mortos contados, consumo × tabela e fuzzy)
     taxa_sobrev = sobrevivencia_vigente(ciclo.manejos_alimentares)
 
-    pop_atual = calcular_populacao_atual(ciclo.quantidade_pos_larvas, taxa_sobrev)
+    vendas = ciclo.vendas
+    pop_atual = populacao_vigente(ciclo.quantidade_pos_larvas, taxa_sobrev, vendas)
+    receita_realizada = receita_realizada_rs(vendas)
     biomassa_atual = calcular_biomassa_kg(pop_atual, peso_atual)
     mortalidade_diaria = estimar_mortalidade_diaria(taxa_sobrev, dias_cultivo)
 
@@ -152,6 +155,7 @@ def _executar_simulacao(
             custos_fixos_total=sum(
                 float(c.valor_rs) for c in ciclo.custos_operacionais
                 if c.categoria not in (CategoriaCusto.RACAO, CategoriaCusto.POS_LARVAS)
+                and c.fase == FaseCusto.CULTIVO  # preparo e despesca são pontuais: não entram no custo diário
             ),
             dias_cultivo=dias_cultivo,
             racao_diaria_hoje_kg=racao_hoje_kg,
@@ -190,9 +194,10 @@ def _executar_simulacao(
         preco_futuro_kg=preco_futuro,
         custo_diario_racao_energia=custo_diario_total,
         biomassa_atual_kg=biomassa_atual,
+        receita_realizada_rs=receita_realizada,
     )
 
-    lo_atual = (biomassa_atual * preco_atual) - co_total
+    lo_atual = (biomassa_atual * preco_atual) + receita_realizada - co_total
     simulacao_id = None
     if persistir:
         simulacao_id = _persistir(db, ciclo_id, dias_horizonte, resultado)

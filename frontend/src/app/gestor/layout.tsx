@@ -17,6 +17,7 @@ import {
   Shield,
   ShieldCheck,
   Utensils,
+  Package,
 } from "lucide-react";
 import { clearToken, isSuperadmin } from "@/lib/api";
 import { useSessao } from "@/lib/sessao";
@@ -26,6 +27,7 @@ const NAV_ITEMS = [
   { href: "/gestor/viveiros", label: "Viveiros & Ciclos", icon: Shell },
   { href: "/gestor/simulacao", label: "Simulador ΔV", icon: TrendingUp },
   { href: "/gestor/financeiro", label: "Financeiro", icon: DollarSign },
+  { href: "/gestor/insumos", label: "Insumos", icon: Package },
   { href: "/gestor/tabelas-alimentares", label: "Tabelas Alimentares", icon: Utensils },
   { href: "/gestor/painel-noturno", label: "Painel Noturno", icon: Moon },
   { href: "/campo/manejo", label: "Registro de Campo", icon: Utensils },

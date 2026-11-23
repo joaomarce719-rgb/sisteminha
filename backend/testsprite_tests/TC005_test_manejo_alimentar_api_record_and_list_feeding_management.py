@@ -110,10 +110,19 @@ def test_manejo_alimentar_api_record_and_list_feeding_management():
         ciclos_url = f"{BASE_URL}/api/v1/ciclos/"
         cycle_payload = {
             "viveiro_id": pond_id,
-            "descricao": "Test cycle created for maneio test",
-            "data_inicio": time.strftime("%Y-%m-%d")
+            "data_povoamento": time.strftime("%Y-%m-%d")
         }
         resp = session.post(ciclos_url, json=cycle_payload, headers=auth_headers, timeout=timeout)
+        assert resp.status_code in (200, 201), f"Plan cycle failed: {resp.status_code} {resp.text}"
+        planned_id = resp.json()["id"]
+        steps_url = f"{ciclos_url}{planned_id}/etapas-preparo"
+        for step in session.get(steps_url, headers=auth_headers, timeout=timeout).json():
+            session.patch(f"{steps_url}/{step['id']}", json={"status": "NAO_REALIZADA"},
+                          headers=auth_headers, timeout=timeout)
+        resp = session.post(f"{ciclos_url}{planned_id}/povoar",
+                            json={"data_povoamento": time.strftime("%Y-%m-%d"), "quantidade_pos_larvas": 10000,
+                                  "custo_aquisicao_pl": 100.0},
+                            headers=auth_headers, timeout=timeout)
         assert resp.status_code in (200, 201), f"Create cycle failed: {resp.status_code} {resp.text}"
         cycle_json = {}
         try:

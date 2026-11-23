@@ -26,13 +26,16 @@ import {
   Download,
   Pause,
   Play,
+  Package,
+  Receipt,
+  ClipboardList,
+  History,
 } from "lucide-react";
 import {
   viveirosApi,
   ciclosApi,
   biometriasApi,
   manejosApi,
-  tabelasAlimentaresApi,
 } from "@/lib/api";
 import { mensagemErro } from "@/lib/utils";
 import { resumoConfronto } from "@/lib/confronto";
@@ -43,7 +46,6 @@ import type {
   Biometria,
   ManejoAlimentar,
   RecomendacaoAlimentar,
-  TabelaAlimentar,
 } from "@/lib/types";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -52,201 +54,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MetricCard } from "@/components/ui/metric-card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { AbaInsumosCiclo } from "@/components/insumos/aba-insumos-ciclo";
+import { fmtData, fmtMoney, fmtQtd } from "@/components/insumos/lista-usos-insumo";
+import { VendasCiclo, useVendasCiclo } from "@/components/viveiro/vendas-ciclo";
+import { HistoricoViveiro } from "@/components/viveiro/historico-viveiro";
+import { PlanejarCicloDialog, PreparoCiclo } from "@/components/viveiro/preparo-ciclo";
+import { hojeLocal } from "@/components/ui/data-lancamento";
 import { toast } from "@/components/ui/toast";
-
-function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
-// ── Modal Iniciar Ciclo com Shadcn Dialog ───────────
-function IniciarCicloDialog({
-  open,
-  onClose,
-  onCreated,
-  viveiroId,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onCreated: () => void;
-  viveiroId: string;
-}) {
-  const [form, setForm] = useState({
-    data_povoamento: new Date().toISOString().split("T")[0],
-    quantidade_pos_larvas: "",
-    custo_aquisicao_pl: "",
-    peso_medio_pl_g: "",
-    laboratorio_origem: "",
-    tabela_alimentar_id: "",
-  });
-  const [tabelas, setTabelas] = useState<TabelaAlimentar[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (open) {
-      tabelasAlimentaresApi
-        .listar(true)
-        .then((data) => {
-          setTabelas(data);
-          const padrao = data.find((t) => t.is_padrao);
-          if (padrao) {
-            setForm((prev) => ({ ...prev, tabela_alimentar_id: padrao.id }));
-          }
-        })
-        .catch(() => {});
-    }
-  }, [open]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    try {
-      await ciclosApi.criar({
-        viveiro_id: viveiroId,
-        data_povoamento: form.data_povoamento,
-        quantidade_pos_larvas: parseInt(form.quantidade_pos_larvas),
-        custo_aquisicao_pl: parseFloat(form.custo_aquisicao_pl),
-        peso_medio_pl_g: form.peso_medio_pl_g ? parseFloat(form.peso_medio_pl_g) : null,
-        laboratorio_origem: form.laboratorio_origem.trim() || null,
-        tabela_alimentar_id: form.tabela_alimentar_id || null,
-      });
-      toast.success(
-        "Ciclo produtivo iniciado!",
-        `${parseInt(form.quantidade_pos_larvas).toLocaleString("pt-BR")} pós-larvas povoadas.`
-      );
-      onCreated();
-      onClose();
-    } catch (err) {
-      setError(mensagemErro(err, "Erro ao iniciar ciclo"));
-      toast.error("Falha ao iniciar ciclo", mensagemErro(err, "Verifique os dados"));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onClose={onClose} title="Iniciar Ciclo Produtivo" description="Povoamento de pós-larvas no viveiro">
-      {error && (
-        <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 border border-red-200 text-red-600 text-sm mb-4">
-          <AlertTriangle className="w-4 h-4 shrink-0" />
-          {error}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <Label htmlFor="data_povoamento">Data do Povoamento *</Label>
-          <Input
-            id="data_povoamento"
-            required
-            type="date"
-            value={form.data_povoamento}
-            onChange={(e) => setForm({ ...form, data_povoamento: e.target.value })}
-            className="mt-1"
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="quantidade_pos_larvas">Quantidade de Pós-Larvas (PLs) *</Label>
-          <Input
-            id="quantidade_pos_larvas"
-            required
-            type="number"
-            min="1"
-            inputMode="numeric"
-            value={form.quantidade_pos_larvas}
-            onChange={(e) => setForm({ ...form, quantidade_pos_larvas: e.target.value })}
-            placeholder="Ex: 250000"
-            className="mt-1"
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="custo_aquisicao_pl">Custo Total de Aquisição das PLs (R$) *</Label>
-          <Input
-            id="custo_aquisicao_pl"
-            required
-            type="number"
-            min="0"
-            step="0.01"
-            inputMode="decimal"
-            value={form.custo_aquisicao_pl}
-            onChange={(e) => setForm({ ...form, custo_aquisicao_pl: e.target.value })}
-            placeholder="Ex: 3500.00"
-            className="mt-1"
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="peso_medio_pl_g">Peso Médio da PL no Povoamento (g)</Label>
-          <Input
-            id="peso_medio_pl_g"
-            type="number"
-            min="0"
-            max="5"
-            step="0.001"
-            inputMode="decimal"
-            value={form.peso_medio_pl_g}
-            onChange={(e) => setForm({ ...form, peso_medio_pl_g: e.target.value })}
-            placeholder="Ex: 0.01"
-            className="mt-1"
-          />
-          <p className="text-xs text-slate-500 mt-1">
-            Base da biomassa inicial no cálculo do FCA. Uma PL recém-saída do laboratório pesa cerca de 0.01 g; juvenis de berçário pesam mais. Se ficar vazio, a biomassa inicial é considerada desprezível.
-          </p>
-        </div>
-
-        <div>
-          <Label htmlFor="laboratorio_origem">Laboratório de Origem / Fornecedor</Label>
-          <Input
-            id="laboratorio_origem"
-            value={form.laboratorio_origem}
-            onChange={(e) => setForm({ ...form, laboratorio_origem: e.target.value })}
-            placeholder="Ex: Aquagenetics, Larvicultura Norte"
-            className="mt-1"
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="tabela_alimentar_id">Tabela de Arraçoamento (RF-010)</Label>
-          <select
-            id="tabela_alimentar_id"
-            value={form.tabela_alimentar_id}
-            onChange={(e) => setForm({ ...form, tabela_alimentar_id: e.target.value })}
-            className="w-full mt-1 text-sm h-10 px-3 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          >
-            {tabelas.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.nome} (v{t.versao}) {t.is_padrao ? "★ [Padrão]" : ""}
-              </option>
-            ))}
-            {tabelas.length === 0 && (
-              <option value="">Clifford (1992) — Padrão do Sistema</option>
-            )}
-          </select>
-          <p className="text-[11px] text-slate-400 mt-1">
-            Define os pontos de calibração utilizados no cálculo algorítmico da ração diária
-          </p>
-        </div>
-
-        <div className="pt-2 flex gap-3">
-          <Button type="button" variant="outline" onClick={onClose} className="flex-1">
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={loading} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white">
-            {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Activity className="w-4 h-4 mr-2" />}
-            Iniciar Ciclo
-          </Button>
-        </div>
-      </form>
-    </Dialog>
-  );
-}
 
 // ── Modal Biometria com Shadcn Dialog ───────────────
 function BiometriaDialog({
@@ -553,6 +367,8 @@ function ManejoDialog({
 }
 
 // ── Modal Encerrar Ciclo com Shadcn Dialog ──────────
+// A receita do ciclo é a soma das vendas: sem despesca final lançada, os dois campos abaixo criam essa venda;
+// com ela, enviar biomassa e receita de novo dobraria os totais, então o diálogo só confirma o encerramento.
 function EncerrarCicloDialog({
   open,
   onClose,
@@ -564,27 +380,39 @@ function EncerrarCicloDialog({
   onDone: () => void;
   cicloId: string;
 }) {
+  const { vendas, falhou } = useVendasCiclo(cicloId);
   const [form, setForm] = useState({
-    data_despesca_real: new Date().toISOString().split("T")[0],
+    data_despesca_real: hojeLocal(),
     biomassa_colhida_kg: "",
     receita_real_rs: "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const finais = (vendas ?? []).filter((v) => v.tipo === "DESPESCA_FINAL");
+  const temFinal = finais.length > 0;
+  const biomassaFinal = finais.reduce((soma, v) => soma + v.biomassa_kg, 0);
+  const receitaFinal = finais.reduce((soma, v) => soma + v.valor_total_rs, 0);
+  const dataUltimaFinal = finais.reduce((maior, v) => (v.data_venda > maior ? v.data_venda : maior), "");
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      await ciclosApi.encerrar(cicloId, {
-        data_despesca_real: form.data_despesca_real,
-        biomassa_colhida_kg: parseFloat(form.biomassa_colhida_kg),
-        receita_real_rs: parseFloat(form.receita_real_rs),
-      });
+      await ciclosApi.encerrar(
+        cicloId,
+        temFinal
+          ? {}
+          : {
+              data_despesca_real: form.data_despesca_real,
+              biomassa_colhida_kg: parseFloat(form.biomassa_colhida_kg),
+              receita_real_rs: parseFloat(form.receita_real_rs),
+            }
+      );
       toast.success(
         "Ciclo produtivo encerrado com sucesso!",
-        `Despesca de ${parseFloat(form.biomassa_colhida_kg).toLocaleString("pt-BR")} kg registrada.`
+        `Despesca de ${(temFinal ? biomassaFinal : parseFloat(form.biomassa_colhida_kg)).toLocaleString("pt-BR")} kg registrada.`
       );
       onDone();
       onClose();
@@ -606,55 +434,94 @@ function EncerrarCicloDialog({
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <Label htmlFor="data_despesca">Data da Despesca Efetiva *</Label>
-          <Input
-            id="data_despesca"
-            required
-            type="date"
-            value={form.data_despesca_real}
-            onChange={(e) => setForm({ ...form, data_despesca_real: e.target.value })}
-            className="mt-1"
-          />
-        </div>
+        {falhou && (
+          <p className="text-sm text-red-600">
+            Não foi possível ler as vendas do ciclo, então o encerramento está bloqueado. Feche e tente de novo.
+          </p>
+        )}
+        {vendas === null && !falhou && (
+          <div className="flex justify-center py-4">
+            <Loader2 className="w-5 h-5 text-sky-500 animate-spin" />
+          </div>
+        )}
 
-        <div>
-          <Label htmlFor="biomassa_colhida">Biomassa Real Colhida (kg) *</Label>
-          <Input
-            id="biomassa_colhida"
-            required
-            type="number"
-            step="0.01"
-            min="0.01"
-            inputMode="decimal"
-            value={form.biomassa_colhida_kg}
-            onChange={(e) => setForm({ ...form, biomassa_colhida_kg: e.target.value })}
-            placeholder="Ex: 3450.00"
-            className="mt-1"
-          />
-        </div>
+        {vendas !== null && temFinal && (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900 space-y-1">
+            <p>
+              Despesca final já lançada: <strong>{finais.length === 1 ? "1 venda" : `${finais.length} vendas`}</strong>,{" "}
+              <strong>{fmtQtd(biomassaFinal)} kg</strong> e <strong>{fmtMoney(receitaFinal)}</strong>.
+            </p>
+            <p>
+              O ciclo será encerrado na data da última venda final ({fmtData(dataUltimaFinal)}). Para lançar mais
+              cargas, feche este diálogo e use a aba Vendas.
+            </p>
+          </div>
+        )}
 
-        <div>
-          <Label htmlFor="receita_real">Receita Total Realizada (R$) *</Label>
-          <Input
-            id="receita_real"
-            required
-            type="number"
-            step="0.01"
-            min="0"
-            inputMode="decimal"
-            value={form.receita_real_rs}
-            onChange={(e) => setForm({ ...form, receita_real_rs: e.target.value })}
-            placeholder="Ex: 86250.00"
-            className="mt-1"
-          />
-        </div>
+        {vendas !== null && !temFinal && (
+          <>
+            <p className="text-xs text-slate-500">
+              Nenhuma venda de despesca final lançada: os valores abaixo criam essa venda, com o peso médio da última
+              biometria.
+            </p>
+            <div>
+              <Label htmlFor="data_despesca">Data da Despesca Efetiva *</Label>
+              <Input
+                id="data_despesca"
+                required
+                type="date"
+                max={hojeLocal()}
+                value={form.data_despesca_real}
+                onChange={(e) => setForm({ ...form, data_despesca_real: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="biomassa_colhida">Biomassa Real Colhida (kg) *</Label>
+              <Input
+                id="biomassa_colhida"
+                required
+                type="number"
+                step="0.01"
+                min="0.01"
+                max="9999999999"
+                inputMode="decimal"
+                value={form.biomassa_colhida_kg}
+                onChange={(e) => setForm({ ...form, biomassa_colhida_kg: e.target.value })}
+                placeholder="Ex: 3450.00"
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="receita_real">Receita Total Realizada (R$) *</Label>
+              <Input
+                id="receita_real"
+                required
+                type="number"
+                step="0.01"
+                min="0"
+                max="9999999999.99"
+                inputMode="decimal"
+                value={form.receita_real_rs}
+                onChange={(e) => setForm({ ...form, receita_real_rs: e.target.value })}
+                placeholder="Ex: 86250.00"
+                className="mt-1"
+              />
+            </div>
+          </>
+        )}
+
+        <p className="text-xs text-slate-500">
+          A receita do ciclo é a soma de todas as vendas lançadas (desbastes e despesca final).
+        </p>
 
         <div className="pt-2 flex gap-3">
           <Button type="button" variant="outline" onClick={onClose} className="flex-1">
             Cancelar
           </Button>
-          <Button type="submit" disabled={loading} className="flex-1 bg-red-600 hover:bg-red-700 text-white">
+          <Button type="submit" disabled={loading || vendas === null} className="flex-1 bg-red-600 hover:bg-red-700 text-white">
             {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <XCircle className="w-4 h-4 mr-2" />}
             Confirmar Despesca
           </Button>
@@ -671,6 +538,7 @@ export default function ViveiroDetalhePage() {
 
   const [viveiro, setViveiro] = useState<Viveiro | null>(null);
   const [cicloAtivo, setCicloAtivo] = useState<CicloProdutivo | null>(null);
+  const [cicloPlanejado, setCicloPlanejado] = useState<CicloProdutivo | null>(null);
   const [metricas, setMetricas] = useState<MetricasAtuais | null>(null);
   const [biometrias, setBiometrias] = useState<Biometria[]>([]);
   const [manejos, setManejos] = useState<ManejoAlimentar[]>([]);
@@ -732,6 +600,8 @@ export default function ViveiroDetalhePage() {
 
       const ciclo = cycs.find((c) => c.status === "ATIVO" || c.status === "PAUSADO") || null;
       setCicloAtivo(ciclo);
+      // O ciclo em preparo ainda não tem pós-larvas: nunca pede métricas nem recomendação
+      setCicloPlanejado(cycs.find((c) => c.status === "PLANEJADO") || null);
 
       if (ciclo) {
         const [met, bios, mans, rec] = await Promise.all([
@@ -839,13 +709,15 @@ export default function ViveiroDetalhePage() {
         {/* Botões de Ação */}
         <div className="flex flex-wrap gap-2 pt-2 sm:pt-0">
           {!cicloAtivo ? (
-            <Button
-              onClick={() => setShowCicloModal(true)}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-md shadow-emerald-600/20"
-            >
-              <Activity className="w-4 h-4 mr-2" />
-              Iniciar Novo Ciclo
-            </Button>
+            !cicloPlanejado && (
+              <Button
+                onClick={() => setShowCicloModal(true)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-md shadow-emerald-600/20"
+              >
+                <ClipboardList className="w-4 h-4 mr-2" />
+                Planejar Novo Ciclo
+              </Button>
+            )
           ) : (
             <>
               <Button
@@ -914,27 +786,33 @@ export default function ViveiroDetalhePage() {
         </div>
       </div>
 
-      {/* Alerta de Viveiro Sem Ciclo Ativo */}
-      {!cicloAtivo && (
+      {/* Ciclo planejado: painel de preparo (etapas, insumos, custos e povoamento) */}
+      {cicloPlanejado && <PreparoCiclo ciclo={cicloPlanejado} onAlterado={loadData} />}
+
+      {/* Alerta de Viveiro Livre */}
+      {!cicloAtivo && !cicloPlanejado && (
         <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center shadow-sm">
           <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center mx-auto mb-4">
-            <Activity className="w-7 h-7" />
+            <ClipboardList className="w-7 h-7" />
           </div>
           <h3 className="text-lg font-bold text-slate-900 mb-1">
-            Viveiro pronto para povoamento
+            Viveiro livre para um novo ciclo
           </h3>
           <p className="text-sm text-slate-500 mb-6 max-w-sm mx-auto">
-            Não há ciclo em curso neste viveiro. Cadastre um novo lote de pós-larvas para ativar o modelo preditivo.
+            Não há ciclo em curso neste viveiro. Planeje o ciclo: o preparo do viveiro vem antes do povoamento com pós-larvas.
           </p>
           <Button
             onClick={() => setShowCicloModal(true)}
             className="bg-emerald-600 hover:bg-emerald-700 text-white"
           >
             <Plus className="w-4 h-4 mr-2" />
-            Iniciar Ciclo de Cultivo
+            Planejar Ciclo de Cultivo
           </Button>
         </div>
       )}
+
+      {/* Sem ciclo em curso não há abas: o histórico (ciclos finalizados) aparece direto */}
+      {!cicloAtivo && <HistoricoViveiro viveiroId={viveiroId} />}
 
       {/* Conteúdo do Ciclo Ativo */}
       {cicloAtivo && (
@@ -945,7 +823,7 @@ export default function ViveiroDetalhePage() {
               <div className="flex items-center gap-2">
                 <CalendarDays className="w-4 h-4 text-emerald-400" />
                 <span className="text-xs text-slate-300">
-                  Povoamento: <strong className="text-white ml-1">{fmtDate(cicloAtivo.data_povoamento)}</strong>
+                  Povoamento: <strong className="text-white ml-1">{fmtData(cicloAtivo.data_povoamento)}</strong>
                 </span>
               </div>
 
@@ -959,7 +837,7 @@ export default function ViveiroDetalhePage() {
               <div className="flex items-center gap-2">
                 <Bug className="w-4 h-4 text-ocean-400" />
                 <span className="text-xs text-slate-300">
-                  Estocagem: <strong className="text-white ml-1">{cicloAtivo.quantidade_pos_larvas.toLocaleString("pt-BR")} PLs</strong>
+                  Estocagem: <strong className="text-white ml-1">{cicloAtivo.quantidade_pos_larvas?.toLocaleString("pt-BR") ?? "—"} PLs</strong>
                 </span>
               </div>
 
@@ -993,6 +871,18 @@ export default function ViveiroDetalhePage() {
                 <Utensils className="w-4 h-4 mr-2" />
                 Manejo & Ração ({manejos.length})
               </TabsTrigger>
+              <TabsTrigger value="insumos">
+                <Package className="w-4 h-4 mr-2" />
+                Insumos
+              </TabsTrigger>
+              <TabsTrigger value="vendas">
+                <Receipt className="w-4 h-4 mr-2" />
+                Vendas
+              </TabsTrigger>
+              <TabsTrigger value="historico">
+                <History className="w-4 h-4 mr-2" />
+                Histórico
+              </TabsTrigger>
             </TabsList>
 
             {/* ABA 1: MÉTRICAS */}
@@ -1004,7 +894,7 @@ export default function ViveiroDetalhePage() {
                     <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 flex items-center gap-3 text-amber-900">
                       <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
                       <div className="text-sm">
-                        <strong>Alerta de Hiperdensidade:</strong> A densidade atual calculada ({metricas.densidade_estocagem} camarões/m²) está acima do limite recomendado para este tipo de aeração.
+                        <strong>Alerta de Hiperdensidade:</strong> A densidade de estocagem do povoamento ({metricas.densidade_estocagem} camarões/m²) está acima do limite recomendado para este tipo de aeração.
                       </div>
                     </div>
                   )}
@@ -1063,6 +953,13 @@ export default function ViveiroDetalhePage() {
                       accent="ocean"
                     />
                     <MetricCard
+                      title="Densidade atual"
+                      value={metricas.densidade_atual != null ? `${metricas.densidade_atual.toLocaleString("pt-BR")} /m²` : "—"}
+                      subtitle={`Povoamento: ${metricas.densidade_estocagem.toLocaleString("pt-BR")} /m²`}
+                      icon={Droplets}
+                      accent="ocean"
+                    />
+                    <MetricCard
                       title="Custo Total Acumulado"
                       value={
                         metricas.custo_operacional_total_rs != null
@@ -1073,10 +970,37 @@ export default function ViveiroDetalhePage() {
                       icon={DollarSign}
                       accent="purple"
                     />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <MetricCard
-                      title="Lucro Operacional Est."
+                      title="Receita realizada"
+                      value={metricas.receita_realizada_rs != null ? fmtMoney(metricas.receita_realizada_rs) : "Indisponível"}
+                      subtitle="Soma das vendas já lançadas"
+                      icon={Receipt}
+                      accent="emerald"
+                    />
+                    <MetricCard
+                      title="Lucro realizado"
+                      value={metricas.lucro_realizado_rs != null ? fmtMoney(metricas.lucro_realizado_rs) : "Indisponível"}
+                      subtitle={
+                        metricas.receita_realizada_rs
+                          ? "Vendas realizadas − custos lançados"
+                          : "Ainda sem vendas: só os custos lançados até agora"
+                      }
+                      icon={DollarSign}
+                      accent={
+                        metricas.lucro_realizado_rs == null || !metricas.receita_realizada_rs
+                          ? "slate"
+                          : metricas.lucro_realizado_rs >= 0
+                          ? "emerald"
+                          : "red"
+                      }
+                    />
+                    <MetricCard
+                      title="Lucro estimado se despescar hoje"
                       value={metricas.lucro_operacional_rs != null ? `R$ ${metricas.lucro_operacional_rs.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "Indisponível"}
-                      subtitle={metricas.margem_operacional_pct != null ? `Margem estimada: ${metricas.margem_operacional_pct}%` : (metricas.entradas_faltantes && metricas.entradas_faltantes.length > 0 ? `Requer: ${metricas.entradas_faltantes.join(", ")}` : "Receita menos custos")}
+                      subtitle={metricas.margem_operacional_pct != null ? `Margem estimada: ${metricas.margem_operacional_pct}%` : (metricas.entradas_faltantes && metricas.entradas_faltantes.length > 0 ? `Requer: ${metricas.entradas_faltantes.join(", ")}` : "Lucro realizado + biomassa na água ao preço de hoje")}
                       icon={DollarSign}
                       accent={metricas.lucro_operacional_rs == null ? "neutral" : metricas.lucro_operacional_rs >= 0 ? "emerald" : "red"}
                     />
@@ -1128,7 +1052,7 @@ export default function ViveiroDetalhePage() {
                           </div>
                           <div>
                             <div className="font-bold text-slate-900 text-sm">
-                              {fmtDate(bio.data_medicao)}
+                              {fmtData(bio.data_medicao)}
                             </div>
                             <div className="text-xs text-slate-500">
                               {bio.observacoes || "Amostragem de rotina"}
@@ -1233,7 +1157,7 @@ export default function ViveiroDetalhePage() {
                             </div>
                             <div>
                               <div className="font-bold text-slate-900 text-sm">
-                                {fmtDate(m.data_registro)}
+                                {fmtData(m.data_registro)}
                               </div>
                               <div className="text-xs text-slate-500">
                                 {sobraObj?.desc || m.sobra_bandeja_nivel}
@@ -1268,17 +1192,33 @@ export default function ViveiroDetalhePage() {
                 )}
               </div>
             </TabsContent>
+
+            {/* ABA 4: INSUMOS */}
+            <TabsContent value="insumos">
+              <AbaInsumosCiclo cicloId={cicloAtivo.id} escolherFase onAlterado={loadData} />
+            </TabsContent>
+
+            {/* ABA 5: VENDAS */}
+            <TabsContent value="vendas">
+              <VendasCiclo cicloId={cicloAtivo.id} onAlterado={loadData} />
+            </TabsContent>
+
+            {/* ABA 6: HISTÓRICO */}
+            <TabsContent value="historico">
+              <HistoricoViveiro viveiroId={viveiroId} />
+            </TabsContent>
           </Tabs>
         </>
       )}
 
       {/* Diálogos Integrados */}
-      <IniciarCicloDialog
-        open={showCicloModal}
-        onClose={() => setShowCicloModal(false)}
-        onCreated={loadData}
-        viveiroId={viveiroId}
-      />
+      {showCicloModal && (
+        <PlanejarCicloDialog
+          onClose={() => setShowCicloModal(false)}
+          onCreated={loadData}
+          viveiroId={viveiroId}
+        />
+      )}
 
       {cicloAtivo && (
         <>
@@ -1295,12 +1235,14 @@ export default function ViveiroDetalhePage() {
             cicloId={cicloAtivo.id}
             recomendacao={recomendacao}
           />
-          <EncerrarCicloDialog
-            open={showEncerrarModal}
-            onClose={() => setShowEncerrarModal(false)}
-            onDone={loadData}
-            cicloId={cicloAtivo.id}
-          />
+          {showEncerrarModal && (
+            <EncerrarCicloDialog
+              open
+              onClose={() => setShowEncerrarModal(false)}
+              onDone={loadData}
+              cicloId={cicloAtivo.id}
+            />
+          )}
         </>
       )}
     </div>

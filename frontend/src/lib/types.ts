@@ -17,6 +17,7 @@ export interface ConfrontoVivos {
   situacao: SituacaoConfronto;
 }
 export type CategoriaCusto = "RACAO" | "ENERGIA_ELETRICA" | "MAO_DE_OBRA" | "POS_LARVAS" | "PROBIOTICOS_QUIMICOS" | "MANUTENCAO" | "OUTROS";
+export type FaseCusto = "PREPARO" | "CULTIVO" | "DESPESCA";
 export type RecomendacaoDespesca = "MANTER_CULTIVO" | "DESPESCA_IMEDIATA";
 export type ComportamentoCamarao = "NORMAL_FUNDO" | "FLOR_DAGUA_BOQUEANDO" | "NATACAO_AGITADA" | "ECDISE_MASSIVA" | "PRESENCA_BORDAS";
 export type StatusEnergia = "REDE_CONCESSIONARIA" | "GERADOR_DIESEL" | "SEM_ENERGIA_QUEDA";
@@ -59,9 +60,11 @@ export interface Viveiro {
 export interface CicloProdutivo {
   id: string;
   viveiro_id: string;
+  // Data prevista enquanto PLANEJADO; passa a ser a real ao povoar
   data_povoamento: string;
-  quantidade_pos_larvas: number;
-  custo_aquisicao_pl: number;
+  // Vazios no ciclo PLANEJADO (antes do povoamento)
+  quantidade_pos_larvas: number | null;
+  custo_aquisicao_pl: number | null;
   peso_medio_pl_g?: number | null;
   laboratorio_origem: string | null;
   status: StatusCiclo;
@@ -77,6 +80,8 @@ export interface MetricasAtuais {
   viveiro_identificacao: string;
   dias_cultivo: number;
   densidade_estocagem: number;
+  // População atual (já descontadas as vendas) ÷ área
+  densidade_atual?: number | null;
   alerta_hiperdensidade: boolean;
   populacao_inicial: number;
   taxa_sobrevivencia_fuzzy_pct: number;
@@ -91,10 +96,29 @@ export interface MetricasAtuais {
   racao_diaria_sugerida_kg: number | null;
   custo_operacional_total_rs: number | null;
   receita_bruta_estimada_rs: number | null;
+  // Lucro estimado se despescar hoje: já inclui a receita das vendas anteriores
   lucro_operacional_rs: number | null;
   margem_operacional_pct: number | null;
   preco_venda_atual_rs_kg: number | null;
+  // Só o GESTOR recebe: soma das vendas e (receita realizada − custo total lançado)
+  receita_realizada_rs?: number | null;
+  lucro_realizado_rs?: number | null;
   entradas_faltantes?: string[];
+}
+
+// ── Etapas do preparo (ciclo PLANEJADO) ───────────────
+export type TipoEtapa = "SECAGEM" | "CALAGEM" | "ADUBACAO" | "ABASTECIMENTO" | "TRATAMENTO_AGUA" | "OUTRA";
+export type StatusEtapa = "PENDENTE" | "EM_ANDAMENTO" | "CONCLUIDA" | "NAO_REALIZADA";
+
+export interface EtapaPreparo {
+  id: string;
+  ciclo_id: string;
+  tipo: TipoEtapa;
+  status: StatusEtapa;
+  data_inicio: string | null;
+  data_fim: string | null;
+  observacao: string | null;
+  ordem: number;
 }
 
 // ── Biometria ─────────────────────────────────────────
@@ -218,6 +242,7 @@ export interface CustoOperacional {
   categoria: CategoriaCusto;
   descricao: string;
   valor_rs: number;
+  fase: FaseCusto;
   created_at: string;
 }
 
@@ -225,6 +250,143 @@ export interface CustoResumo {
   categoria: CategoriaCusto;
   total_rs: number;
   qtd_lancamentos: number;
+}
+
+// ── Insumos ───────────────────────────────────────────
+// A API devolve null no que o papel não pode ver: saldo (VIGIA), preço médio e saldo negativo (CAMPO e VIGIA)
+export interface Insumo {
+  id: string;
+  nome: string;
+  unidade_uso: string;
+  categoria: CategoriaCusto;
+  ativo: boolean;
+  saldo: number | null;
+  preco_medio_rs: number | null;
+  saldo_negativo: boolean | null;
+}
+
+export interface CompraInsumo {
+  id: string;
+  insumo_id: string;
+  data_compra: string;
+  quantidade: number;
+  valor_total_rs: number;
+  fornecedor: string | null;
+  observacao: string | null;
+  retroativo: boolean;
+  created_at: string;
+}
+
+export interface UsoInsumo {
+  id: string;
+  insumo_id: string;
+  insumo_nome: string;
+  unidade_uso: string;
+  data_uso: string;
+  quantidade: number;
+  fase: FaseCusto;
+  // Etapa do preparo em que o insumo foi usado; o PUT precisa reenviá-la para mantê-la
+  etapa_id: string | null;
+  retroativo: boolean;
+  observacao: string | null;
+  // Só o GESTOR recebe os campos de valor
+  preco_unitario_rs: number | null;
+  valor_rs: number | null;
+  pendente_de_valor: boolean | null;
+  // Preço fixado pelo gestor (nota fiscal); null = vale o preço médio. O PUT precisa reenviá-lo para mantê-lo
+  preco_corrigido_rs: number | null;
+  recalculado_em: string | null;
+}
+
+// ── Vendas do ciclo (só GESTOR) ───────────────────────
+export type TipoVenda = "DESBASTE" | "DESPESCA_FINAL";
+
+export interface VendaCiclo {
+  id: string;
+  ciclo_id: string;
+  data_venda: string;
+  tipo: TipoVenda;
+  biomassa_kg: number;
+  peso_medio_g: number;
+  animais_estimados: number;
+  preco_kg: number;
+  valor_total_rs: number;
+  comprador: string | null;
+  observacao: string | null;
+  retroativo: boolean;
+  created_at: string;
+}
+
+// ── Financeiro do ciclo (só GESTOR) ───────────────────
+export interface CustoFaseCategoria {
+  fase: FaseCusto;
+  categoria: CategoriaCusto;
+  total_rs: number;
+}
+
+export interface FinanceiroCiclo {
+  custos_por_fase: Record<string, number>;
+  custos_por_categoria: Record<string, number>;
+  custos_fase_categoria: CustoFaseCategoria[];
+  vendas: VendaCiclo[];
+  receita_realizada_rs: number;
+  custo_total_rs: number;
+  // Receita das vendas − custos lançados; definitivo com o ciclo finalizado
+  lucro_realizado_rs: number;
+  margem_realizada_pct: number | null;
+  // Lucro realizado + biomassa na água × preço de hoje; null no ciclo finalizado ou sem biometria/preço
+  lucro_estimado_se_despescar_hoje_rs: number | null;
+  custo_por_kg_rs: number | null;
+  definitivo: boolean;
+  usos_pendentes: number;
+  valores_recalculados_em: string | null;
+}
+
+// ── Histórico do viveiro (um item por ciclo, do mais recente ao mais antigo) ──
+// Todo campo em reais vem null para CAMPO e VIGIA
+export interface EtapaHistorico {
+  tipo: TipoEtapa;
+  status: StatusEtapa;
+  data_inicio: string | null;
+  data_fim: string | null;
+}
+
+export interface InsumoHistorico {
+  insumo_id: string;
+  nome: string;
+  unidade_uso: string;
+  quantidade_total: number;
+  custo_total_rs: number | null;
+}
+
+export interface SemanaRacao {
+  inicio: string;
+  fim: string;
+  kg: number;
+  custo_rs: number | null;
+  fca_parcial: number | null;
+}
+
+export interface HistoricoCiclo {
+  ciclo_id: string;
+  status: StatusCiclo;
+  data_povoamento: string;
+  data_despesca_real: string | null;
+  quantidade_pos_larvas: number | null;
+  etapas: EtapaHistorico[];
+  insumos: InsumoHistorico[];
+  racao_total_kg: number;
+  racao_custo_rs: number | null;
+  racao_por_semana: SemanaRacao[];
+  vendas: { quantidade: number; biomassa_total_kg: number; receita_rs: number | null };
+  peso_final_g: number | null;
+  sobrevivencia_final_pct: number | null;
+  // Final no ciclo finalizado, o atual no ativo
+  fca: number | null;
+  custo_total_rs: number | null;
+  lucro_realizado_rs: number | null;
+  margem_pct: number | null;
+  custo_por_kg_rs: number | null;
 }
 
 // ── Preços ────────────────────────────────────────────

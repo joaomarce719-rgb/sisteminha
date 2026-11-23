@@ -24,6 +24,8 @@ from src.routers import (
     biometrias,
     ciclos,
     custos,
+    etapas_preparo,
+    insumos,
     manejos,
     organizacoes,
     precos,
@@ -31,6 +33,8 @@ from src.routers import (
     rondas,
     simulacao,
     tabelas_alimentares,
+    usos_insumo,
+    vendas,
     viveiros,
 )
 
@@ -81,6 +85,10 @@ app.include_router(manejos.router)
 app.include_router(manejos.global_router)
 app.include_router(custos.router)
 app.include_router(custos.global_router)
+app.include_router(insumos.router)
+app.include_router(usos_insumo.router)
+app.include_router(etapas_preparo.router)
+app.include_router(vendas.router)
 app.include_router(precos.router)
 app.include_router(simulacao.router)
 app.include_router(simulacao.global_router)

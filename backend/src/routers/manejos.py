@@ -1,7 +1,6 @@
 """SAD Carcinicultura — Rotas de Manejo Alimentar (RF-04)."""
 
 from dataclasses import asdict
-from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -25,15 +24,16 @@ from src.schemas.manejo_alimentar import (
 )
 from src.services.alimentacao import pontos_alimentares
 from src.services.auth_service import has_role
+from src.services.regras_data import hoje_da_fazenda
 from src.services.decision_engine import (
     calcular_biomassa_kg,
-    calcular_populacao_atual,
     calcular_racao_diaria,
     taxa_alimentar,
     calcular_ganho_diario,
     calcular_ganho_semanal,
 )
-from src.services.regras_ciclo import validar_data_no_ciclo
+from src.services.populacao import animais_vendidos_ate, populacao_vigente
+from src.services.regras_ciclo import exigir_povoamento, validar_data_no_ciclo
 from src.services.fuzzy_engine import inferir_ajuste_sobrevivencia
 from src.services.sobrevivencia import (
     agrupar_por_dia,
@@ -79,9 +79,10 @@ def registrar_manejo(
     anteriores = ordenar(m for m in ciclo.manejos_alimentares if m.data_registro < payload.data_registro)
     taxa_sobrev_anterior = sobrevivencia_vigente(anteriores)
     pos_larvas = ciclo.quantidade_pos_larvas
+    vendas = ciclo.vendas
 
-    # Calcular biomassa estimada
-    pop_atual = calcular_populacao_atual(pos_larvas, taxa_sobrev_anterior)
+    # Biomassa estimada na data do manejo: vendas posteriores a ela não descontam
+    pop_atual = populacao_vigente(pos_larvas, taxa_sobrev_anterior, vendas, ate=payload.data_registro)
     biomassa = calcular_biomassa_kg(pop_atual, peso_medio)
 
     mortos_dia = sum(m.camaroes_mortos or 0 for m in registros_dia) + (payload.camaroes_mortos or 0)
@@ -140,6 +141,7 @@ def registrar_manejo(
         lambda data: peso_na_data(biometrias, data),
         lambda peso: taxa_alimentar(peso, pontos_calibracao),
         payload.data_registro,
+        vendidos_ate=lambda data: animais_vendidos_ate(vendas, data),
     )
     nova_taxa_sobrev = nova_sobrevivencia(
         taxa_sobrev_anterior, dias_periodo, mortos_dia / pos_larvas * 100, ajuste, implicita
@@ -192,14 +194,16 @@ def recomendacao_alimentar(
     ciclo = result.scalar_one_or_none()
     if not ciclo:
         raise HTTPException(status_code=404, detail="Ciclo não encontrado.")
+    exigir_povoamento(ciclo)
 
     biometrias = sorted(ciclo.biometrias, key=lambda b: b.data_medicao)
     peso_medio = biometrias[-1].peso_medio_g if biometrias else 1.0
 
     manejos = ordenar(ciclo.manejos_alimentares)
     taxa_sobrev = sobrevivencia_vigente(manejos)
+    vendas = ciclo.vendas
 
-    pop_atual = calcular_populacao_atual(ciclo.quantidade_pos_larvas, taxa_sobrev)
+    pop_atual = populacao_vigente(ciclo.quantidade_pos_larvas, taxa_sobrev, vendas)
     biomassa = calcular_biomassa_kg(pop_atual, peso_medio)
     pontos_calibracao = pontos_alimentares(ciclo, db)
     taxa_clifford_pct = taxa_alimentar(peso_medio, pontos_calibracao)
@@ -219,11 +223,11 @@ def recomendacao_alimentar(
             ajuste_texto = "✅ Consumo limpo — manter ou avaliar incremento leve."
 
     # Confronto de hoje: ração lançada (todos os tratos) contra a ração da tabela
-    hoje = date.today()
+    hoje = hoje_da_fazenda()
     registros_hoje = [m for m in manejos if m.data_registro == hoje]
     taxa_inicio_dia = sobrevivencia_vigente(m for m in manejos if m.data_registro < hoje)
     biomassa_inicio_dia = calcular_biomassa_kg(
-        calcular_populacao_atual(ciclo.quantidade_pos_larvas, taxa_inicio_dia), peso_medio
+        populacao_vigente(ciclo.quantidade_pos_larvas, taxa_inicio_dia, vendas, ate=hoje), peso_medio
     )
     racao_tabela_dia = calcular_racao_diaria(biomassa_inicio_dia, peso_medio, pontos_calibracao)
     racao_hoje = sum(m.quantidade_racao_kg for m in registros_hoje)
@@ -244,6 +248,7 @@ def recomendacao_alimentar(
                 lambda data: peso_na_data(biometrias, data),
                 lambda peso: taxa_alimentar(peso, pontos_calibracao),
                 hoje,
+                vendidos_ate=lambda data: animais_vendidos_ate(vendas, data),
             )
         ),
     )

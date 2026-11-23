@@ -119,11 +119,20 @@ def test_biometrias_api_record_and_list_biometric_samples():
         ciclos_url = f"{base}/api/v1/ciclos/"
         ciclo_payload = {
             "viveiro_id": viveiro_id,
-            "data_inicio": time.strftime("%Y-%m-%d"),
-            "descricao": "Test cycle"
+            "data_povoamento": time.strftime("%Y-%m-%d"),
         }
         try:
             r = session.post(ciclos_url, json=ciclo_payload, headers=auth_headers, timeout=TIMEOUT)
+            assert r.status_code in (200, 201), f"Planning ciclo failed: {r.status_code} - {r.text}"
+            planejado_id = r.json()["id"]
+            etapas_url = f"{ciclos_url}{planejado_id}/etapas-preparo"
+            for etapa in session.get(etapas_url, headers=auth_headers, timeout=TIMEOUT).json():
+                session.patch(f"{etapas_url}/{etapa['id']}", json={"status": "NAO_REALIZADA"},
+                              headers=auth_headers, timeout=TIMEOUT)
+            r = session.post(f"{ciclos_url}{planejado_id}/povoar",
+                             json={"data_povoamento": time.strftime("%Y-%m-%d"), "quantidade_pos_larvas": 10000,
+                                   "custo_aquisicao_pl": 100.0},
+                             headers=auth_headers, timeout=TIMEOUT)
         except requests.RequestException as e:
             raise AssertionError(f"Failed to call ciclos create endpoint: {e}")
 

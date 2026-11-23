@@ -120,13 +120,15 @@ O sistema apoia a operação de cultivos em viveiros escavados ou estruturas equ
 - diagnóstico veterinário ou sanitário conclusivo;
 - substituição da decisão do responsável técnico;
 - contabilidade fiscal completa, emissão de documentos fiscais ou folha de pagamento;
-- compra, venda ou logística de insumos como processo transacional;
+- compra, venda ou logística de insumos como processo transacional (pedido, pagamento, nota fiscal, logística e cadastro completo de fornecedor);
 - marketplace ou integração automática com bolsas de preços;
 - previsão meteorológica própria;
 - controle físico de acesso à fazenda;
 - manutenção de sensores e equipamentos de campo;
 - treinamento de modelos de inteligência artificial sem dataset e validação aprovados;
 - garantia de decisão ótima quando os dados de entrada forem incompletos ou de baixa qualidade.
+
+> **Nota (insumos):** o registro leve de compras de insumo, com data, quantidade, valor total e fornecedor opcional, **está no escopo**, apenas para calcular o preço médio ponderado, o saldo por organização e o custo dos usos por ciclo (RF-031 e RF-032). O processo transacional da compra continua fora do escopo, assim como o estoque por viveiro.
 
 ---
 
@@ -255,6 +257,12 @@ Os requisitos abaixo formam a baseline proposta. O campo **Status** identifica s
 | **RF-028** | O sistema deve permitir importar dados de sensores ou arquivos quando a integração for aprovada. | Proposto | Could | Importação valida schema, unidade, data/hora, origem e duplicidade; erros são apresentados sem descartar silenciosamente dados. |
 | **RF-029** | O sistema deve permitir configurar parâmetros, faixas e referências por organização, com controle de versão. | Proposto | Should | Alterações exigem permissão e preservam o valor anterior e a data de vigência. |
 | **RF-030** | O sistema deve impedir ou sinalizar cálculos baseados em dados incompletos, inconsistentes ou obsoletos. | Necessário | Must | O usuário vê o motivo da indisponibilidade e os campos necessários para completar o indicador. |
+| **RF-031** | O sistema deve manter o cadastro de insumos por organização e o registro leve de compras, calculando o preço médio ponderado móvel e o saldo de cada insumo. | Necessário | Should | O nome do insumo é único na organização (sem diferenciar maiúsculas) e as categorias RACAO e POS_LARVAS não são aceitas. Cada compra informa data, quantidade (> 0), valor total (> 0) e fornecedor opcional. O preço médio passa a ser (saldo × preço médio anterior + valor da compra) ÷ (saldo + quantidade comprada); o saldo é a soma das compras menos a soma dos usos, por organização. Compra com data anterior a hoje exige a marca de lançamento retroativo e recalcula o insumo. Só o gestor vê preços e compras. |
+| **RF-032** | O sistema deve registrar o uso de insumo por ciclo, com quantidade, fase (PREPARO, CULTIVO ou DESPESCA) e etapa do preparo opcional, gerando o custo operacional correspondente. | Necessário | Should | O custo do uso é a quantidade vezes o preço médio vigente na data; o custo gerado entra no custo do ciclo na fase do uso e só é alterado ou removido pelo uso. Data futura é recusada; data anterior a hoje exige a marca de lançamento retroativo (também na API) e fica auditada. Inclusão, alteração ou exclusão com data passada reprocessa o insumo em ordem de data. Uso sem saldo é aceito com aviso; uso sem compra anterior fica pendente de valor e bloqueia o encerramento do ciclo. O gestor pode corrigir o preço unitário de um uso. Campo e vigia lançam o uso sem ver valores. |
+| **RF-033** | O sistema deve exigir que todo ciclo novo seja planejado e passe pelo preparo antes do povoamento, com etapas do preparo marcadas como feitas ou não realizadas. | Necessário | Must | O ciclo nasce PLANEJADO com a data prevista de povoamento e a lista sugerida de etapas (secagem, calagem, adubação, abastecimento e tratamento da água), editável pelo gestor. Cada etapa fica PENDENTE, EM_ANDAMENTO, CONCLUIDA ou NAO_REALIZADA. O povoamento (data real, pós-larvas e custo de aquisição) só é aceito sem etapa PENDENTE ou EM_ANDAMENTO e muda o ciclo para ATIVO. Enquanto PLANEJADO, o gestor pode reagendar (data, tabela alimentar, viveiro) ou cancelar o planejamento, e o viveiro admite um único ciclo aberto (PLANEJADO, ATIVO ou PAUSADO). |
+| **RF-034** | O sistema deve permitir várias vendas por ciclo, entre desbastes e despesca final, descontando os animais vendidos dos cálculos de população. | Necessário | Must | Cada venda informa data, tipo, biomassa (kg), peso médio (g), preço por kg e comprador opcional; o preço é sugerido pela tabela de preços e pode ser editado. População, biomassa, densidade atual, FCA e lucro de despescar hoje descontam os animais e a biomassa já vendidos e somam a receita já recebida; a sobrevivência estimada não é derrubada pelo desbaste. O encerramento exige ao menos uma venda de despesca final e usa a soma das vendas como biomassa colhida e receita real. Só o gestor lança vendas. |
+| **RF-035** | O sistema deve apresentar o histórico de cada viveiro por ciclo, com linha do tempo e resumo do resultado. | Necessário | Should | Para cada ciclo do viveiro, do mais recente ao mais antigo, o resumo traz período, pós-larvas, etapas do preparo, insumos e quantidades, ração (kg, custo e FCA parcial por semana), desbastes, biomassa produzida, peso final, sobrevivência, FCA e, para o gestor, receita, custo, lucro e margem. Campo e vigia consultam o histórico sem valores em reais. |
+| **RF-036** | O sistema deve apresentar o financeiro do ciclo com custos por fase e categoria, vendas, lucro realizado, lucro estimado se despescar hoje e custo por kg produzido. | Necessário | Must | Lucro realizado = receita das vendas − custos lançados (definitivo com o ciclo finalizado); lucro estimado se despescar hoje = lucro realizado + biomassa atual × preço de hoje. Os dois números sempre aparecem com rótulo próprio. Custo por kg = custo total ÷ biomassa vendida. Custos de fase PREPARO e DESPESCA entram no custo total e no lucro, mas não no custo diário estimado. Só o gestor acessa. |
 
 ### 9.1 Regras de cálculo
 
@@ -620,6 +628,17 @@ As fórmulas abaixo foram transcritas ou normalizadas a partir dos PDFs. A valid
 > **Legenda:** **C** = Consultar; **E** = Editar; **L** = Somente leitura; **-** = Sem acesso.  
 > `*` Depende do escopo e da política da organização.
 
+A matriz acima não cobre os recursos de insumos, preparo e vendas; para eles, a tabela a seguir (papéis GESTOR, CAMPO e VIGIA) é a referência:
+
+| Recurso | GESTOR | CAMPO | VIGIA |
+| :--- | :--- | :--- | :--- |
+| Cadastro de insumos | Cria, edita e vê preços | Vê nome, unidade e saldo (só quantidade) | Vê só nome e unidade |
+| Compras de insumo | Cria, edita, exclui e vê valores | Sem acesso | Sem acesso |
+| Uso de insumo | Cria, edita, exclui e corrige o preço | Cria e vê os usos do ciclo, sem valores | Cria; não consulta a lista de usos |
+| Etapas do preparo | Cria, edita e exclui | Vê e atualiza status e datas | Sem acesso |
+| Vendas | Cria, edita e exclui | Sem acesso | Sem acesso |
+| Financeiro e histórico com valores | Acesso total | Histórico sem valores em reais | Histórico sem valores em reais |
+
 ---
 
 ## 16. Desempenho, disponibilidade e escalabilidade
@@ -803,10 +822,10 @@ Confirmado nos materiais: arquitetura em camadas, separação front-end/back-end
 ## 23. Priorização MoSCoW
 
 ### Must have — imprescindível para o MVP operacional
-RF-001, RF-002, RF-003, RF-004, RF-005, RF-006, RF-007, RF-008, RF-009, RF-010, RF-011, RF-012, RF-013, RF-014, RF-015, RF-016, RF-017, RF-018, RF-020, RF-026, RF-027, RF-030, RNF-001, RNF-002, RNF-003, RNF-004, RNF-005, RNF-006, RNF-007, RNF-008, RNF-013, RNF-016, RNF-017, RNF-018, RNF-020.
+RF-001, RF-002, RF-003, RF-004, RF-005, RF-006, RF-007, RF-008, RF-009, RF-010, RF-011, RF-012, RF-013, RF-014, RF-015, RF-016, RF-017, RF-018, RF-020, RF-026, RF-027, RF-030, RF-033, RF-034, RF-036, RNF-001, RNF-002, RNF-003, RNF-004, RNF-005, RNF-006, RNF-007, RNF-008, RNF-013, RNF-016, RNF-017, RNF-018, RNF-020.
 
 ### Should have — importante para a primeira versão produtiva
-RF-019, RF-021, RF-022, RF-025, RF-029, RNF-009, RNF-010, RNF-011, RNF-012, RNF-014, RNF-015, RNF-019.
+RF-019, RF-021, RF-022, RF-025, RF-029, RF-031, RF-032, RF-035, RNF-009, RNF-010, RNF-011, RNF-012, RNF-014, RNF-015, RNF-019.
 
 ### Could have — evolução de valor
 RF-023, RF-024, RF-028, modo offline, notificações multicanal, comparações avançadas e integração automática com preços de mercado.
@@ -850,6 +869,10 @@ RF-023, RF-024, RF-028, modo offline, notificações multicanal, comparações a
 | RF-025 | UC-009, UC-011, UC-012 |
 | RF-026 / RF-028 | UC-005, UC-006, UC-010 |
 | RF-027 / RF-029 / RF-030 | UC-001, UC-002, UC-003, UC-004, UC-005, UC-006, UC-007, UC-008, UC-010, UC-013, UC-014 |
+| RF-031 / RF-032 | UC-008, UC-009 |
+| RF-033 | UC-003 |
+| RF-034 / RF-036 | UC-008, UC-009, UC-011 |
+| RF-035 | UC-009 |
 
 ---
 

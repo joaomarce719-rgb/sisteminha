@@ -4,10 +4,15 @@ import type {
   Alerta,
   Biometria,
   CicloProdutivo,
+  CompraInsumo,
   CustoOperacional,
   CustoResumo,
+  EtapaPreparo,
   FazendaAdmin,
+  FinanceiroCiclo,
   GestorAdmin,
+  HistoricoCiclo,
+  Insumo,
   LogAuditoria,
   ManejoAlimentar,
   MetricasAtuais,
@@ -23,7 +28,9 @@ import type {
   StatusAlerta,
   TabelaAlimentar,
   TokenResponse,
+  UsoInsumo,
   Usuario,
+  VendaCiclo,
   Viveiro,
 } from "./types";
 
@@ -278,6 +285,8 @@ export const viveirosApi = {
   criar: (data: Payload) => apiFetch<Viveiro>("/viveiros/", { method: "POST", body: JSON.stringify(data) }),
   atualizar: (id: string, data: Payload) =>
     apiFetch<Viveiro>(`/viveiros/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  // Ciclos do viveiro, do mais recente ao mais antigo; os campos em reais só vêm para o GESTOR
+  historico: (id: string) => apiFetch<HistoricoCiclo[]>(`/viveiros/${id}/historico`),
 };
 
 export async function downloadFile(path: string, defaultFilename: string): Promise<void> {
@@ -310,13 +319,22 @@ export const ciclosApi = {
     return apiFetch<CicloProdutivo[]>(`/ciclos/?${q.toString()}`);
   },
   obter: (id: string) => apiFetch<CicloProdutivo>(`/ciclos/${id}`),
+  // Planeja o ciclo (nasce PLANEJADO, com as etapas do preparo); as pós-larvas entram em `povoar`
   criar: (data: Payload) =>
     apiFetch<CicloProdutivo>("/ciclos/", { method: "POST", body: JSON.stringify(data) }),
+  povoar: (id: string, data: Payload) =>
+    apiFetch<CicloProdutivo>(`/ciclos/${id}/povoar`, { method: "POST", body: JSON.stringify(data) }),
+  // Muda data prevista, tabela alimentar ou viveiro do ciclo planejado; só os campos enviados mudam
+  reagendar: (id: string, data: Payload) =>
+    apiFetch<CicloProdutivo>(`/ciclos/${id}/planejamento`, { method: "PATCH", body: JSON.stringify(data) }),
+  cancelar: (id: string) => apiFetch<CicloProdutivo>(`/ciclos/${id}/cancelar`, { method: "POST" }),
   encerrar: (id: string, data: Payload) =>
     apiFetch<CicloProdutivo>(`/ciclos/${id}/encerrar`, { method: "POST", body: JSON.stringify(data) }),
   pausar: (id: string) => apiFetch<CicloProdutivo>(`/ciclos/${id}/pausar`, { method: "POST" }),
   retomar: (id: string) => apiFetch<CicloProdutivo>(`/ciclos/${id}/retomar`, { method: "POST" }),
   metricas: (id: string) => apiFetch<MetricasAtuais>(`/ciclos/${id}/metricas-atuais`),
+  // Custos por fase e categoria, vendas, lucro realizado e lucro estimado se despescar hoje (só GESTOR)
+  financeiro: (id: string) => apiFetch<FinanceiroCiclo>(`/ciclos/${id}/financeiro`),
   exportarCsv: (id: string) =>
     downloadFile(`/ciclos/${id}/exportar-csv`, `relatorio_ciclo_${id.slice(0, 8)}.csv`),
 };
@@ -348,6 +366,69 @@ export const custosApi = {
   resumo: (cicloId: string) => apiFetch<CustoResumo[]>(`/ciclos/${cicloId}/custos/resumo`),
   exportarCsv: (cicloId: string) =>
     downloadFile(`/ciclos/${cicloId}/custos/exportar-csv`, `custos_ciclo_${cicloId.slice(0, 8)}.csv`),
+};
+
+// ── Etapas do preparo (ciclo planejado) ────────────────
+export const etapasPreparoApi = {
+  listar: (cicloId: string) => apiFetch<EtapaPreparo[]>(`/ciclos/${cicloId}/etapas-preparo/`),
+  criar: (cicloId: string, data: Payload) =>
+    apiFetch<EtapaPreparo>(`/ciclos/${cicloId}/etapas-preparo/`, { method: "POST", body: JSON.stringify(data) }),
+  // O PATCH muda só os campos enviados (status, datas e observação)
+  atualizar: (cicloId: string, etapaId: string, data: Payload) =>
+    apiFetch<EtapaPreparo>(`/ciclos/${cicloId}/etapas-preparo/${etapaId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  excluir: (cicloId: string, etapaId: string) =>
+    apiFetch<void>(`/ciclos/${cicloId}/etapas-preparo/${etapaId}`, { method: "DELETE" }),
+};
+
+// ── Insumos e compras ──────────────────────────────────
+export const insumosApi = {
+  listar: () => apiFetch<Insumo[]>("/insumos/"),
+  criar: (data: Payload) => apiFetch<Insumo>("/insumos/", { method: "POST", body: JSON.stringify(data) }),
+  atualizar: (id: string, data: Payload) =>
+    apiFetch<Insumo>(`/insumos/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  compras: {
+    listar: (insumoId: string) => apiFetch<CompraInsumo[]>(`/insumos/${insumoId}/compras`),
+    criar: (insumoId: string, data: Payload) =>
+      apiFetch<CompraInsumo>(`/insumos/${insumoId}/compras`, { method: "POST", body: JSON.stringify(data) }),
+    // O PUT reenvia a compra inteira
+    atualizar: (insumoId: string, compraId: string, data: Payload) =>
+      apiFetch<CompraInsumo>(`/insumos/${insumoId}/compras/${compraId}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+    excluir: (insumoId: string, compraId: string) =>
+      apiFetch<void>(`/insumos/${insumoId}/compras/${compraId}`, { method: "DELETE" }),
+  },
+};
+
+// ── Uso de insumo no ciclo ─────────────────────────────
+export const usosInsumoApi = {
+  listar: (cicloId: string) => apiFetch<UsoInsumo[]>(`/ciclos/${cicloId}/usos-insumo/`),
+  criar: (cicloId: string, data: Payload) =>
+    apiFetch<UsoInsumo>(`/ciclos/${cicloId}/usos-insumo/`, { method: "POST", body: JSON.stringify(data) }),
+  // O PUT reenvia o uso inteiro
+  atualizar: (cicloId: string, usoId: string, data: Payload) =>
+    apiFetch<UsoInsumo>(`/ciclos/${cicloId}/usos-insumo/${usoId}`, { method: "PUT", body: JSON.stringify(data) }),
+  excluir: (cicloId: string, usoId: string) =>
+    apiFetch<void>(`/ciclos/${cicloId}/usos-insumo/${usoId}`, { method: "DELETE" }),
+};
+
+// ── Vendas do ciclo (desbaste e despesca final) ────────
+export const vendasApi = {
+  listar: (cicloId: string) => apiFetch<VendaCiclo[]>(`/ciclos/${cicloId}/vendas/`),
+  criar: (cicloId: string, data: Payload) =>
+    apiFetch<VendaCiclo>(`/ciclos/${cicloId}/vendas/`, { method: "POST", body: JSON.stringify(data) }),
+  // O PUT reenvia a venda inteira
+  atualizar: (cicloId: string, vendaId: string, data: Payload) =>
+    apiFetch<VendaCiclo>(`/ciclos/${cicloId}/vendas/${vendaId}`, { method: "PUT", body: JSON.stringify(data) }),
+  excluir: (cicloId: string, vendaId: string) =>
+    apiFetch<void>(`/ciclos/${cicloId}/vendas/${vendaId}`, { method: "DELETE" }),
+  // Preço por kg da tabela de preços para o peso médio; null quando não há faixa
+  precoSugerido: (cicloId: string, pesoMedioG: number) =>
+    apiFetch<{ preco_kg: number | null }>(`/ciclos/${cicloId}/vendas/preco-sugerido?peso_medio_g=${pesoMedioG}`),
 };
 
 // ── Preços ─────────────────────────────────────────────

@@ -255,7 +255,7 @@ export default function DashboardPage() {
         />
 
         <MetricCard
-          label="Lucro Operacional Est."
+          label="Lucro Est. se Despescar Hoje"
           value={`R$ ${(totalLucro / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}k`}
           accentColor={totalLucro >= 0 ? "emerald" : "coral"}
           icon={totalLucro >= 0 ? TrendingUp : TrendingDown}
