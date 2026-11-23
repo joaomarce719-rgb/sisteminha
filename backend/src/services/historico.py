@@ -15,7 +15,7 @@ from src.services import decision_engine as de
 from src.services import populacao as pv
 from src.services.precos import regra_da_organizacao, tabela_vigente
 from src.services.regras_data import hoje_da_fazenda
-from src.services.sobrevivencia import peso_na_data, sobrevivencia_vigente
+from src.services.sobrevivencia import ordenar, peso_na_data, sobrevivencia_vigente
 
 
 @dataclass(frozen=True)
@@ -51,27 +51,34 @@ def _racao_por_semana(
     ciclo: CicloProdutivo, biomassa_inicial: float, preco_racao: float | None
 ) -> list[dict]:
     """Ração por semana desde o povoamento, com custo e FCA parcial acumulado até o fim de cada semana."""
-    manejos = ciclo.manejos_alimentares
+    manejos = ordenar(ciclo.manejos_alimentares)
     if not manejos:
         return []
+    vendas = sorted(ciclo.vendas, key=lambda v: v.data_venda)
     kg_por_semana: dict[int, float] = defaultdict(float)
     for m in manejos:
         kg_por_semana[max(0, (m.data_registro - ciclo.data_povoamento).days // 7)] += m.quantidade_racao_kg
     finalizado = ciclo.status == StatusCiclo.FINALIZADO
     semanas, acumulado = [], 0.0
+    taxa, j, k = 100.0, 0, 0  # taxa vigente, manejos e vendas já passados: uma passada só, sem refiltrar a cada semana
     for i in range(max(kg_por_semana) + 1):
         inicio = ciclo.data_povoamento + timedelta(days=7 * i)
         fim = inicio + timedelta(days=6)
         kg = kg_por_semana.get(i, 0.0)
         acumulado += kg
         fca = None
+        while j < len(manejos) and manejos[j].data_registro <= fim:
+            if manejos[j].taxa_sobrevivencia_estimada_fuzzy is not None:
+                taxa = manejos[j].taxa_sobrevivencia_estimada_fuzzy
+            j += 1
+        while k < len(vendas) and vendas[k].data_venda <= fim:
+            k += 1
         peso = peso_na_data(ciclo.biometrias, fim)
         if peso is not None and acumulado > 0:  # sem ração ainda, FCA 0 pareceria perfeito
-            vendas_ate = [v for v in ciclo.vendas if v.data_venda <= fim]
+            vendas_ate = vendas[:k]
             if finalizado and ciclo.data_despesca_real and fim >= ciclo.data_despesca_real:
                 biomassa = 0.0  # a água foi esvaziada na despesca final
             else:
-                taxa = sobrevivencia_vigente(m for m in manejos if m.data_registro <= fim)
                 populacao = pv.populacao_vigente(ciclo.quantidade_pos_larvas, taxa, vendas_ate)
                 biomassa = de.calcular_biomassa_kg(populacao, peso)
             fca = de.calcular_fca(acumulado, biomassa, biomassa_inicial, pv.biomassa_vendida_kg(vendas_ate))
@@ -154,9 +161,10 @@ def resumo_do_ciclo(db: Session, ciclo: CicloProdutivo, mostrar_valores: bool) -
     insumos: dict = {}
     for u in usos:
         item = insumos.setdefault(u.id, {"insumo_id": u.id, "nome": u.nome, "unidade_uso": u.unidade_uso,
-                                         "quantidade_total": 0.0, "custo_total_rs": 0.0})
+                                         "quantidade_total": 0.0, "custo_total_rs": None})
         item["quantidade_total"] += float(u.quantidade)
-        item["custo_total_rs"] += float(u.valor_rs or 0)
+        if u.valor_rs is not None:  # None = nenhum uso com valor (R$ 0,00 pareceria insumo de graça)
+            item["custo_total_rs"] = (item["custo_total_rs"] or 0.0) + float(u.valor_rs)
     for item in insumos.values():
         item["quantidade_total"] = round(item["quantidade_total"], 4)
         item["custo_total_rs"] = rs(item["custo_total_rs"])

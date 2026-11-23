@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from src.models.ciclo_produtivo import CicloProdutivo
 from src.models.enums import FaseCusto, StatusCiclo
+from src.models.etapa_preparo import EtapaPreparo
 from src.services.regras_data import hoje_da_fazenda
 
 # Um viveiro só pode ter um ciclo nestes estados ao mesmo tempo
@@ -57,3 +58,10 @@ def validar_data_no_ciclo(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=f"{rotulo} não pode estar no futuro.",
         )
+
+
+def etapa_do_ciclo(db: Session, ciclo_id: UUID, etapa_id: UUID) -> EtapaPreparo:
+    etapa = db.get(EtapaPreparo, etapa_id)
+    if not etapa or etapa.ciclo_id != ciclo_id:
+        raise HTTPException(status_code=404, detail="Etapa do preparo não encontrada.")
+    return etapa

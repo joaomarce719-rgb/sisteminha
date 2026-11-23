@@ -109,3 +109,32 @@ def test_povoar_com_data_futura_da_422(client, gestor, novo_viveiro):
     r = _povoar(client, gestor, ciclo_id, HOJE_FAZENDA)
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "ATIVO"
+
+
+def test_fuso_desconhecido_falha_na_carga_do_setting():
+    from src.config import Settings
+
+    with pytest.raises(ValueError):
+        Settings(fazenda_fuso_horario="America/Sao_Paul")
+
+
+def test_metricas_contam_os_dias_pelo_dia_da_fazenda(client, gestor, ciclo, monkeypatch):
+    povoamento = date.fromisoformat(ciclo["data_povoamento"])
+    monkeypatch.setattr("src.routers.ciclos.hoje_da_fazenda", lambda: povoamento + timedelta(days=10))
+    r = client.get(f"/api/v1/ciclos/{ciclo['id']}/metricas-atuais", headers=gestor)
+    assert r.status_code == 200, r.text
+    assert r.json()["dias_cultivo"] == 10
+
+
+def test_recomendacao_alimentar_acha_o_manejo_do_dia_da_fazenda(client, gestor, ciclo, monkeypatch):
+    r = client.post(
+        f"/api/v1/ciclos/{ciclo['id']}/manejos-alimentares/",
+        json={"data_registro": HOJE_FAZENDA.isoformat(), "quantidade_racao_kg": 5, "sobra_bandeja_nivel": "SEM_SOBRA"},
+        headers=gestor,
+    )
+    assert r.status_code == 201, r.text
+    url = f"/api/v1/ciclos/{ciclo['id']}/manejos-alimentares/recomendacao"
+    assert client.get(url, headers=gestor).json()["racao_lancada_hoje_kg"] == 5
+    # o "hoje" da recomendação é o da fazenda: com outro dia, o manejo de hoje não conta
+    monkeypatch.setattr("src.routers.manejos.hoje_da_fazenda", lambda: ONTEM_FAZENDA)
+    assert client.get(url, headers=gestor).json()["racao_lancada_hoje_kg"] == 0

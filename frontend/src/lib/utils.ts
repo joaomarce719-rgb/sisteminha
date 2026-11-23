@@ -1,6 +1,8 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
+import type { CategoriaCusto, StatusCiclo } from "@/lib/types";
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
@@ -25,3 +27,30 @@ export function localInputParaIso(valor: string): string {
 export function mensagemErro(err: unknown, padrao: string): string {
   return err instanceof Error && err.message ? err.message : padrao;
 }
+
+export const fmtQtd = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 4 });
+export const fmtMoney = (v: number) =>
+  `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+// O preço unitário tem 4 casas (a API só arredonda o total a centavos)
+export const fmtPreco = (v: number) =>
+  `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
+/** Data "AAAA-MM-DD" da API, sem passar por UTC (new Date("AAAA-MM-DD") mostraria o dia anterior no Brasil). */
+export const fmtData = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("pt-BR");
+
+export const ROTULO_CATEGORIA: Record<CategoriaCusto, string> = {
+  RACAO: "Ração",
+  ENERGIA_ELETRICA: "Energia Elétrica",
+  MAO_DE_OBRA: "Mão de Obra",
+  POS_LARVAS: "Pós-Larvas",
+  PROBIOTICOS_QUIMICOS: "Probióticos/Químicos",
+  MANUTENCAO: "Manutenção",
+  OUTROS: "Outros",
+};
+
+export const ROTULO_STATUS_CICLO: Record<StatusCiclo, string> = {
+  PLANEJADO: "Planejado",
+  ATIVO: "Ativo",
+  PAUSADO: "Pausado",
+  FINALIZADO: "Finalizado",
+  CANCELADO: "Cancelado",
+};

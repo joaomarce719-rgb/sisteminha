@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, Package, Pencil, Plus, Receipt, Trash2 } from "lucide-react";
 import { insumosApi } from "@/lib/api";
-import { cn, mensagemErro } from "@/lib/utils";
+import { cn, fmtData, fmtMoney, fmtPreco, fmtQtd, mensagemErro, ROTULO_CATEGORIA as CATEGORIAS } from "@/lib/utils";
 import type { CategoriaCusto, CompraInsumo, Insumo } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,28 +14,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/toast";
 
-const CATEGORIAS: Record<CategoriaCusto, string> = {
-  RACAO: "Ração",
-  ENERGIA_ELETRICA: "Energia Elétrica",
-  MAO_DE_OBRA: "Mão de Obra",
-  POS_LARVAS: "Pós-Larvas",
-  PROBIOTICOS_QUIMICOS: "Probióticos/Químicos",
-  MANUTENCAO: "Manutenção",
-  OUTROS: "Outros",
-};
-
 // Ração e pós-larvas têm custo próprio (manejo alimentar e povoamento): a API não as aceita como insumo
 const CATEGORIAS_INSUMO = (Object.keys(CATEGORIAS) as CategoriaCusto[]).filter(
   (c) => c !== "RACAO" && c !== "POS_LARVAS"
 );
 
-const fmtQtd = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 4 });
-const fmtMoney = (v: number) =>
-  `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-// O preço unitário tem 4 casas (a API só arredonda o total a centavos)
-const fmtPreco = (v: number) =>
-  `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
-const fmtData = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("pt-BR");
 
 const insumoVazio = () => ({ nome: "", unidade: "", categoria: "OUTROS" as CategoriaCusto });
 const compraVazia = () => ({ data: hojeLocal(), retroativo: false, quantidade: "", valor: "", fornecedor: "", observacao: "" });

@@ -8,13 +8,9 @@ import type { FaseCusto, UsoInsumo } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/components/ui/toast";
 
-export const fmtQtd = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 4 });
-export const fmtMoney = (v: number) =>
-  `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-// O preço unitário tem 4 casas (a API só arredonda o total a centavos)
-export const fmtPreco = (v: number) =>
-  `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
-export const fmtData = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString("pt-BR");
+import { fmtData, fmtMoney, fmtPreco, fmtQtd } from "@/lib/utils";
+
+export { fmtData, fmtMoney, fmtPreco, fmtQtd };
 
 export const FASES: Record<FaseCusto, string> = { PREPARO: "Preparo", CULTIVO: "Cultivo", DESPESCA: "Despesca" };
 

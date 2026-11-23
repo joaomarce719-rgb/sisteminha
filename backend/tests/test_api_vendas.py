@@ -416,3 +416,14 @@ def test_corrigir_so_o_comprador_mantem_a_receita_do_encerramento(client, gestor
     r = client.put(f"{base}/{final['id']}", json={**corpo, "preco_kg": 14.00}, headers=gestor)
     assert r.json()["valor_total_rs"] == round(8765.4 * 14.00, 2)
     assert _ciclo_da_api(client, gestor, ciclo["id"])["receita_real_rs"] == round(8765.4 * 14.00, 2)
+
+
+def test_corrigir_sem_preco_mantem_o_preco_gravado(client, gestor, ciclo):
+    _encerrar_com_payload(client, gestor, ciclo["id"], 8765.4, 123456.78)
+    base = f"/api/v1/ciclos/{ciclo['id']}/vendas"
+    [final] = client.get(base, headers=gestor).json()
+    corpo = {k: final[k] for k in ("data_venda", "tipo", "biomassa_kg", "peso_medio_g")}  # sem preco_kg
+    r = client.put(f"{base}/{final['id']}", json={**corpo, "comprador": "Frigorífico Sul"}, headers=gestor)
+    assert r.status_code == 200, r.text
+    assert (r.json()["preco_kg"], r.json()["valor_total_rs"]) == (14.08, 123456.78)  # a tabela de hoje não reprecifica
+    assert _ciclo_da_api(client, gestor, ciclo["id"])["receita_real_rs"] == 123456.78

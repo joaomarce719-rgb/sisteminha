@@ -1,6 +1,7 @@
 """Preço médio ponderado móvel dos insumos: regras puras (`aplicar_preco_medio`) e leitura do banco."""
 
 import unicodedata
+import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from typing import Literal
@@ -103,15 +104,23 @@ def _texto_da_quantidade(quantidade: float) -> str:
     return f"{quantidade:.4f}".rstrip("0").rstrip(".")
 
 
-def reprocessar_insumo(db: Session, insumo_id: UUID, usuario: Usuario | None = None) -> None:
+def reprocessar_insumo(
+    db: Session, insumo_id: UUID, usuario: Usuario | None = None, uso_alterado: UUID | None = None
+) -> None:
     """Reaplica compras e usos do insumo e acerta preço aplicado e custo gerado de cada uso.
 
     Uso pendente (sem compra até a data e sem preço corrigido) fica sem custo. Quando o custo de
-    um uso de ciclo FINALIZADO muda, o uso recebe `recalculado_em` e a mudança vai para a auditoria.
+    um uso de ciclo FINALIZADO muda, o uso recebe `recalculado_em` e a mudança vai para a auditoria;
+    o uso que o próprio gestor acabou de lançar ou editar (`uso_alterado`) não conta como recálculo.
     """
     insumo = db.get(Insumo, insumo_id)
     resultados = {r.uso_id: r for r in aplicar_preco_medio(eventos_do_insumo(db, insumo_id))[0]}
     usos = db.scalars(select(ConsumoInsumo).where(ConsumoInsumo.insumo_id == insumo_id)).all()
+    finalizados = set(db.scalars(
+        select(CicloProdutivo.id).where(
+            CicloProdutivo.id.in_({u.ciclo_id for u in usos}), CicloProdutivo.status == StatusCiclo.FINALIZADO
+        )
+    ))
     for uso in usos:
         preco = resultados[uso.id].preco_unitario_rs
         quantidade = float(uso.quantidade)
@@ -126,17 +135,16 @@ def reprocessar_insumo(db: Session, insumo_id: UUID, usuario: Usuario | None = N
                 db.delete(custo)
         else:
             if custo is None:
-                custo = CustoOperacional(ciclo_id=uso.ciclo_id)
+                custo = CustoOperacional(id=uuid.uuid4(), ciclo_id=uso.ciclo_id)  # id já, para um flush só no fim
                 db.add(custo)
             custo.data_lancamento = uso.data_uso
             custo.categoria = CategoriaCusto(insumo.categoria)
             custo.descricao = f"{insumo.nome} ({_texto_da_quantidade(quantidade)} {insumo.unidade_uso})"
             custo.valor_rs = valor
             custo.fase = uso.fase
-            db.flush()
             uso.custo_id = custo.id
 
-        if valor != valor_anterior and db.get(CicloProdutivo, uso.ciclo_id).status == StatusCiclo.FINALIZADO:
+        if valor != valor_anterior and uso.id != uso_alterado and uso.ciclo_id in finalizados:
             uso.recalculado_em = datetime.now(timezone.utc)
             registrar_auditoria(
                 db, "RECALCULAR_USO_INSUMO", "ConsumoInsumo", uso.id, usuario,

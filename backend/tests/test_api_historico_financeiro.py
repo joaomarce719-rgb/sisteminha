@@ -262,3 +262,13 @@ def test_semana_sem_racao_acumulada_nao_tem_fca_parcial(client, gestor, novo_cic
     primeira, segunda = item["racao_por_semana"]
     assert primeira["kg"] == 0 and primeira["fca_parcial"] is None
     assert segunda["fca_parcial"] is not None
+
+
+def test_insumo_sem_nenhum_uso_com_valor_vem_sem_custo_no_historico(client, gestor, novo_ciclo):
+    ciclo = novo_ciclo()
+    insumo = _insumo(client, gestor)
+    _usar(client, gestor, ciclo["id"], insumo["id"], 50)  # sem compra: uso pendente de valor, sem custo
+    [item] = _historico(client, gestor, ciclo["viveiro_id"])
+    [usado] = item["insumos"]
+    assert usado["quantidade_total"] == 50
+    assert usado["custo_total_rs"] is None  # R$ 0,00 pareceria insumo de graça

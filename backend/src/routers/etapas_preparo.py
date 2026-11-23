@@ -16,7 +16,7 @@ from src.schemas.etapa_preparo import EtapaPreparoCreate, EtapaPreparoResponse, 
 from src.services.audit import registrar_auditoria, snapshot
 from src.services.auth_service import has_role
 from src.services.escopo import verificar_ciclo_da_organizacao
-from src.services.regras_ciclo import obter_ciclo
+from src.services.regras_ciclo import etapa_do_ciclo, obter_ciclo
 
 router = APIRouter(
     prefix="/api/v1/ciclos/{ciclo_id}/etapas-preparo",
@@ -35,13 +35,6 @@ def _ciclo_alteravel(db: Session, ciclo_id: UUID, user: Usuario) -> CicloProduti
     if ciclo.status == StatusCiclo.FINALIZADO and user.papel != RoleUsuario.GESTOR:
         raise HTTPException(status_code=403, detail="Somente o gestor altera um ciclo finalizado.")
     return ciclo
-
-
-def etapa_do_ciclo(db: Session, ciclo_id: UUID, etapa_id: UUID) -> EtapaPreparo:
-    etapa = db.get(EtapaPreparo, etapa_id)
-    if not etapa or etapa.ciclo_id != ciclo_id:
-        raise HTTPException(status_code=404, detail="Etapa do preparo não encontrada.")
-    return etapa
 
 
 def _validar_datas(etapa: EtapaPreparo) -> None:

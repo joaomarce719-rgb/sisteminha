@@ -289,7 +289,12 @@ def test_ciclo_finalizado_registra_recalculado_em(client, gestor, campo, insumo,
 
     # no ciclo finalizado só o gestor lança
     assert _usar(client, campo, ciclo["id"], insumo["id"], 1).status_code == 403
-    assert _usar(client, gestor, ciclo["id"], insumo["id"], 1).status_code == 201
+    novo = _usar(client, gestor, ciclo["id"], insumo["id"], 1)
+    assert novo.status_code == 201
+    assert novo.json()["recalculado_em"] is None  # o uso que o gestor acabou de lançar não é recálculo
+    logs = client.get("/api/v1/auditoria/", params={"limite": 200, "entidade": "ConsumoInsumo"}, headers=gestor)
+    assert not [log for log in logs.json()["items"]
+                if log["registro_id"] == novo.json()["id"] and log["acao"] == "RECALCULAR_USO_INSUMO"]
 
 
 def test_status_do_ciclo_limita_o_uso(client, gestor, insumo, novo_ciclo):

@@ -26,7 +26,6 @@ from src.models.manejo_alimentar import ManejoAlimentar
 from src.models.tabela_alimentar import TabelaAlimentar
 from src.models.venda_ciclo import VendaCiclo
 from src.models.viveiro import Viveiro
-from src.routers.vendas import colunas_da_venda, sincronizar_totais_do_ciclo
 from src.schemas.ciclo import (
     CicloEncerrar,
     CicloPlanejar,
@@ -48,6 +47,7 @@ from src.services.insumos import reprocessar_insumo
 from src.services.regras_ciclo import ciclo_aberto_do_viveiro, exigir_povoamento
 from src.services.regras_ciclo import obter_ciclo as buscar_ciclo  # a rota GET se chama obter_ciclo
 from src.services.regras_data import hoje_da_fazenda
+from src.services.vendas import colunas_da_venda, sincronizar_totais_do_ciclo
 
 router = APIRouter(prefix="/api/v1/ciclos", tags=["Ciclos Produtivos"])
 
@@ -439,7 +439,7 @@ def metricas_atuais(
     exigir_povoamento(ciclo)
 
     viveiro = ciclo.viveiro
-    hoje = date.today()
+    hoje = hoje_da_fazenda()
     dias_cultivo = (hoje - ciclo.data_povoamento).days
 
     # Densidade

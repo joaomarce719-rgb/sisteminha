@@ -14,6 +14,7 @@ from src.models.enums import RoleUsuario
 from src.models.tabela_preco import TabelaPrecoMercado
 from src.schemas.preco import PrecoCreate, PrecoResponse, PrecoUpdate
 from src.services.auth_service import has_role
+from src.services.regras_data import hoje_da_fazenda
 
 router = APIRouter(prefix="/api/v1/precos-mercado", tags=["Preços de Mercado"])
 
@@ -94,7 +95,7 @@ def listar_precos(
         .order_by(TabelaPrecoMercado.faixa_gramatura_min)
     )
     if vigentes:
-        hoje = date.today()
+        hoje = hoje_da_fazenda()
         query = query.where(
             TabelaPrecoMercado.vigencia_inicio <= hoje,
             (TabelaPrecoMercado.vigencia_fim.is_(None))

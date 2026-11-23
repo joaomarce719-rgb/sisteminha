@@ -1,7 +1,6 @@
 """SAD Carcinicultura — Rotas de Manejo Alimentar (RF-04)."""
 
 from dataclasses import asdict
-from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -25,6 +24,7 @@ from src.schemas.manejo_alimentar import (
 )
 from src.services.alimentacao import pontos_alimentares
 from src.services.auth_service import has_role
+from src.services.regras_data import hoje_da_fazenda
 from src.services.decision_engine import (
     calcular_biomassa_kg,
     calcular_racao_diaria,
@@ -223,7 +223,7 @@ def recomendacao_alimentar(
             ajuste_texto = "✅ Consumo limpo — manter ou avaliar incremento leve."
 
     # Confronto de hoje: ração lançada (todos os tratos) contra a ração da tabela
-    hoje = date.today()
+    hoje = hoje_da_fazenda()
     registros_hoje = [m for m in manejos if m.data_registro == hoje]
     taxa_inicio_dia = sobrevivencia_vigente(m for m in manejos if m.data_registro < hoje)
     biomassa_inicio_dia = calcular_biomassa_kg(

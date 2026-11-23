@@ -2,8 +2,9 @@
 
 from functools import lru_cache
 from typing import List, Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _JWT_PLACEHOLDER = "TROQUE-POR-UMA-CHAVE-SEGURA-DE-64-CARACTERES"
@@ -51,6 +52,15 @@ class Settings(BaseSettings):
     # ── Fazenda ──────────────────────────────────────
     # Fuso que define "hoje" nas regras de data (o servidor pode rodar em UTC).
     fazenda_fuso_horario: str = "America/Sao_Paulo"
+
+    @field_validator("fazenda_fuso_horario")
+    @classmethod
+    def _fuso_existe(cls, valor: str) -> str:
+        try:
+            ZoneInfo(valor)
+        except (ZoneInfoNotFoundError, ValueError) as erro:
+            raise ValueError(f"Fuso horário desconhecido: {valor}") from erro
+        return valor
 
     @property
     def cors_origins_list(self) -> List[str]:

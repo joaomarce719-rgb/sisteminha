@@ -1,6 +1,6 @@
 """SAD Carcinicultura — Rotas do Simulador de Despesca ΔV (RF-06, RN-07)."""
 
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -26,6 +26,7 @@ from src.schemas.simulacao import (
 )
 from src.services.alimentacao import pontos_alimentares
 from src.services.auth_service import has_role
+from src.services.regras_data import hoje_da_fazenda
 from src.services.precos import regra_da_organizacao, tabela_vigente
 from src.services.sobrevivencia import sobrevivencia_vigente
 from src.services.populacao import populacao_vigente, receita_realizada_rs
@@ -75,7 +76,7 @@ def _executar_simulacao(
     if ciclo.status != StatusCiclo.ATIVO:
         raise HTTPException(status_code=400, detail="Ciclo não está ativo.")
 
-    hoje = date.today()
+    hoje = hoje_da_fazenda()
     dias_cultivo = (hoje - ciclo.data_povoamento).days
 
     # Biometrias

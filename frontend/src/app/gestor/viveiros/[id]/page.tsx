@@ -62,14 +62,6 @@ import { PlanejarCicloDialog, PreparoCiclo } from "@/components/viveiro/preparo-
 import { hojeLocal } from "@/components/ui/data-lancamento";
 import { toast } from "@/components/ui/toast";
 
-function fmtDate(d: string) {
-  return new Date(d).toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
 // ── Modal Biometria com Shadcn Dialog ───────────────
 function BiometriaDialog({
   open,
@@ -831,7 +823,7 @@ export default function ViveiroDetalhePage() {
               <div className="flex items-center gap-2">
                 <CalendarDays className="w-4 h-4 text-emerald-400" />
                 <span className="text-xs text-slate-300">
-                  Povoamento: <strong className="text-white ml-1">{fmtDate(cicloAtivo.data_povoamento)}</strong>
+                  Povoamento: <strong className="text-white ml-1">{fmtData(cicloAtivo.data_povoamento)}</strong>
                 </span>
               </div>
 
@@ -1060,7 +1052,7 @@ export default function ViveiroDetalhePage() {
                           </div>
                           <div>
                             <div className="font-bold text-slate-900 text-sm">
-                              {fmtDate(bio.data_medicao)}
+                              {fmtData(bio.data_medicao)}
                             </div>
                             <div className="text-xs text-slate-500">
                               {bio.observacoes || "Amostragem de rotina"}
@@ -1165,7 +1157,7 @@ export default function ViveiroDetalhePage() {
                             </div>
                             <div>
                               <div className="font-bold text-slate-900 text-sm">
-                                {fmtDate(m.data_registro)}
+                                {fmtData(m.data_registro)}
                               </div>
                               <div className="text-xs text-slate-500">
                                 {sobraObj?.desc || m.sobra_bandeja_nivel}

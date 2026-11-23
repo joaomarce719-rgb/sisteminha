@@ -14,12 +14,11 @@ from src.models.enums import FaseCusto, RoleUsuario, StatusCiclo
 from src.models.insumo import ConsumoInsumo, Insumo
 from src.models.usuario import Usuario
 from src.schemas.uso_insumo import UsoInsumoCreate, UsoInsumoResponse
-from src.routers.etapas_preparo import etapa_do_ciclo
 from src.services.audit import registrar_auditoria, snapshot
 from src.services.auth_service import has_role
 from src.services.escopo import insumo_da_organizacao, verificar_ciclo_da_organizacao
 from src.services.insumos import reprocessar_insumo
-from src.services.regras_ciclo import obter_ciclo, validar_data_no_ciclo
+from src.services.regras_ciclo import etapa_do_ciclo, obter_ciclo, validar_data_no_ciclo
 from src.services.regras_data import exigir_retroativo_para_data_passada
 
 router = APIRouter(
@@ -97,7 +96,7 @@ def registrar_uso(
     uso = ConsumoInsumo(ciclo_id=ciclo_id, registrado_por=_user.id, **_colunas(payload))
     db.add(uso)
     db.flush()
-    reprocessar_insumo(db, uso.insumo_id, _user)
+    reprocessar_insumo(db, uso.insumo_id, _user, uso_alterado=uso.id)
     registrar_auditoria(db, "CRIAR_USO_INSUMO", "ConsumoInsumo", uso.id, _user, dados_novos=snapshot(uso))
     return _resposta(db, uso, _user)
 
@@ -134,7 +133,7 @@ def atualizar_uso(
     for campo, valor in _colunas(payload).items():
         setattr(uso, campo, valor)
     db.flush()
-    reprocessar_insumo(db, uso.insumo_id, _user)
+    reprocessar_insumo(db, uso.insumo_id, _user, uso_alterado=uso.id)
     if insumo_anterior != uso.insumo_id:
         reprocessar_insumo(db, insumo_anterior, _user)
     registrar_auditoria(

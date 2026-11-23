@@ -1,6 +1,7 @@
 """SAD Carcinicultura — Regra de data dos lançamentos retroativos (compras, usos de insumo e vendas)."""
 
 from datetime import date, datetime
+from functools import lru_cache
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
@@ -8,9 +9,14 @@ from fastapi import HTTPException, status
 from src.config import get_settings
 
 
+@lru_cache
+def _fuso(nome: str) -> ZoneInfo:
+    return ZoneInfo(nome)
+
+
 def hoje_da_fazenda() -> date:
     """Data de hoje no fuso da fazenda: com o servidor em UTC, date.today() já vira o dia às 21h."""
-    return datetime.now(ZoneInfo(get_settings().fazenda_fuso_horario)).date()
+    return datetime.now(_fuso(get_settings().fazenda_fuso_horario)).date()
 
 
 def exigir_retroativo_para_data_passada(data: date, retroativo: bool, rotulo: str) -> None:

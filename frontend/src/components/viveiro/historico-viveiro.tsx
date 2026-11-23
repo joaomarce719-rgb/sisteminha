@@ -3,7 +3,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { CheckCircle2, ClipboardList, Loader2, Package, Receipt, Sprout, type LucideIcon } from "lucide-react";
 import { viveirosApi } from "@/lib/api";
-import { mensagemErro } from "@/lib/utils";
+import { mensagemErro, ROTULO_STATUS_CICLO } from "@/lib/utils";
 import { ROTULO_STATUS_ETAPA, ROTULO_TIPO_ETAPA } from "@/lib/etapas-preparo";
 import type { EtapaHistorico, HistoricoCiclo, StatusCiclo } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
@@ -14,13 +14,19 @@ import { fmtData, fmtMoney, fmtQtd } from "@/components/insumos/lista-usos-insum
 import { VARIANTE_STATUS } from "@/components/viveiro/preparo-ciclo";
 import { VendasCiclo } from "@/components/viveiro/vendas-ciclo";
 
-const STATUS_CICLO: Record<StatusCiclo, { rotulo: string; variante: "secondary" | "success" | "warning" | "info" | "destructive" }> = {
-  PLANEJADO: { rotulo: "Planejado", variante: "secondary" },
-  ATIVO: { rotulo: "Ativo", variante: "success" },
-  PAUSADO: { rotulo: "Pausado", variante: "warning" },
-  FINALIZADO: { rotulo: "Finalizado", variante: "info" },
-  CANCELADO: { rotulo: "Cancelado", variante: "destructive" },
+const VARIANTE_STATUS_CICLO: Record<StatusCiclo, "secondary" | "success" | "warning" | "info" | "destructive"> = {
+  PLANEJADO: "secondary",
+  ATIVO: "success",
+  PAUSADO: "warning",
+  FINALIZADO: "info",
+  CANCELADO: "destructive",
 };
+const STATUS_CICLO = Object.fromEntries(
+  (Object.keys(ROTULO_STATUS_CICLO) as StatusCiclo[]).map((s) => [
+    s,
+    { rotulo: ROTULO_STATUS_CICLO[s], variante: VARIANTE_STATUS_CICLO[s] },
+  ])
+) as Record<StatusCiclo, { rotulo: string; variante: (typeof VARIANTE_STATUS_CICLO)[StatusCiclo] }>;
 
 // A API devolve 0 no FCA quando não há ração registrada: vale como "sem dados"
 const fmtFca = (v: number | null) => (v ? fmtQtd(v) : "—");

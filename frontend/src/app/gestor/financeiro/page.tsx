@@ -18,7 +18,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { ciclosApi, custosApi, viveirosApi } from "@/lib/api";
-import { mensagemErro } from "@/lib/utils";
+import { mensagemErro, ROTULO_CATEGORIA, ROTULO_STATUS_CICLO } from "@/lib/utils";
 import type { CicloProdutivo, Viveiro, CustoOperacional, CustoResumo, FaseCusto, FinanceiroCiclo } from "@/lib/types";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -31,15 +31,7 @@ import { toast } from "@/components/ui/toast";
 import { FASES, fmtData, fmtMoney, fmtQtd } from "@/components/insumos/lista-usos-insumo";
 import { TIPOS_VENDA } from "@/components/viveiro/vendas-ciclo";
 
-const CATEGORIAS: Record<string, string> = {
-  RACAO: "Ração",
-  ENERGIA_ELETRICA: "Energia Elétrica",
-  MAO_DE_OBRA: "Mão de Obra",
-  POS_LARVAS: "Pós-Larvas",
-  PROBIOTICOS_QUIMICOS: "Probióticos/Químicos",
-  MANUTENCAO: "Manutenção",
-  OUTROS: "Outros",
-};
+const CATEGORIAS: Record<string, string> = ROTULO_CATEGORIA;
 
 const CAT_COLORS: Record<string, string> = {
   RACAO: "#f97316",
@@ -53,13 +45,7 @@ const CAT_COLORS: Record<string, string> = {
 
 const ORDEM_FASES = Object.keys(FASES);
 
-const STATUS_CICLO: Record<string, string> = {
-  PLANEJADO: "Planejado",
-  ATIVO: "Ativo",
-  PAUSADO: "Pausado",
-  FINALIZADO: "Finalizado",
-  CANCELADO: "Cancelado",
-};
+const STATUS_CICLO: Record<string, string> = ROTULO_STATUS_CICLO;
 
 /** Resultado do ciclo: lucro realizado e lucro estimado (sempre rotulados), margem, custo por kg e avisos. */
 function ResultadoCiclo({ dados }: { dados: FinanceiroCiclo }) {
